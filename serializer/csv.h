@@ -10,7 +10,7 @@ typedef struct {
   char delimiter;
   File file;
 
-  usize offset;
+  usz offset;
 } CSV;
 
 fn StringStream csv_header(Arena *arena, CSV *config);

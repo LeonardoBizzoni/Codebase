@@ -1,19 +1,19 @@
 #include "base.h"
 #include "arena.h"
 
-inline fn bool isPowerOfTwo(usize value) {
+inline fn bool isPowerOfTwo(usz value) {
   return !(value & (value - 1));
 }
 
-inline fn void *forwardAlign(void *ptr, usize align) {
+inline fn void *forwardAlign(void *ptr, usz align) {
   Assert(isPowerOfTwo(align));
 
-  usize mod = (usize)ptr & (align - 1);
+  usz mod = (usz)ptr & (align - 1);
   return (mod ? ptr = (u8 *)ptr + align - mod
 	      : ptr);
 }
 
-fn Arena *arenaBuild(usize size, usize base) {
+fn Arena *arenaBuild(usz size, usz base) {
 #if OS_LINUX || OS_BSD
   void *fail_state = MAP_FAILED;
   void *mem = mmap((void *)base, size, PROT_READ | PROT_WRITE,
@@ -37,8 +37,8 @@ fn Arena *arenaBuild(usize size, usize base) {
   }
 }
 
-inline fn void arenaPop(Arena *arena, usize bytes) {
-  arena->head = ClampBot((isize)arena->head - (isize)bytes, 0);
+inline fn void arenaPop(Arena *arena, usz bytes) {
+  arena->head = ClampBot((isz)arena->head - (isz)bytes, 0);
 }
 
 inline fn bool arenaFree(Arena *arena) {
@@ -51,10 +51,10 @@ inline fn bool arenaFree(Arena *arena) {
 #endif
 }
 
-fn void *arenaPush(Arena *arena, usize size, usize align) {
+fn void *arenaPush(Arena *arena, usz size, usz align) {
   if (!align) {align = DefaultAlignment;}
   void *aligned_head = forwardAlign((u8 *)arena->base + arena->head, align);
-  usize offset = (u8 *)aligned_head - (u8 *)arena->base;
+  usz offset = (u8 *)aligned_head - (u8 *)arena->base;
 
   if ((u8 *)aligned_head + size > (u8 *)arena->base + arena->total_size) {
     return 0;

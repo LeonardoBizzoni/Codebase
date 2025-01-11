@@ -28,7 +28,7 @@ fn String8 fs_read(Arena *arena, String8 filepath) {
     return (String8) {0};
   }
 
-  String8 res = { .str = (u8 *)New(arena, u8, file_stat.st_size) };
+  String8 res = { .str = New(arena, u8, file_stat.st_size) };
   res.size = read(fd, res.str, file_stat.st_size);
 
   (void)close(fd);
@@ -47,7 +47,7 @@ fn bool fs_write(String8 filepath, String8 content) {
     return false;
   }
 
-  if (write(fd, content.str, content.size) != (isize)content.size) {
+  if (write(fd, content.str, content.size) != (isz)content.size) {
     (void)close(fd);
     return false;
   }
@@ -57,7 +57,7 @@ fn bool fs_write(String8 filepath, String8 content) {
 
 fn bool fs_writeStream(String8 filepath, StringStream content) {
   StringNode *start = content.first++;
-  isize fd = fs_write(filepath, start->value);
+  isz fd = fs_write(filepath, start->value);
   if (fd < 0) {
     return false;
   }
@@ -81,7 +81,7 @@ fn bool fs_append(String8 filepath, String8 content) {
     return false;
   }
 
-  if (write(fd, content.str, content.size) != (isize)content.size) {
+  if (write(fd, content.str, content.size) != (isz)content.size) {
     (void)close(fd);
     return false;
   }
@@ -91,7 +91,7 @@ fn bool fs_append(String8 filepath, String8 content) {
 
 fn bool fs_appendStream(String8 filepath, StringStream content) {
   StringNode *start = content.first;
-  isize fd = fs_append(filepath, start->value);
+  isz fd = fs_append(filepath, start->value);
 
   for (start = start->next; start; start = start->next) {
     if (!write(fd, start->value.str, start->value.size)) {
@@ -116,7 +116,7 @@ fn FileProperties fs_getProp(String8 filepath) {
 
   res.ownerID = file_stat.st_uid;
   res.groupID = file_stat.st_gid;
-  res.size = (usize)file_stat.st_size;
+  res.size = (usz)file_stat.st_size;
   res.last_access_time = (u64)file_stat.st_atime;
   res.last_modification_time = (u64)file_stat.st_mtime;
   res.last_status_change_time = (u64)file_stat.st_ctime;
@@ -165,7 +165,7 @@ fn File fs_openTmp(Arena *arena) {
   i32 fd = mkstemp(path);
 
   String8 pathstr = {
-    .str = (u8 *)New(arena, u8, Arrsize(path)),
+    .str = New(arena, u8, Arrsize(path)),
     .size = Arrsize(path),
   };
   memCopy(pathstr.str, path, Arrsize(path));
@@ -205,7 +205,7 @@ fn File fs_open(Arena *arena, String8 filepath) {
 }
 
 fn bool fs_fileWrite(File *file, String8 content) {
-  return write(file->descriptor, content.str, content.size) != (isize)content.size;
+  return write(file->descriptor, content.str, content.size) != (isz)content.size;
 }
 
 fn bool fs_fileWriteStream(File *file, StringStream content) {
@@ -292,7 +292,7 @@ fn FilenameList fs_iterFiles(Arena *arena, String8 dirname) {
       continue;
     }
 
-    FilenameNode *node = (FilenameNode *)New(arena, FilenameNode);
+    FilenameNode *node = New(arena, FilenameNode);
     node->value = str;
     DLLPushBack(res.first, res.last, node);
   }
@@ -304,11 +304,11 @@ fn FilenameList fs_iterFiles(Arena *arena, String8 dirname) {
 fn bool fs_rmIter(Arena *temp_arena, String8 dirname) {
   const String8 currdir = Strlit(".");
   const String8 parentdir = Strlit("..");
-  usize prev_head = temp_arena->head;
+  usz prev_head = temp_arena->head;
 
   FilenameList dirstack = {0};
   FilenameList deletable = {0};
-  FilenameNode *root = (FilenameNode *)New(temp_arena, FilenameNode);
+  FilenameNode *root = New(temp_arena, FilenameNode);
   root->value = dirname;
   StackPush(dirstack.first, root);
 
@@ -332,7 +332,7 @@ fn bool fs_rmIter(Arena *temp_arena, String8 dirname) {
                                    Strexpand(current->value), Strexpand(str));
 
       if (entry->d_type == DT_DIR) {
-        FilenameNode *childdir = (FilenameNode *)New(temp_arena, FilenameNode);
+        FilenameNode *childdir = New(temp_arena, FilenameNode);
         childdir->value = fullpath;
         StackPush(dirstack.first, childdir);
       } else {

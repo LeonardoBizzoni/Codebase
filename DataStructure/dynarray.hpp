@@ -5,19 +5,19 @@
 
 template <typename T>
 struct DynArray {
-  usize size;
+  usz size;
 
   ArrayListNode<T> *first = 0;
   ArrayListNode<T> *last = 0;
 
-  DynArray(Arena *arena, usize initial_capacity = 8)
+  DynArray(Arena *arena, usz initial_capacity = 8)
   : size(initial_capacity) {
     Assert(initial_capacity > 0);
-    first = last = (ArrayListNode<T> *) New(arena, ArrayListNode<T>);
+    first = last = New(arena, ArrayListNode<T>);
     first->block = Array<T>(arena, initial_capacity);
   }
 
-  T& operator[](usize i) {
+  T& operator[](usz i) {
     Assert(i < size);
 
     for (ArrayListNode<T> *it = first; it; it = it->next) {
@@ -34,9 +34,9 @@ struct DynArray {
 
   struct Iterator {
     ArrayListNode<T>* current;
-    usize idx;
+    usz idx;
 
-    Iterator(ArrayListNode<T> *ptr, usize idx) : current(ptr), idx(idx) {}
+    Iterator(ArrayListNode<T> *ptr, usz idx) : current(ptr), idx(idx) {}
 
     T& operator*() { return current->block[idx]; }
 
@@ -63,7 +63,7 @@ struct DynArray {
 
 template <typename T>
 fn bool dynarrayExpand(Arena *arena, DynArray<T> *arr,
-		       usize expansion_size);
+		       usz expansion_size);
 
 
 #endif

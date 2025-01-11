@@ -3,8 +3,8 @@
 #include "../../../image.h"
 #include "../../../math/constants.h"
 
-fn Viewport openglViewport(String8 name, usize initial_width,
-			   usize initial_height) {
+fn Viewport openglViewport(String8 name, usz initial_width,
+			   usz initial_height) {
   opengl_init();
   Viewport viewport = {.xdisplay = XOpenDisplay(0)};
   if (!viewport.xdisplay) {
@@ -229,8 +229,8 @@ fn Viewport openglViewport(String8 name, usize initial_width,
   return viewport;
 }
 
-fn Viewport vulkanViewport(String8 name, usize initial_width,
-			   usize initial_height) {
+fn Viewport vulkanViewport(String8 name, usz initial_width,
+			   usz initial_height) {
   return (Viewport) {0};
 }
 
@@ -334,18 +334,18 @@ ViewportEvent viewportGetEvent(Viewport *viewport) {
 }
 
 bool viewportSetIcon(Arena *arena, Viewport *viewport, String8 path) {
-  usize head = arena->head;
+  usz head = arena->head;
   i32 width, height, componentXpixel;
   u8 *imgdata = loadImg(path, &width, &height, &componentXpixel);
   if (!imgdata) { return false; }
 
   i32 size = 2 + width * height;
-  u64 *data = (u64 *) New(arena, u64, size);
+  u64 *data = New(arena, u64, size);
   if (!data) { return false; }
   data[0] = width;
   data[1] = height;
 
-  for (usize i = 0; i < size - 2; ++i) {
+  for (usz i = 0; i < size - 2; ++i) {
     data[i + 2] = (imgdata[i * 4 + 3] << 24) |
 		  (imgdata[i * 4 + 0] << 16) |
 		  (imgdata[i * 4 + 1] << 8) |
@@ -490,9 +490,9 @@ fn bool opengl_isExtensionSupported(String8 ext_list, String8 extension) {
     return false;
   }
 
-  for (usize start = 0, terminator; ;
+  for (usz start = 0, terminator; ;
        start = terminator, ext_list = strPostfix(ext_list, terminator)) {
-    usize where = strFindFirstSubstr(ext_list, extension);
+    usz where = strFindFirstSubstr(ext_list, extension);
     if (!where) {
       break;
     }

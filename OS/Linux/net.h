@@ -84,7 +84,7 @@ inline fn Socket net_connect(TransportProtocol transprot, NetworkProtocol netpro
   return res;
 }
 
-inline fn void net_send(Socket *sock, usize size, u8 *bytes) {
+inline fn void net_send(Socket *sock, usz size, u8 *bytes) {
   switch (sock->netprot) {
   case IPv4: {
     sendto(sock->fd, bytes, size, 0, 0, sizeof(sock->dest.v4));
