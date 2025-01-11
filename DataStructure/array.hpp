@@ -3,17 +3,17 @@
 
 #include "../base.h"
 
-template <typename T, usize N>
+template <typename T, usz N>
 struct Buffer {
   T values[N];
-  usize size;
+  usz size;
 
   Buffer() : values{0}, size(N) {}
 
   template<typename... Ts>
   Buffer(Ts... args) : values{args...}, size(N) {}
 
-  T& operator[](usize i) {
+  T& operator[](usz i) {
     Assert(i < size);
     return values[i];
   }
@@ -36,12 +36,12 @@ struct Buffer {
       return *this;
     }
 
-    Iterator& operator+=(usize step) {
+    Iterator& operator+=(usz step) {
       current += step;
       return *this;
     }
 
-    Iterator& operator-=(usize step) {
+    Iterator& operator-=(usz step) {
       current -= step;
       return *this;
     }
@@ -57,14 +57,14 @@ struct Buffer {
 template <typename T>
 struct Array {
   T *values;
-  usize size;
+  usz size;
 
-  Array(Arena *arena, usize size) :
+  Array(Arena *arena, usz size) :
     values((New(arena, T, size)), size(size) {
     Assert(size > 0);
   }
 
-  T& operator[](usize i) {
+  T& operator[](usz i) {
     Assert(i < size);
     return values[i];
   }
@@ -87,12 +87,12 @@ struct Array {
       return *this;
     }
 
-    Iterator& operator+=(usize step) {
+    Iterator& operator+=(usz step) {
       current += step;
       return *this;
     }
 
-    Iterator& operator-=(usize step) {
+    Iterator& operator-=(usz step) {
       current -= step;
       return *this;
     }
@@ -119,9 +119,9 @@ struct ArrayList {
 
   struct Iterator {
     ArrayListNode<T> *current;
-    usize idx;
+    usz idx;
 
-    explicit Iterator(ArrayListNode<T> *ptr, usize idx) :
+    explicit Iterator(ArrayListNode<T> *ptr, usz idx) :
       current(ptr), idx(idx) {}
 
     Iterator& operator++() {

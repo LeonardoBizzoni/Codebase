@@ -3,7 +3,7 @@
 
 #include <typeinfo>
 
-template <typename T, usize R, usize C>
+template <typename T, usz R, usz C>
 struct Matrix {
   T values[R][C];
 
@@ -16,20 +16,20 @@ struct Matrix {
 
   static Matrix Identity() {
     Matrix res = {0};
-    for (usize r = 0; r < R; ++r) {
+    for (usz r = 0; r < R; ++r) {
       res[r, r] = 1;
     }
 
     return res;
   }
 
-  template <usize R1, usize C2>
+  template <usz R1, usz C2>
   Matrix<T, R, C2> mulElementWise(Matrix<T, R1, C2> &other) {
     Assert(R1 == C);
     Matrix<T, R, C2> res = *this;
 
-    for (usize r = 0; r < R; ++r) {
-      for (usize c = 0; c < C; ++c) {
+    for (usz r = 0; r < R; ++r) {
+      for (usz c = 0; c < C; ++c) {
 	res[r, c] *= other[r, c];
       }
     }
@@ -40,8 +40,8 @@ struct Matrix {
   Matrix<T, C, R> transpose() {
     Matrix<T, C, R> res = {0};
 
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C; ++j) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C; ++j) {
 	res[j, i] = (*this)[i, j];
       }
     }
@@ -50,13 +50,13 @@ struct Matrix {
   }
 
   // Also called a `minor`
-  Matrix<T, R-1, C-1> submatrix(usize r, usize c) {
+  Matrix<T, R-1, C-1> submatrix(usz r, usz c) {
     Assert(r < R && c < C);
     Matrix<T, R-1, C-1> res = {0};
 
-    for (usize i = 0, a = 0; a < R; ++a) {
+    for (usz i = 0, a = 0; a < R; ++a) {
       if (a == r) {continue;}
-      for (usize j = 0, b = 0; b < C; ++b) {
+      for (usz j = 0, b = 0; b < C; ++b) {
 	if (b == c) {continue;}
 	res[i, j] = (*this)[a, b];
 	++j;
@@ -68,12 +68,12 @@ struct Matrix {
     return res;
   }
 
-  template <usize R1, usize C1>
+  template <usz R1, usz C1>
   Matrix<T, R1, C1> downsize() {
     Assert(R1 <= R && C1 <= C);
     Matrix<T, R1, C1> res = {0};
-    for (usize i = 0; i < R1; ++i) {
-      for (usize j = 0; j < C1; ++j) {
+    for (usz i = 0; i < R1; ++i) {
+      for (usz j = 0; j < C1; ++j) {
 	res[i, j] = (*this)[i, j];
       }
     }
@@ -81,20 +81,20 @@ struct Matrix {
     return res;
   }
 
-  Vector<T, C> getRow(usize i) {
+  Vector<T, C> getRow(usz i) {
     Assert(i < C);
     Vector<T, C> res = {0};
-    for (usize j = 0; j < C; ++j) {
+    for (usz j = 0; j < C; ++j) {
       res[j] = (*this)[i, j];
     }
 
     return res;
   }
 
-  Vector<T, R> getCol(usize i) {
+  Vector<T, R> getCol(usz i) {
     Assert(i < R);
     Vector<T, R> res = {0};
-    for (usize j = 0; j < R; ++j) {
+    for (usz j = 0; j < R; ++j) {
       res[j] = (*this)[j, i];
     }
 
@@ -105,7 +105,7 @@ struct Matrix {
     Assert(R == C);
     T res = 0;
 
-    for (usize i = 0; i < R; ++i) {
+    for (usz i = 0; i < R; ++i) {
       res += (*this)[i, i];
     }
 
@@ -122,7 +122,7 @@ struct Matrix {
 	     - (*this)[0, 1] * (*this)[1, 0];
     } else {
       i32 res = 0;
-      for (usize i = 0; i < R; ++i) {
+      for (usz i = 0; i < R; ++i) {
 	res += pow(-1, i) * (*this)[0, i]
 	       * this->submatrix(0, i).det();
       }
@@ -131,14 +131,14 @@ struct Matrix {
     }
   }
 
-  usize rank() {
+  usz rank() {
     constexpr local f64 eps (1E-9);
     Matrix tmp = *this;
-    usize rank = 0;
+    usz rank = 0;
 
     u32 selected = 0;
-    for (usize i = 0; i < C; ++i) {
-      usize j = 0;
+    for (usz i = 0; i < C; ++i) {
+      usz j = 0;
       for (; j < R; ++j) {
 	if (!GetBit(selected, j) && Abs((tmp[j, i])) > eps) {
 	  break;
@@ -148,13 +148,13 @@ struct Matrix {
       if (j != R) {
 	++rank;
 	SetBit(selected, j, 1);
-	for (usize p = i + 1; p < C; ++p) {
+	for (usz p = i + 1; p < C; ++p) {
 	  tmp[j, p] /= tmp[j, i];
 	}
 
-	for (usize k = 0; k < R; ++k) {
+	for (usz k = 0; k < R; ++k) {
 	  if (k != j && Abs((tmp[k, i])) > eps) {
-	    for (usize p = i + 1; p < C; ++p) {
+	    for (usz p = i + 1; p < C; ++p) {
 	      tmp[k, p] -= tmp[j, p] * tmp[k, i];
 	    }
 	  }
@@ -180,8 +180,8 @@ struct Matrix {
     }
 
     Matrix cofactors = {0};
-    for (usize r = 0; r < R; ++r) {
-      for (usize c = 0; c < R; ++c) {
+    for (usz r = 0; r < R; ++r) {
+      for (usz c = 0; c < R; ++c) {
 	Matrix<T, R-1, C-1> minor = this->submatrix(r, c);
 	cofactors[c, r] = (::pow(-1, r + c) * minor.det()) / det;
       }
@@ -193,32 +193,32 @@ struct Matrix {
   Matrix gramSchmidt() {
     Matrix res = {0};
     Vector<T, R> v1 = getCol(0);
-    for (usize i = 0; i < R; ++i) {
+    for (usz i = 0; i < R; ++i) {
       res[i, 0] = v1[i];
     }
 
-    for (usize i = 1, k = 1; i < R; ++i) {
+    for (usz i = 1, k = 1; i < R; ++i) {
       Vector<T, R> vk = getCol(i);
       Vector<T, R> uk = vk;
       if (vk == Vector<T, R>()) {
 	continue;
       }
 
-      for (usize j = 0; j < k; ++j) {
+      for (usz j = 0; j < k; ++j) {
 	Vector<T, R> uj = res.getCol(j);
 	uk -= uj.proj(vk);
       }
 
-      for (usize i = 0; i < R; ++i) {
+      for (usz i = 0; i < R; ++i) {
 	res[i, k] = uk[i];
       }
 
       ++k;
     }
 
-    for (usize k = 0; k < C; ++k) {
+    for (usz k = 0; k < C; ++k) {
       Vector<T, C> uk = res.getCol(k).normalize();
-      for (usize j = 0; j < R; ++j) {
+      for (usz j = 0; j < R; ++j) {
 	res[j, k] = uk[j];
       }
     }
@@ -227,8 +227,8 @@ struct Matrix {
 
   String8 toString(Arena *arena, const char *format_for_each_elem) {
     StringStream ss = {0};
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C; ++j) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C; ++j) {
 	stringstreamAppend(arena, &ss,
 			   strFormat(arena, format_for_each_elem, (*this)[i, j]));
       }
@@ -243,11 +243,11 @@ struct Matrix {
 
   // =======================================================
   // Operations on rows
-  Matrix swap(usize r1, usize r2) {
+  Matrix swap(usz r1, usz r2) {
     Assert(r1 < R && r2 < R);
     Matrix res = {0};
 
-    for (usize i = 0, old_i = 0, k = 0; i < R; ++i, ++k) {
+    for (usz i = 0, old_i = 0, k = 0; i < R; ++i, ++k) {
       if (i == r1) {
 	old_i = i;
 	i = r2;
@@ -256,7 +256,7 @@ struct Matrix {
 	i = r1;
       }
 
-      for (usize j = 0; j < C; ++j) {
+      for (usz j = 0; j < C; ++j) {
 	res[i, j] = (*this)[k, j];
       }
 
@@ -266,17 +266,17 @@ struct Matrix {
     return res;
   }
 
-  Matrix rowAdd(usize target, usize r) {
+  Matrix rowAdd(usz target, usz r) {
     Assert(target < R && r < R);
     Matrix res = {0};
 
-    for (usize i = 0; i < R; ++i) {
+    for (usz i = 0; i < R; ++i) {
       if (i == target) {
-	for (usize j = 0; j < C; ++j) {
+	for (usz j = 0; j < C; ++j) {
 	  res[i, j] = (*this)[i, j] + (*this)[r, j];
 	}
       } else {
-	for (usize j = 0; j < C; ++j) {
+	for (usz j = 0; j < C; ++j) {
 	  res[i, j] = (*this)[i, j];
 	}
       }
@@ -285,17 +285,17 @@ struct Matrix {
     return res;
   }
 
-  Matrix rowMult(usize target, T v) {
+  Matrix rowMult(usz target, T v) {
     Assert(target < R && v != 0);
     Matrix res = {0};
 
-    for (usize i = 0; i < R; ++i) {
+    for (usz i = 0; i < R; ++i) {
       if (i == target) {
-	for (usize j = 0; j < C; ++j) {
+	for (usz j = 0; j < C; ++j) {
 	  res[i, j] = (*this)[i, j] * v;
 	}
       } else {
-	for (usize j = 0; j < C; ++j) {
+	for (usz j = 0; j < C; ++j) {
 	  res[i, j] = (*this)[i, j];
 	}
       }
@@ -306,12 +306,12 @@ struct Matrix {
 
   // =======================================================
   // Operations on columns
-  Matrix swapColumn(usize r1, usize r2) {
+  Matrix swapColumn(usz r1, usz r2) {
     Assert(r1 < C && r2 < C);
     Matrix res = {0};
 
-    for (usize i = 0, old_j = 0; i < R; ++i) {
-      for (usize j = 0, k = 0; j < C; ++j, ++k) {
+    for (usz i = 0, old_j = 0; i < R; ++i) {
+      for (usz j = 0, k = 0; j < C; ++j, ++k) {
 	if (j == r1) {
 	  old_j = j;
 	  j = r2;
@@ -329,12 +329,12 @@ struct Matrix {
     return res;
   }
 
-  Matrix colAdd(usize target, usize c) {
+  Matrix colAdd(usz target, usz c) {
     Assert(target < C && c < C);
     Matrix res = {0};
 
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C; ++j) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C; ++j) {
 	res[i, j] = (j == target
 		     ? (*this)[i, j] + (*this)[i, c]
 		     : (*this)[i, j]);
@@ -344,12 +344,12 @@ struct Matrix {
     return res;
   }
 
-  Matrix colMult(usize target, T v) {
+  Matrix colMult(usz target, T v) {
     Assert(target < C && v != 0);
     Matrix res = {0};
 
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C; ++j) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C; ++j) {
 	res[i, j] = (j == target
 		     ? (*this)[i, j] * v
 		     : (*this)[i, j]);
@@ -361,15 +361,15 @@ struct Matrix {
 
   // ===========================================================================
   // Operators
-  T& operator[](usize r, usize c) {
+  T& operator[](usz r, usz c) {
     return values[r][c];
   }
 
   Matrix operator+(Matrix &other) {
     Matrix res = *this;
 
-    for (usize r = 0; r < R; ++r) {
-      for (usize c = 0; c < C; ++c) {
+    for (usz r = 0; r < R; ++r) {
+      for (usz c = 0; c < C; ++c) {
 	res[r, c] += other[r, c];
       }
     }
@@ -381,8 +381,8 @@ struct Matrix {
   Matrix operator-(Matrix &other) {
     Matrix res = *this;
 
-    for (usize r = 0; r < R; ++r) {
-      for (usize c = 0; c < C; ++c) {
+    for (usz r = 0; r < R; ++r) {
+      for (usz c = 0; c < C; ++c) {
 	res[r, c] -= other[r, c];
       }
     }
@@ -393,8 +393,8 @@ struct Matrix {
   Matrix operator*(T scalar) {
     Matrix res = *this;
 
-    for (usize r = 0; r < R; ++r) {
-      for (usize c = 0; c < C; ++c) {
+    for (usz r = 0; r < R; ++r) {
+      for (usz c = 0; c < C; ++c) {
 	res[r, c] *= scalar;
       }
     }
@@ -402,14 +402,14 @@ struct Matrix {
     return res;
   }
 
-  template <usize R1, usize C2>
+  template <usz R1, usz C2>
   Matrix<T, R, C2> operator*(Matrix<T, R1, C2> &other) {
     Assert(R1 == C);
     Matrix<T, R, C2> res = {0};
 
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C2; ++j) {
-	for (usize r = 0; r < C; ++r) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C2; ++j) {
+	for (usz r = 0; r < C; ++r) {
 	  res[i, j] += (*this)[i, r] * other[r, j];
 	}
       }
@@ -423,8 +423,8 @@ struct Matrix {
   }
 
   bool operator==(Matrix &other) {
-    for (usize i = 0; i < R; ++i) {
-      for (usize j = 0; j < C; ++j) {
+    for (usz i = 0; i < R; ++i) {
+      for (usz j = 0; j < C; ++j) {
 	if ((*this)[i, j] != other[i, j]) {
 	  return false;
 	}
@@ -439,10 +439,10 @@ struct Matrix {
   }
 };
 
-template <typename T, usize R, usize C>
+template <typename T, usz R, usz C>
 fn void fixRoundingErrors(Matrix<T, R, C> *matrix, f64 epsilon = 1E-5) {
-  for (usize i = 0; i < R; ++i) {
-    for (usize j = 0; j < C; ++j) {
+  for (usz i = 0; i < R; ++i) {
+    for (usz j = 0; j < C; ++j) {
       f64 rounded = round((*matrix)[i, j]);
       if (Abs(((*matrix)[i, j]) - rounded) < epsilon) {
 	(*matrix)[i, j] = rounded;
@@ -451,7 +451,7 @@ fn void fixRoundingErrors(Matrix<T, R, C> *matrix, f64 epsilon = 1E-5) {
   }
 }
 
-template <typename T, usize R, usize C>
+template <typename T, usz R, usz C>
 fn Vector<T, R> eigvals(Matrix<T, R, C> *m, f64 epsilon = 1E-8) {
   Matrix q = m->gramSchmidt();
   Matrix r = q.transpose() * (*m);
@@ -460,13 +460,13 @@ fn Vector<T, R> eigvals(Matrix<T, R, C> *m, f64 epsilon = 1E-8) {
   T last_eig = b[R-1, R-1];
   T diff = 1;
 
-  for (usize iter = 0; iter < 5000 && diff > epsilon; ++iter) {
+  for (usz iter = 0; iter < 5000 && diff > epsilon; ++iter) {
     q = b.gramSchmidt();
     r = q.transpose() * b;
     b = r * q;
 
     T tot = 0;
-    for (usize i = 0; i < R; ++i) {
+    for (usz i = 0; i < R; ++i) {
       tot += Abs((b[i, i]));
     }
 
@@ -474,7 +474,7 @@ fn Vector<T, R> eigvals(Matrix<T, R, C> *m, f64 epsilon = 1E-8) {
   }
 
   Vector<T, R> res;
-  for (usize i = 0; i < R; ++i) {
+  for (usz i = 0; i < R; ++i) {
     res[i] = b[i, i];
   }
 

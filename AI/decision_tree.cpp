@@ -7,7 +7,7 @@
 
 struct Occurrence {
   String8 name;
-  usize count;
+  usz count;
 
   HashMap<String8, Occurrence> targets;
 
@@ -17,7 +17,7 @@ struct Occurrence {
 inline fn f64 ai_entropy(f64 val) { return val ? -val * log2(val) : 0; }
 
 fn f64 ai_computeEntropy(HashMap<String8, Occurrence> *map,
-                         usize row_count) {
+                         usz row_count) {
   f64 res = 0;
   for (HashMap<String8, Occurrence>::Slot slot : map->slots) {
     for (HashMap<String8, Occurrence>::KVNode *curr = slot.first; curr;
@@ -29,17 +29,17 @@ fn f64 ai_computeEntropy(HashMap<String8, Occurrence> *map,
   return res;
 }
 
-fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
-                               usize n_features, usize target_idx,
-                               usize row_count, f64 threshold) {
+fn usz ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
+                               usz n_features, usz target_idx,
+                               usz row_count, f64 threshold) {
   f64 max_gain = 0;
-  usize max_gain_idx = 0;
+  usz max_gain_idx = 0;
   f64 target_entropy = ai_computeEntropy(&maps[target_idx], row_count);
 #if DEBUG
   printf("\t\tTarget entropy: %.16lf\n", target_entropy);
 #endif
 
-  for (usize feature = 0; feature < n_features; ++feature) {
+  for (usz feature = 0; feature < n_features; ++feature) {
     if (feature == target_idx) {
       continue;
     }
@@ -103,18 +103,18 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
 fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
                                    StringStream header,
                                    HashMap<String8, Occurrence> *maps,
-                                   usize n_features, usize target_idx,
+                                   usz n_features, usz target_idx,
                                    f64 threshold) {
 #if DEBUG
   printf("File: %.*s\n", Strexpand(config.file.path));
 #endif
-  usize data_row_start_at = config.offset;
-  usize row_count = 0;
+  usz data_row_start_at = config.offset;
+  usz row_count = 0;
 
   /* Occurrences counter */
   for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
        row = csv_header(map_arena, &config), ++row_count) {
-    usize i = 0;
+    usz i = 0;
     String8 *row_entries = New(map_arena, String8, row.size);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
@@ -135,7 +135,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
 #if DEBUG
   /* Print table */
-  for (usize i = 0; i < n_features; ++i) {
+  for (usz i = 0; i < n_features; ++i) {
     for (HashMap<String8, Occurrence>::Slot slot : maps[i].slots) {
       if (slot.next == 0) {
         continue;
@@ -164,14 +164,14 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   }
 #endif
 
-  usize feature2split_by =
+  usz feature2split_by =
       ai_maxInformationGain(maps, n_features, target_idx, row_count, threshold);
 #if DEBUG
   printf("\tFeature to split by: %ld\n", feature2split_by);
 #endif
   if (feature2split_by == -1) {
     auto res = New(arena, DecisionTreeNode);
-    usize count = 0;
+    usz count = 0;
     for (HashMap<String8, Occurrence>::Slot &slot :
          maps[target_idx].slots) {
       for (HashMap<String8, Occurrence>::KVNode *curr = slot.first; curr;
@@ -191,7 +191,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
     return res;
   }
 
-  usize branches = 0;
+  usz branches = 0;
   for (HashMap<String8, Occurrence>::Slot &slot :
        maps[feature2split_by].slots) {
     for (HashMap<String8, Occurrence>::KVNode *curr = slot.first; curr;
@@ -212,7 +212,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   HashMap<String8, File> file_map(map_arena, strHash, branches);
   for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
        row = csv_header(map_arena, &config), ++row_count) {
-    usize i = 0;
+    usz i = 0;
     String8 *row_entries = New(map_arena, String8, row.size);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
@@ -237,7 +237,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   auto dt = New(arena, DecisionTreeNode);
   dt->should_split_by = feature2split_by;
 
-  usize i = 0;
+  usz i = 0;
   for (StringNode *curr = header.first; curr; curr = curr->next, ++i) {
     // Skip the column used to split
     if (i == feature2split_by) {
@@ -265,7 +265,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
   for (HashMap::Slot &slot : maps[feature2split_by].slots) {
     for (HashMap::KVNode *curr = slot.first; curr; curr = curr->next) {
-      for (usize i = 0; i < n_features; ++i) {
+      for (usz i = 0; i < n_features; ++i) {
         new_maps[i] = HashMap(map_arena, strHash);
       }
 
@@ -285,8 +285,8 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
 fn DecisionTreeNode *ai_buildDecisionTree(Arena *arena, Arena *map_arena,
                                           CSV config, StringStream header,
-                                          usize n_features,
-                                          usize target_feature, f64 threshold) {
+                                          usz n_features,
+                                          usz target_feature, f64 threshold) {
   Assert(target_feature <= n_features && target_feature > 0 && n_features > 1);
 
   if (!header.first) {
@@ -295,7 +295,7 @@ fn DecisionTreeNode *ai_buildDecisionTree(Arena *arena, Arena *map_arena,
 
   using HashMap = HashMap<String8, Occurrence>;
   auto maps = New(arena, HashMap, n_features);
-  for (usize i = 0; i < n_features; ++i) {
+  for (usz i = 0; i < n_features; ++i) {
     maps[i] = HashMap(arena, strHash);
   }
 

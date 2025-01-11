@@ -7,8 +7,8 @@
 
 template <typename T, typename U>
 struct HashMap {
-  usize size;
-  usize (*hasher)(T);
+  usz size;
+  usz (*hasher)(T);
 
   struct KVNode {
     T key;
@@ -23,11 +23,11 @@ struct HashMap {
 
   DynArray<Slot> slots;
 
-  HashMap(Arena *arena, usize (*hasher)(T), usize size = 16) :
+  HashMap(Arena *arena, usz (*hasher)(T), usz size = 16) :
     size(size), hasher(hasher), slots(arena, size) {}
 
   bool insert(Arena *arena, const T &key, const U &value) {
-    usize idx = hasher(key) % slots.size;
+    usz idx = hasher(key) % slots.size;
 
     KVNode *existing_node = 0;
     for(KVNode *n = slots[idx].first; n; n = n->next) {
@@ -48,7 +48,7 @@ struct HashMap {
   }
 
   U* search(const T &key) {
-    usize idx = hasher(key) % slots.size;
+    usz idx = hasher(key) % slots.size;
     for (KVNode *curr = slots[idx].first; curr; curr = curr->next) {
       if (key == curr->key) {
 	return &curr->value;
@@ -58,7 +58,7 @@ struct HashMap {
   }
 
   U* fromKey(Arena *arena, const T &key, const U &default_val = {}) {
-    usize idx = hasher(key) % slots.size;
+    usz idx = hasher(key) % slots.size;
     KVNode *existing_node = 0;
     for(KVNode *n = slots[idx].first; n; n = n->next) {
       if (n->key == key) {
@@ -77,7 +77,7 @@ struct HashMap {
   }
 
   void remove(const T &key) {
-    usize idx = hasher(key) % slots.size;
+    usz idx = hasher(key) % slots.size;
 
     for(KVNode *curr = slots[idx].first, *prev = 0;
 	curr;

@@ -4,7 +4,7 @@
 #include <math.h>
 #include "../base.h"
 
-template <typename T, usize D>
+template <typename T, usz D>
 struct Vector {
   T values[D];
 
@@ -26,7 +26,7 @@ struct Vector {
 
   T dot(Vector &other) {
     T res = 0;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res += values[i] * other.values[i];
     }
 
@@ -46,7 +46,7 @@ struct Vector {
 
   Vector mulElementWise(Vector &other) {
     Vector res = *this;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res *= other[i];
     }
 
@@ -56,7 +56,7 @@ struct Vector {
   // the `||vector||` thing
   f32 magnitude() {
     f32 res = 0.f;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res += Abs(values[i]) * Abs(values[i]);
     }
 
@@ -65,7 +65,7 @@ struct Vector {
 
   f64 magnitude64() {
     f64 res = 0.0;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res += Abs(values[i]) * Abs(values[i]);
     }
 
@@ -81,7 +81,7 @@ struct Vector {
       return res;
     }
 
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res.values[i] = values[i] / length;
     }
 
@@ -94,7 +94,7 @@ struct Vector {
 
   Vector operator+(Vector &other) {
     Vector res;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res.values[i] = values[i] + other.values[i];
     }
 
@@ -102,14 +102,14 @@ struct Vector {
   }
 
   void operator+=(Vector &other) {
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       values[i] += other.values[i];
     }
   }
 
   Vector operator-(Vector &other) {
     Vector res;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res.values[i] = values[i] - other.values[i];
     }
 
@@ -117,7 +117,7 @@ struct Vector {
   }
 
   void operator-=(const Vector &other) {
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       values[i] -= other.values[i];
     }
   }
@@ -136,7 +136,7 @@ struct Vector {
 
   Vector operator*(T scalar) {
     Vector res;
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       res.values[i] = values[i] * scalar;
     }
 
@@ -144,18 +144,18 @@ struct Vector {
   }
 
   void operator*=(T scalar) {
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       values[i] *= scalar;
     }
   }
 
-  T& operator[](usize i) {
+  T& operator[](usz i) {
     Assert(i < D);
     return values[i];
   }
 
   bool operator==(const Vector &other) {
-    for (usize i = 0; i < D; ++i) {
+    for (usz i = 0; i < D; ++i) {
       if (values[i] != other.values[i]) {
 	return false;
       }

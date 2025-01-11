@@ -41,7 +41,7 @@ typedef void (*GL_GEN_VERTEX_ARRAYS) (u32, u32*);
 global GL_GEN_VERTEX_ARRAYS glGenVertexArrays;
 typedef void (*GL_BIND_VERTEX_ARRAY) (u32);
 global GL_BIND_VERTEX_ARRAY glBindVertexArray;
-typedef void (*GL_VERTEX_ATTRIB_POINTER) (i32, u32, i32, bool, usize, void*);
+typedef void (*GL_VERTEX_ATTRIB_POINTER) (i32, u32, i32, bool, usz, void*);
 global GL_VERTEX_ATTRIB_POINTER glVertexAttribPointer;
 typedef void (*GL_ENABLE_VERTEX_ATTRIB_ARRAY) (i32);
 global GL_ENABLE_VERTEX_ATTRIB_ARRAY glEnableVertexAttribArray;
@@ -52,7 +52,7 @@ typedef void (*GL_GEN_BUFFERS) (u32, u32*);
 global GL_GEN_BUFFERS glGenBuffers;
 typedef void (*GL_BIND_BUFFER) (i32, u32);
 global GL_BIND_BUFFER glBindBuffer;
-typedef void (*GL_BUFFER_DATA) (i32, usize, f32*, i32);
+typedef void (*GL_BUFFER_DATA) (i32, usz, f32*, i32);
 global GL_BUFFER_DATA glBufferData;
 
 fn void opengl_init() {

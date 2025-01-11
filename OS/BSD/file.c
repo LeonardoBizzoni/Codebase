@@ -116,7 +116,7 @@ fn FileProperties fs_getProp(String8 filepath) {
 
   res.ownerID = file_stat.st_uid;
   res.groupID = file_stat.st_gid;
-  res.size = (usize)file_stat.st_size;
+  res.size = (usz)file_stat.st_size;
   res.last_access_time = (u64)file_stat.st_atime;
   res.last_modification_time = (u64)file_stat.st_mtime;
   res.last_status_change_time = (u64)file_stat.st_ctime;
@@ -306,7 +306,7 @@ fn FilenameList fs_iterFiles(Arena *arena, String8 dirname) {
 fn bool fs_rmIter(Arena *temp_arena, String8 dirname) {
   const String8 currdir = Strlit(".");
   const String8 parentdir = Strlit("..");
-  usize prev_head = temp_arena->head;
+  usz prev_head = temp_arena->head;
 
   FilenameList dirstack = {0};
   FilenameList deletable = {0};

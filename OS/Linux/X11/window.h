@@ -50,14 +50,14 @@ typedef struct {
     } kbd;
 
     struct {
-      usize x;
-      usize y;
+      usz x;
+      usz y;
     } motion;
 
     struct {
       u8 modifiers;
-      usize x;
-      usize y;
+      usz x;
+      usz y;
 
       ViewportMouseBtnType kind;
     } mouse;
@@ -66,8 +66,8 @@ typedef struct {
 
 typedef struct {
   String8 name;
-  usize width;
-  usize height;
+  usz width;
+  usz height;
 
   Display *xdisplay;
   u32 xscreen;
@@ -101,8 +101,8 @@ typedef struct {
   GLXContext opengl_context;
 } Viewport;
 
-fn Viewport openglViewport(String8 name, usize initial_width, usize initial_height);
-fn Viewport vulkanViewport(String8 name, usize initial_width, usize initial_height);
+fn Viewport openglViewport(String8 name, usz initial_width, usz initial_height);
+fn Viewport vulkanViewport(String8 name, usz initial_width, usz initial_height);
 
 fn void closeViewport(Viewport *viewport);
 fn bool viewportShouldClose(Viewport *viewport);
