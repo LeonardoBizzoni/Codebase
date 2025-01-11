@@ -33,10 +33,10 @@ inline fn u8 encodeUTF32(u32 *res, Codepoint cp);
 
 typedef struct String8 {
   u8 *str;
-  usize size;
+  usz size;
 
 #if CPP
-  inline char operator[](usize idx) {
+  inline char operator[](usz idx) {
     return (char)str[idx];
   }
 #endif
@@ -51,13 +51,13 @@ typedef struct StringNode {
 typedef struct StringStream {
   StringNode *first;
   StringNode *last;
-  usize size;
+  usz size;
 } StringStream;
 
 fn String8 str8FromStream(Arena *arena, StringStream *stream);
 fn void stringstreamAppend(Arena *arena, StringStream *strlist, String8 other);
 
-inline fn String8 str8(char *chars, usize len);
+inline fn String8 str8(char *chars, usz len);
 inline fn String8 strFromCstr(char *chars);
 inline fn String8 strFromDateTime(Arena *arena, DateTime dt);
 inline fn String8 strFromUnixTime(Arena *arena, u64 unix_timestamp);
@@ -74,21 +74,21 @@ fn i64 i64FromStr(String8 s);
 fn u64 u64FromStr(String8 s);
 fn f64 f64FromStr(String8 s);
 
-fn usize strHash(String8 s);
+fn usz strHash(String8 s);
 
 fn String8 stringifyI64(Arena *arena, i64 n);
 fn String8 stringifyU64(Arena *arena, u64 n);
 fn String8 stringifyF64(Arena *arena, f64 n);
 
-fn usize str8len(char *chars);
+fn usz str8len(char *chars);
 
 fn String8 strFormat(Arena *arena, const char *fmt, ...);
 fn String8 strFormatVa(Arena *arena, const char *fmt, va_list args);
 
-fn String8 strPrefix(String8 s, usize end);
-fn String8 strPostfix(String8 s, usize start);
-fn String8 substr(String8 s, usize end);
-fn String8 strRange(String8 s, usize start, usize end);
+fn String8 strPrefix(String8 s, usz end);
+fn String8 strPostfix(String8 s, usz start);
+fn String8 substr(String8 s, usz end);
+fn String8 strRange(String8 s, usz start, usz end);
 fn bool strEndsWith(String8 s, char ch);
 fn String8 longestCommonSubstring(Arena *arena, String8 s1, String8 s2);
 
@@ -97,8 +97,8 @@ fn String8 lowerFromStr(Arena *arena, String8 s);
 fn String8 capitalizeFromStr(Arena *arena, String8 s);
 
 fn StringStream strSplit(Arena *arena, String8 s, char ch);
-fn usize strFindFirst(String8 s, char ch);
-fn usize strFindFirstSubstr(String8 s, String8 needle);
+fn usz strFindFirst(String8 s, char ch);
+fn usz strFindFirstSubstr(String8 s, String8 needle);
 fn bool strContains(String8 s, char ch);
 
 fn bool charIsSpace(u8 ch);
@@ -128,12 +128,12 @@ inline fn bool operator!=(String8 s1, String8 s2) {
 
 typedef struct {
   u16 *str;
-  usize size;
+  usz size;
 } String16;
 
 typedef struct {
   u32 *str;
-  usize size;
+  usz size;
 } String32;
 
 fn bool str16Eq(String16 s1, String16 s2);

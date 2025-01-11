@@ -16,16 +16,16 @@
 
 typedef struct {
   void *base;
-  usize head;
-  usize total_size;
+  usz head;
+  usz total_size;
 } Arena;
 
-inline fn void *forwardAlign(void *ptr, usize align);
-inline fn bool isPowerOfTwo(usize value);
+inline fn void *forwardAlign(void *ptr, usz align);
+inline fn bool isPowerOfTwo(usz value);
 
-fn Arena *arenaBuild(usize size, usize base_addr);
-inline fn void arenaPop(Arena *arena, usize bytes);
+fn Arena *arenaBuild(usz size, usz base_addr);
+inline fn void arenaPop(Arena *arena, usz bytes);
 inline fn bool arenaFree(Arena *arena);
-fn void *arenaPush(Arena *arena, usize size, usize align);
+fn void *arenaPush(Arena *arena, usz size, usz align);
 
 #endif

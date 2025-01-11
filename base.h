@@ -173,6 +173,7 @@
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 typedef float f32;
 typedef double f64;
 typedef long double f128;
@@ -186,19 +187,14 @@ typedef uint32_t u32;
 typedef int64_t i64;
 typedef uint64_t u64;
 
+typedef size_t usz;
+typedef ptrdiff_t isz;
+
 #if !CPP
 typedef enum {
   false,
   true
 } bool;
-#endif
-
-#if defined(ARCH_X64) || defined(ARCH_ARM64)
-typedef u64 usize;
-typedef i64 isize;
-#else
-typedef u32 usize;
-typedef i32 isize;
 #endif
 
 #define DefaultAlignment (2 * sizeof(void*))

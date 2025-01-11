@@ -10,7 +10,7 @@ fn StringStream csv_nextRow(Arena *arena, CSV *config) {
   }
 
   String8 content = strPostfix(config->file.content, config->offset);
-  usize line_ends = strFindFirst(content, '\n');
+  usz line_ends = strFindFirst(content, '\n');
   String8 row = strPrefix(content, line_ends);
 
   config->offset += line_ends + 1;
