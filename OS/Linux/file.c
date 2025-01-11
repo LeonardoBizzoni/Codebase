@@ -28,7 +28,7 @@ fn String8 fs_read(Arena *arena, String8 filepath) {
     return (String8) {0};
   }
 
-  String8 res = { .str = (u8 *)New(arena, u8, file_stat.st_size) };
+  String8 res = { .str = New(arena, u8, file_stat.st_size) };
   res.size = read(fd, res.str, file_stat.st_size);
 
   (void)close(fd);
@@ -165,7 +165,7 @@ fn File fs_openTmp(Arena *arena) {
   i32 fd = mkstemp(path);
 
   String8 pathstr = {
-    .str = (u8 *)New(arena, u8, Arrsize(path)),
+    .str = New(arena, u8, Arrsize(path)),
     .size = Arrsize(path),
   };
   memCopy(pathstr.str, path, Arrsize(path));
@@ -292,7 +292,7 @@ fn FilenameList fs_iterFiles(Arena *arena, String8 dirname) {
       continue;
     }
 
-    FilenameNode *node = (FilenameNode *)New(arena, FilenameNode);
+    FilenameNode *node = New(arena, FilenameNode);
     node->value = str;
     DLLPushBack(res.first, res.last, node);
   }
@@ -308,7 +308,7 @@ fn bool fs_rmIter(Arena *temp_arena, String8 dirname) {
 
   FilenameList dirstack = {0};
   FilenameList deletable = {0};
-  FilenameNode *root = (FilenameNode *)New(temp_arena, FilenameNode);
+  FilenameNode *root = New(temp_arena, FilenameNode);
   root->value = dirname;
   StackPush(dirstack.first, root);
 
@@ -332,7 +332,7 @@ fn bool fs_rmIter(Arena *temp_arena, String8 dirname) {
                                    Strexpand(current->value), Strexpand(str));
 
       if (entry->d_type == DT_DIR) {
-        FilenameNode *childdir = (FilenameNode *)New(temp_arena, FilenameNode);
+        FilenameNode *childdir = New(temp_arena, FilenameNode);
         childdir->value = fullpath;
         StackPush(dirstack.first, childdir);
       } else {

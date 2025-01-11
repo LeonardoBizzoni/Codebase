@@ -115,7 +115,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
        row = csv_header(map_arena, &config), ++row_count) {
     usize i = 0;
-    String8 *row_entries = (String8 *)New(map_arena, String8, row.size);
+    String8 *row_entries = New(map_arena, String8, row.size);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
     }
@@ -170,7 +170,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   printf("\tFeature to split by: %ld\n", feature2split_by);
 #endif
   if (feature2split_by == -1) {
-    auto res = (DecisionTreeNode *)New(arena, DecisionTreeNode);
+    auto res = New(arena, DecisionTreeNode);
     usize count = 0;
     for (HashMap<String8, Occurrence>::Slot &slot :
          maps[target_idx].slots) {
@@ -213,7 +213,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
        row = csv_header(map_arena, &config), ++row_count) {
     usize i = 0;
-    String8 *row_entries = (String8 *)New(map_arena, String8, row.size);
+    String8 *row_entries = New(map_arena, String8, row.size);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
     }
@@ -234,7 +234,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   }
 
   /* Call recursively to create the decision tree child nodes. */
-  auto dt = (DecisionTreeNode *)New(arena, DecisionTreeNode);
+  auto dt = New(arena, DecisionTreeNode);
   dt->should_split_by = feature2split_by;
 
   usize i = 0;
@@ -260,7 +260,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   --target_idx;
 
   using HashMap = HashMap<String8, Occurrence>;
-  auto new_maps = (HashMap *)New(
+  auto new_maps = New(
       map_arena, HashMap, n_features);
 
   for (HashMap::Slot &slot : maps[feature2split_by].slots) {
@@ -294,8 +294,7 @@ fn DecisionTreeNode *ai_buildDecisionTree(Arena *arena, Arena *map_arena,
   }
 
   using HashMap = HashMap<String8, Occurrence>;
-  auto maps =
-      (HashMap *)New(arena, HashMap, n_features);
+  auto maps = New(arena, HashMap, n_features);
   for (usize i = 0; i < n_features; ++i) {
     maps[i] = HashMap(arena, strHash);
   }

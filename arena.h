@@ -11,8 +11,8 @@
 
 #define New(...) Newx(__VA_ARGS__,New3,New2)(__VA_ARGS__)
 #define Newx(a,b,c,d,...) d
-#define New2(arenaptr, type) (type*)arenaPush(arenaptr, sizeof(type), alignof(type))
-#define New3(arenaptr, type, count) (type*)arenaPush(arenaptr, (count) * sizeof(type), alignof(type))
+#define New2(arenaptr, type) (type*)arenaPush(arenaptr, sizeof(type), _Alignof(type))
+#define New3(arenaptr, type, count) (type*)arenaPush(arenaptr, (count) * sizeof(type), _Alignof(type))
 
 typedef struct {
   void *base;

@@ -340,7 +340,7 @@ bool viewportSetIcon(Arena *arena, Viewport *viewport, String8 path) {
   if (!imgdata) { return false; }
 
   i32 size = 2 + width * height;
-  u64 *data = (u64 *) New(arena, u64, size);
+  u64 *data = New(arena, u64, size);
   if (!data) { return false; }
   data[0] = width;
   data[1] = height;

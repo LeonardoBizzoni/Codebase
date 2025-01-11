@@ -13,7 +13,7 @@ struct DynArray {
   DynArray(Arena *arena, usize initial_capacity = 8)
   : size(initial_capacity) {
     Assert(initial_capacity > 0);
-    first = last = (ArrayListNode<T> *) New(arena, ArrayListNode<T>);
+    first = last = New(arena, ArrayListNode<T>);
     first->block = Array<T>(arena, initial_capacity);
   }
 
