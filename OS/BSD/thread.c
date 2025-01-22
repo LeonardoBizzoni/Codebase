@@ -1,19 +1,17 @@
-#include "thread.h"
-
-inline fn Thread *threadSpawn(void *(*thread_main)(void *)) {
-  return threadSpawnArgs(thread_main, 0);
+inline fn Thread *threadSpawn(OS_ThreadFunction *func) {
+  return threadSpawnArgs(func, 0);
 }
 
-fn Thread *threadSpawnArgs(void *(*thread_main)(void *), void *arg_data) {
-  Assert(thread_main);
-
+fn Thread *threadSpawnArgs(OS_ThreadFunction *func, void *arg_data) {
+  Assert(func);
+  
   Thread *thread;
-  i32 res = pthread_create(&thread, 0, thread_main, arg_data);
-
+  i32 res = pthread_create(&thread, 0, func, arg_data);
+  
   if (!thread || res != 0) {
     perror("`Base::OS::spawn_thread`");
   }
-
+  
   return thread;
 }
 

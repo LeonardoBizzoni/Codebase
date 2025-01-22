@@ -1,13 +1,13 @@
-inline fn Thread os_thdSpawn(void *(*thread_main)(void *)) {
-  return os_thdSpawnArgs(thread_main, 0);
+inline fn Thread os_thdSpawn(OS_ThreadFunction *func) {
+  return os_thdSpawnArgs(func, 0);
 }
 
-fn Thread os_thdSpawnArgs(void *(*thread_main)(void *), void *arg_data) {
-  Assert(thread_main);
-
+fn Thread os_thdSpawnArgs(OS_ThreadFunction *func, void *arg_data) {
+  Assert(func);
+  
   Thread thread_id;
-  pthread_create(&thread_id, 0, thread_main, arg_data);
-
+  pthread_create(&thread_id, 0, func, arg_data);
+  
   return thread_id;
 }
 
