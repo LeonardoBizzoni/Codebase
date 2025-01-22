@@ -1,12 +1,10 @@
-#include "../file.h"
-
 #include <fcntl.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <sys/types.h>
+#include <unistd.h>
 
 #include <dirent.h>
+#include <sys/types.h>
 
 // =============================================================================
 // File reading and writing/appending
@@ -33,12 +31,12 @@ fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
 }
 
 fn String8 fs_read(Arena *arena, os_Handle file) {
-  int fd = file.fd[0];
   String8 result = {0};
+  int fd = file.fd[0];
   if(!fd) { return result; }
 
   struct stat file_stat;
-  if (!fstat(fd, &file_stat)) {
+  if (fstat(fd, &file_stat) == 0) {
     u8 *buffer = New(arena, u8, file_stat.st_size);
     if(pread(fd, buffer, file_stat.st_size, 0) >= 0) {
       result.str = buffer;
@@ -49,43 +47,43 @@ fn String8 fs_read(Arena *arena, os_Handle file) {
   return result;
 }
 
-inline fn bool fs_write(os_Handle file, String8 content) {
+fn bool fs_write(os_Handle file, String8 content) {
   if(!file.fd[0]) { return false; }
   return write(file.fd[0], content.str, content.size) == (isize)content.size;
 }
 
 fn fs_Properties fs_getProp(os_Handle file) {
-  fs_Properties result = {0};
-  if(!file.fd[0]) { return result; }
+  fs_Properties res = {0};
+  if(!file.fd[0]) { return res; }
 
   struct stat file_stat;
   if (fstat((i32)file.fd[0], &file_stat) < 0) {
-    return result;
+    return res;
   }
 
-  result.ownerID = file_stat.st_uid;
-  result.groupID = file_stat.st_gid;
-  result.size = (usize)file_stat.st_size;
-  result.last_access_time = (u64)file_stat.st_atime;
-  result.last_modification_time = (u64)file_stat.st_mtime;
-  result.last_status_change_time = (u64)file_stat.st_ctime;
+  res.ownerID = file_stat.st_uid;
+  res.groupID = file_stat.st_gid;
+  res.size = (usize)file_stat.st_size;
+  res.last_access_time = (u64)file_stat.st_atime;
+  res.last_modification_time = (u64)file_stat.st_mtime;
+  res.last_status_change_time = (u64)file_stat.st_ctime;
 
-  result.user = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IRUSR) { result.user |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWUSR) { result.user |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXUSR) { result.user |= os_Permissions_Execute; }
+  res.user = os_Permissions_Unknown;
+  if (file_stat.st_mode & S_IRUSR) { res.user |= os_Permissions_Read; }
+  if (file_stat.st_mode & S_IWUSR) { res.user |= os_Permissions_Write; }
+  if (file_stat.st_mode & S_IXUSR) { res.user |= os_Permissions_Execute; }
 
-  result.group = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IRGRP) { result.group |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWGRP) { result.group |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXGRP) { result.group |= os_Permissions_Execute; }
+  res.group = os_Permissions_Unknown;
+  if (file_stat.st_mode & S_IRGRP) { res.group |= os_Permissions_Read; }
+  if (file_stat.st_mode & S_IWGRP) { res.group |= os_Permissions_Write; }
+  if (file_stat.st_mode & S_IXGRP) { res.group |= os_Permissions_Execute; }
 
-  result.other = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IROTH) { result.other |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWOTH) { result.other |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXOTH) { result.other |= os_Permissions_Execute; }
+  res.other = os_Permissions_Unknown;
+  if (file_stat.st_mode & S_IROTH) { res.other |= os_Permissions_Read; }
+  if (file_stat.st_mode & S_IWOTH) { res.other |= os_Permissions_Write; }
+  if (file_stat.st_mode & S_IXOTH) { res.other |= os_Permissions_Execute; }
 
-  return result;
+  return res;
 }
 
 // =============================================================================
@@ -94,8 +92,7 @@ fn fs_Properties fs_getProp(os_Handle file) {
 fn File fs_fopen(String8 filepath) {
   File file = {0};
   i32 fd = open((char *)filepath.str, O_RDWR | O_CREAT,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-
+		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   if (fd >= 0) {
     file.handle.fd[0] = fd;
     file.path = filepath;
@@ -126,7 +123,7 @@ fn File fs_fopenTmp(Arena *arena) {
   return file;
 }
 
-inline fn bool fs_fclose(File *file) {
+fn bool fs_fclose(File *file) {
   return close(file->handle.fd[0]) >= 0;
 }
 
@@ -153,11 +150,11 @@ inline fn bool fs_fileHasChanged(File *file) {
 	 (file->prop.last_status_change_time != prop.last_status_change_time);
 }
 
-inline fn bool fs_fdelete(File *file) {
+fn bool fs_fdelete(File *file) {
   return unlink((char *) file->path.str) >= 0 && fs_fclose(file);
 }
 
-inline fn bool fs_frename(File *file, String8 to) {
+fn bool fs_frename(File *file, String8 to) {
   return rename((char *) file->path.str, (char *) to.str) >= 0;
 }
 
@@ -173,22 +170,25 @@ inline fn bool fs_rename(String8 filepath, String8 to) {
   return rename((char *)filepath.str, (char *)to.str) >= 0;
 }
 
-inline fn bool fs_mkdir(String8 path) {
+fn bool fs_mkdir(String8 path) {
   Assert(path.size != 0);
   return mkdir((char *)path.str,
                S_IRWXU | (S_IRGRP | S_IXGRP) | (S_IROTH | S_IXOTH)) >= 0;
 }
 
-inline fn bool fs_rmdir(String8 path) {
+fn bool fs_rmdir(String8 path) {
   Assert(path.size != 0);
   return rmdir((char *)path.str) >= 0;
 }
 
+// =============================================================================
+// File iteration
 fn FilenameList fs_iterFiles(Arena *arena, String8 dirname) {
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
   FilenameList res = {0};
+
   DIR *dir = opendir((char *)dirname.str);
   if (!dir) {
     return res;

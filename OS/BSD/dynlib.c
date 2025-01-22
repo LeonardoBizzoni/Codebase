@@ -1,5 +1,3 @@
-#include "../dynlib.h"
-
 #include <dlfcn.h>
 
 inline fn void *dynlib_open(String8 path) {
