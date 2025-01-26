@@ -109,26 +109,21 @@ inline fn u8 encodeUTF32(u32 *res, Codepoint cp) {
 // =============================================================================
 // UTF-8 string
 fn String8 str8FromStream(Arena *arena, StringStream stream) {
-  usize size = 0;
-  for (StringNode *curr = stream.first; curr; curr = curr->next) {
-    size += curr->value.size;
-  }
-  
-  u8 *str = New(arena, u8, size);
+  u8 *str = New(arena, u8, stream.total_size);
   u8 *ptr = str;
   for (StringNode *curr = stream.first; curr; curr = curr->next) {
     memCopy(ptr, curr->value.str, curr->value.size);
     ptr += curr->value.size;
   }
   
-  return str8(str, size);
+  return str8(str, stream.total_size);
 }
 
 fn void stringstreamAppend(Arena *arena, StringStream *strlist, String8 other) {
   Assert(arena);
   Assert(strlist);
-  ++strlist->size;
-  
+  strlist->node_count += 1;
+  strlist->total_size += other.size;
   StringNode *str = New(arena, StringNode);
   str->value = other;
   DLLPushBack(strlist->first, strlist->last, str);

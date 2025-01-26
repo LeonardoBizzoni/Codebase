@@ -28,7 +28,7 @@ inline fn u8 encodeUTF32(u32 *res, Codepoint cp);
 typedef struct String8 {
   u8 *str;
   usize size;
-
+  
 #if CPP
   inline char operator[](usize idx) {
     return (char)str[idx];
@@ -45,7 +45,8 @@ typedef struct StringNode {
 typedef struct StringStream {
   StringNode *first;
   StringNode *last;
-  usize size;
+  usize node_count;
+  usize total_size;
 } StringStream;
 
 fn String8 str8FromStream(Arena *arena, StringStream stream);
