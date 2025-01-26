@@ -136,6 +136,9 @@
     _assert_break(); \
   })
 
+#define StaticAssert(C, ID) global u8 Glue(ID, __LINE__)[(C)?1:-1]
+
+
 #ifdef ENABLE_ASSERT
 #  define Assert(COND) AssertAlways(COND)
 #  define AssertMsg(COND, MSG) AssertAlwaysWithMsg(COND, MSG)

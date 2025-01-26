@@ -13,6 +13,7 @@
 #  include "BSD/opengl.h"
 #  include "BSD/X11/window.h"
 #elif OS_WINDOWS
+# include "win32/win32_file.h"
 # include "win32/win32_thread.h"
 #else
 #error os layer is not supported for this platform

@@ -132,19 +132,21 @@ typedef struct {
 } String32;
 
 fn bool str16Eq(String16 s1, String16 s2);
+fn usize cstring16_length(u16 *str);
+fn String16 str16_cstr(u16 *str);
 fn bool str32Eq(String32 s1, String32 s2);
 
 // =============================================================================
 // UTF string conversion
 
-fn String8 UTF8From16(Arena *arena, String16 *in);
-fn String8 UTF8From32(Arena *arena, String32 *in);
+fn String8 UTF8From16(Arena *arena, String16 in);
+fn String8 UTF8From32(Arena *arena, String32 in);
 
-fn String16 UTF16From8(Arena *arena, String8 *in);
-fn String16 UTF16From32(Arena *arena, String32 *in);
+fn String16 UTF16From8(Arena *arena, String8 in);
+fn String16 UTF16From32(Arena *arena, String32 in);
 
-fn String32 UTF32From8(Arena *arena, String8 *in);
-fn String32 UTF32From16(Arena *arena, String16 *in);
+fn String32 UTF32From8(Arena *arena, String8 in);
+fn String32 UTF32From16(Arena *arena, String16 in);
 
 // =============================================================================
 

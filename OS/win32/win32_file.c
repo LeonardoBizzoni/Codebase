@@ -1,7 +1,7 @@
 fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
   os_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
-  String16 path = UTF16From8(scratch.arena, &filepath);
+  String16 path = UTF16From8(scratch.arena, filepath);
   SECURITY_ATTRIBUTES security_attributes = {sizeof(SECURITY_ATTRIBUTES), 0, 0};
   DWORD access_flags = 0;
   DWORD share_mode = 0;
@@ -70,7 +70,7 @@ fn fs_Properties fs_getProp(os_Handle file) {
 fn File fs_fileOpen(Arena *arena, String8 filepath) {
   File result = {0};
   Scratch scratch = ScratchBegin(&arena, 1);
-  String16 path = UTF16From8(scratch.arena, &filepath);
+  String16 path = UTF16From8(scratch.arena, filepath);
   
   SECURITY_ATTRIBUTES security_attributes = {sizeof(SECURITY_ATTRIBUTES), 0, 0};
   DWORD access_flags = GENERIC_READ | GENERIC_WRITE;
@@ -91,4 +91,66 @@ fn File fs_fileOpen(Arena *arena, String8 filepath) {
     }
   }
   return result;
+}
+
+fn OS_FileIter* 
+os_file_iter_begin(Arena *arena, String8 path)
+{
+  Scratch scratch = ScratchBegin(&arena, 1);
+  StringStream list = {0};
+  
+  stringstreamAppend(scratch.arena, &list, path);
+  stringstreamAppend(scratch.arena, &list, Strlit("\\*"));
+  path = str8FromStream(scratch.arena, list);
+  
+  String16 path16 = UTF16From8(scratch.arena, path);
+  WIN32_FIND_DATAW file_data = {0};
+  
+  OS_W32_FileIter *iter = New(arena, OS_W32_FileIter);
+  iter->handle = FindFirstFileW((WCHAR*)path16.str, &file_data);
+  iter->file_data = file_data;
+  
+  OS_FileIter *result = (OS_FileIter*)iter;
+  return result;
+}
+
+fn bool 
+os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
+{
+  bool result = false;
+  OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter;
+  for(;!w32_iter->done;)
+  {
+    WCHAR *file_name = w32_iter->file_data.cFileName;
+    bool is_dot = file_name[0] == '.';
+    bool is_dotdot = file_name[0] == '.' && file_name[1] == '.';
+    
+    bool valid = (!is_dot && !is_dotdot);
+    WIN32_FIND_DATAW data;
+    if(valid)
+    {
+      memcpy(&data, &w32_iter->file_data, sizeof(data));
+    }
+    
+    if(!FindNextFileW(w32_iter->handle, &w32_iter->file_data)) 
+    {
+      w32_iter->done = 1;
+    }
+    
+    if(valid)
+    {
+      info_out->name = UTF8From16(arena, str16_cstr((u16*)data.cFileName));
+      result = true;
+      break;
+    }
+  }
+  
+  return result;
+}
+
+fn void 
+os_file_iter_end(OS_FileIter *iter)
+{
+  OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter;
+  FindClose(w32_iter->handle);
 }

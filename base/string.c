@@ -595,133 +595,144 @@ bool str16Eq(String16 s1, String16 s2) {
   if (s1.size != s2.size) {
     return false;
   }
-
+  
   for (usize i = 0; i < s1.size; ++i) {
     if (s1.str[i] != s2.str[i]) {
       return false;
     }
   }
-
+  
   return true;
+}
+
+fn usize cstring16_length(u16 *str){
+  u16 *p = str;
+  for(; *p; ++p);
+  return p - str;
+}
+
+fn String16 str16_cstr(u16 *str){
+  String16 result = { str, cstring16_length(str) };
+  return result;
 }
 
 fn bool str32Eq(String32 s1, String32 s2) {
   if (s1.size != s2.size) {
     return false;
   }
-
+  
   for (usize i = 0; i < s1.size; ++i) {
     if (s1.str[i] != s2.str[i]) {
       return false;
     }
   }
-
+  
   return true;
 }
 
 // =============================================================================
 // UTF string conversion
-fn String8 UTF8From16(Arena *arena, String16 *in) {
-  usize res_size = 0, approx_size = in->size * 4;
+fn String8 UTF8From16(Arena *arena, String16 in) {
+  usize res_size = 0, approx_size = in.size * 4;
   u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
-
+  
   Codepoint codepoint = {0};
-  for (u16 *start = in->str, *end = in->str + in->size; start < end;
+  for (u16 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
     codepoint = decodeUTF16(start);
-
+    
     u8 utf8_codepoint_size = encodeUTF8(res_offset, codepoint);
     res_size += utf8_codepoint_size;
     res_offset += utf8_codepoint_size;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   return str8(bytes, res_size);
 }
 
-fn String8 UTF8From32(Arena *arena, String32 *in) {
-  usize res_size = 0, approx_size = in->size * 4;
+fn String8 UTF8From32(Arena *arena, String32 in) {
+  usize res_size = 0, approx_size = in.size * 4;
   u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
-
+  
   Codepoint codepoint = {0};
-  for (u32 *start = in->str, *end = in->str + in->size; start < end;
+  for (u32 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
     codepoint = decodeUTF32(start);
-
+    
     u8 utf8_codepoint_size = encodeUTF8(res_offset, codepoint);
     res_size += utf8_codepoint_size;
     res_offset += utf8_codepoint_size;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   return str8(bytes, res_size);
 }
 
-fn String16 UTF16From8(Arena *arena, String8 *in) {
-  usize res_size = 0, approx_size = in->size * 2;
+fn String16 UTF16From8(Arena *arena, String8 in) {
+  usize res_size = 0, approx_size = in.size * 2;
   u16 *words = New(arena, u16, approx_size), *res_offset = words;
-
+  
   Codepoint codepoint = {0};
-  for (u8 *start = in->str, *end = in->str + in->size; start < end;
+  for (u8 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
     codepoint = decodeUTF8(start);
-
+    
     u8 utf16_codepoint_size = encodeUTF16(res_offset, codepoint);
     res_size += utf16_codepoint_size;
     res_offset += utf16_codepoint_size;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   String16 res = {words, res_size};
   return res;
 }
 
-fn String16 UTF16From32(Arena *arena, String32 *in) {
-  usize res_size = 0, approx_size = in->size * 2;
+fn String16 UTF16From32(Arena *arena, String32 in) {
+  usize res_size = 0, approx_size = in.size * 2;
   u16 *words = New(arena, u16, approx_size), *res_offset = words;
-
+  
   Codepoint codepoint = {0};
-  for (u32 *start = in->str, *end = in->str + in->size; start < end;
+  for (u32 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
     codepoint = decodeUTF32(start);
-
+    
     u8 utf16_codepoint_size = encodeUTF16(res_offset, codepoint);
     res_size += utf16_codepoint_size;
     res_offset += utf16_codepoint_size;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   String16 res = {words, res_size};
   return res;
 }
 
-fn String32 UTF32From8(Arena *arena, String8 *in) {
-  usize res_size = 0, approx_size = in->size * 2;
+fn String32 UTF32From8(Arena *arena, String8 in) {
+  usize res_size = 0, approx_size = in.size * 2;
   u32 *dwords = New(arena, u32, approx_size), *res_offset = dwords;
-
+  
   Codepoint cp = {0};
-  for (u8 *start = in->str, *end = in->str + in->size; start < end;
+  for (u8 *start = in.str, *end = in.str + in.size; start < end;
        start += cp.size, ++res_size) {
     cp = decodeUTF8(start);
     *res_offset++ = cp.codepoint;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   String32 res = {dwords, res_size};
   return res;
 }
 
-fn String32 UTF32From16(Arena *arena, String16 *in) {
-  usize res_size = 0, approx_size = in->size * 2;
+fn String32 UTF32From16(Arena *arena, String16 in) {
+  usize res_size = 0, approx_size = in.size * 2;
   u32 *dwords = New(arena, u32, approx_size), *res_offset = dwords;
-
+  
   Codepoint cp = {0};
-  for (u16 *start = in->str, *end = in->str + in->size; start < end;
+  for (u16 *start = in.str, *end = in.str + in.size; start < end;
        start += cp.size, ++res_size) {
     cp = decodeUTF16(start);
     *res_offset++ = cp.codepoint;
   }
-
+  
   arenaPop(arena, (approx_size - res_size));
   String32 res = {dwords, res_size};
   return res;

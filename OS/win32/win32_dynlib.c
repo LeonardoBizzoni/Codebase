@@ -1,7 +1,7 @@
 fn OS_Library os_lib_open(String8 path){
   OS_Library result = {0};
   Scratch scratch = ScratchBegin(0,0);
-  String16 path16 = UTF16From8(scratch.arena, &path);
+  String16 path16 = UTF16From8(scratch.arena, path);
   HMODULE module = LoadLibraryExW((WCHAR*)path16.str, 0, 0);
   if(module != 0){
     result.v[0] = (u64)module;
