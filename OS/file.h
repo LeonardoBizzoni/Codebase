@@ -1,5 +1,5 @@
-#ifndef BASE_OS_FILE
-#define BASE_OS_FILE
+#ifndef OS_FILE_H
+#define OS_FILE_H
 
 typedef u8 os_Permissions;
 enum {
@@ -108,4 +108,4 @@ fn OS_FileIter* os_file_iter_begin(Arena *arena, String8 path);
 fn bool         os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out);
 fn void         os_file_iter_end(OS_FileIter *iter);
 
-#endif
+#endif // OS_FILE_H

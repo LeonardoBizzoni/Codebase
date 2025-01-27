@@ -32,16 +32,29 @@ fn String8 fs_read(Arena *arena, os_Handle file) {
   LARGE_INTEGER file_size = {0};
   HANDLE handle = (HANDLE)file.fd[0];
   
-  if(GetFileSizeEx(handle, &file_size)) {
-    DWORD bytes_read = 0;
-    DWORD size = (DWORD)file_size.QuadPart;
-    void *buffer = New(arena, u8, size);
+  GetFileSizeEx(handle, &file_size);
+  u64 to_read = file_size.QuadPart;
+  u64 total_read = 0;
+  u8 *ptr = New(arena, u8, to_read);
+  for(;total_read < to_read;)
+  {
+    u64 amount64 = to_read - total_read;
+    u32 amount32 = amount64 > U32_MAX ? U32_MAX : (u32)amount64;
+    u32 bytes_read;
     OVERLAPPED overlapped = {0};
-    if(ReadFile(handle, buffer, size, &bytes_read, &overlapped)
-       && size == bytes_read) {
-      result.str = (u8*)buffer;
-      result.size = size;
+    BOOL read_result = ReadFile(handle, ptr + total_read, amount32, &bytes_read, &overlapped);
+    total_read += bytes_read;
+    
+    if(bytes_read != amount32 && !read_result)
+    {
+      break;
     }
+  }
+  
+  if(total_read == to_read)
+  {
+    result.str = ptr;
+    result.size = to_read;
   }
   
   return result;
@@ -52,11 +65,27 @@ fn bool fs_write(os_Handle file, String8 content) {
   
   if(file.fd[0] == 0) { return result; }
   
-  DWORD bytes_written = 0;
-  if(WriteFile((HANDLE)file.fd[0], content.str, (DWORD)content.size, &bytes_written, 0)
-     && content.size == bytes_written) {
+  HANDLE handle = (HANDLE)file.fd[0];
+  u64 to_write = content.size;
+  u64 total_write = 0;
+  for(;total_write < to_write;)
+  {
+    u64 amount64 = to_write - total_write;
+    u32 amount32_to_write = amount64 > U32_MAX ? U32_MAX : (u32)amount64;
+    u32 bytes_written = 0;
+    BOOL write_result = WriteFile(handle, content.str + total_write, amount32_to_write, &bytes_written, 0);
+    total_write += bytes_written;
+    if(bytes_written != amount32_to_write && !write_result)
+    {
+      break;
+    }
+  }
+  
+  if(total_write == to_write)
+  {
     result = true;
   }
+  
   return result;
 }
 
