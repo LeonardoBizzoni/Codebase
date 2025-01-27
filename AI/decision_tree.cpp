@@ -97,29 +97,29 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 #endif
   usize data_row_start_at = config.offset;
   usize row_count = 0;
-
+  
   /* Occurrences counter */
-  for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
+  for (StringStream row = csv_nextRow(map_arena, &config); row.node_count != 0;
        row = csv_header(map_arena, &config), ++row_count) {
     usize i = 0;
-    String8 *row_entries = New(map_arena, String8, row.size);
+    String8 *row_entries = New(map_arena, String8, row.node_count);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
     }
-
+    
     for (i = 0; i < n_features; ++i) {
       Occurrence *node = maps[i].fromKey(map_arena, row_entries[i], Occurrence(map_arena));
       node->count += 1;
-
+      
       if (i != target_idx) {
         Occurrence *node = maps[i].search(row_entries[i]);
         Occurrence *tnode = node->targets.fromKey(map_arena, row_entries[target_idx],
-						  Occurrence(map_arena));
+                                                  Occurrence(map_arena));
         tnode->count += 1;
       }
     }
   }
-
+  
 #if DEBUG
   /* Print table */
   for (usize i = 0; i < n_features; ++i) {
@@ -186,36 +186,36 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
       branches += 1;
     }
   }
-
+  
 #if DEBUG
   printf("\tThe dataset will be split into %ld branches\n\n", branches);
   printf(
-      "\t==============================================================\n\n");
+         "\t==============================================================\n\n");
 #endif
-
+  
   /* Iterator over the entire CSV file and write into the corresponding tmp */
   /*   file the CSV row. */
   config.offset = data_row_start_at;
   HashMap<String8, File> file_map(map_arena, strHash, branches);
-  for (StringStream row = csv_nextRow(map_arena, &config); row.size != 0;
+  for (StringStream row = csv_nextRow(map_arena, &config); row.node_count != 0;
        row = csv_header(map_arena, &config), ++row_count) {
     usize i = 0;
-    String8 *row_entries = New(map_arena, String8, row.size);
+    String8 *row_entries = New(map_arena, String8, row.node_count);
     for (StringNode *r = row.first; r && i < n_features; r = r->next, ++i) {
       row_entries[i] = r->value;
     }
-
+    
     // Get the correct tmp file
     File *file = file_map.fromKey(map_arena, row_entries[feature2split_by],
-				  fs_fopenTmp(arena));
+                                  fs_fopenTmp(arena));
     i = (feature2split_by == 0 ? 1 : 0);
-
+    
     StringStream ss = {0};
     Scratch scratch = ScratchBegin(0, 0);
     stringstreamAppend(scratch.arena, &ss, str8(file->content, file->prop.size));
     stringstreamAppend(scratch.arena, &ss, row_entries[i++]);
-
-    for (; i < row.size; ++i) {
+    
+    for (; i < row.node_count; ++i) {
       if (i == feature2split_by) {
         continue;
       }
@@ -223,14 +223,14 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
       stringstreamAppend(scratch.arena, &ss, row_entries[i]);
     }
     stringstreamAppend(scratch.arena, &ss, Strlit("\n"));
-    fs_fwrite(file, str8FromStream(scratch.arena, &ss));
+    fs_fwrite(file, str8FromStream(scratch.arena, ss));
     ScratchEnd(scratch);
   }
-
+  
   /* Call recursively to create the decision tree child nodes. */
   DecisionTreeNode *dt = New(arena, DecisionTreeNode);
   dt->should_split_by = feature2split_by;
-
+  
   usize i = 0;
   for (StringNode *curr = header.first; curr; curr = curr->next, ++i) {
     // Skip the column used to split
@@ -238,7 +238,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
       dt->label = curr->value;
       curr->prev->next = curr->next;
       curr->next->prev = curr->prev;
-      --header.size;
+      header.node_count -= 1;
       break;
     }
   }
@@ -266,7 +266,7 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
       DLLPushBack(dt->first, dt->last, child);
     }
   }
-
+  
   return dt;
 }
 
