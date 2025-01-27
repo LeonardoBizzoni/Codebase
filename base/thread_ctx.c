@@ -1,4 +1,4 @@
-global thread_local TlsContext tls_ctx;
+global threadvar TlsContext tls_ctx;
 
 fn Arena *tlsGetScratch(Arena **conflicts, usize count) {
   if(tls_ctx.arenas[0] == 0) {

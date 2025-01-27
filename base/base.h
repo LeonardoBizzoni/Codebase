@@ -100,19 +100,19 @@
 #define TLS_CTX_SIZE MB(64)
 
 #if COMPILER_GCC
-#  define alignof(TYPE) __alignof__(TYPE)
+#  define AlignOf(TYPE) __alignof__(TYPE)
 #elif COMPILER_CLANG
-#  define alignof(TYPE) _Alignof(TYPE)
+#  define AlignOf(TYPE) _Alignof(TYPE)
 #elif COMPILER_CL
-#  define alignof(TYPE) __alignof(TYPE)
+#  define AlignOf(TYPE) __alignof(TYPE)
 #else
-#  define alignof(TYPE) 1
+#  define AlignOf(TYPE) 1
 #endif
 
 #if COMPILER_CL
-#  define thread_local __declspec(thread)
+#  define threadvar __declspec(thread)
 #elif COMPILER_CLANG || COMPILER_GCC
-#  define thread_local __thread
+#  define threadvar __thread
 #endif
 
 
