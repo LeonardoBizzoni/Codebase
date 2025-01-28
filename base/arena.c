@@ -2,66 +2,80 @@ inline fn bool isPowerOfTwo(usize value) {
   return !(value & (value - 1));
 }
 
-inline fn void *forwardAlign(void *ptr, usize align) {
+inline fn usize forwardAlign(usize ptr, usize align) {
   Assert(isPowerOfTwo(align));
 
-  usize mod = (usize)ptr & (align - 1);
-  return (mod ? ptr = (u8 *)ptr + align - mod
-	      : ptr);
+  usize mod = ptr & (align - 1);
+  return (mod ? ptr = ptr + align - mod : ptr);
 }
 
-fn Arena *arenaBuild(usize size, usize base) {
-#if OS_LINUX || OS_BSD
-  void *fail_state = MAP_FAILED;
-  void *mem = mmap((void *)base, size, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-#elif OS_WINDOWS
-  void *fail_state = 0;
-  void *mem = VirtualAlloc((void *)base, size,
-			   MEM_COMMIT | MEM_RESERVE,
-			   PAGE_READWRITE);
+fn Arena *_arenaBuild(ArenaArgs args) {
+  void *mem = 0;
+  usize reserve, commit;
+
+#if CPP
+  if (args.commit_size == 0) {
+    args.commit_size = ArenaDefaultCommitSize;
+  }
+  if (args.reserve_size == 0) {
+    args.reserve_size = ArenaDefaultReserveSize;
+  }
 #endif
 
-  if (mem == fail_state) {
-    return 0;
-  } else {
-    Arena *arena = (Arena *)mem;
-    arena->base = arena + sizeof(Arena);
-    arena->total_size = size - sizeof(Arena);
-    arena->head = 0;
+  if (args.flags & Arena_UseHugePage) {
+    reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->hugepage_size);
+    commit = forwardAlign(args.commit_size, os_getSystemInfo()->hugepage_size);
 
-    return arena;
+    mem = os_reserveHuge(args.base_addr, reserve);
+  } else {
+    reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->page_size);
+    commit = forwardAlign(args.commit_size, os_getSystemInfo()->page_size);
+
+    mem = os_reserve(args.base_addr, reserve);
   }
+
+  if (!mem) { return 0; }
+  os_commit(mem, commit);
+
+  Arena *arena = (Arena *)mem;
+  arena->base = (void *)((usize)mem + sizeof(Arena));
+  arena->head = 0;
+  arena->flags = args.flags;
+  arena->commit_size = commit;
+  arena->reserve_size = reserve;
+  arena->commits = 1;
+  return arena;
 }
 
 inline fn void arenaPop(Arena *arena, usize bytes) {
   arena->head = ClampBot((isize)arena->head - (isize)bytes, 0);
+  /* TODO(lb): decommit pages */
 }
 
-inline fn bool arenaFree(Arena *arena) {
-#if OS_LINUX || OS_BSD
-  return munmap(arena->base, arena->total_size + sizeof(Arena));
-#elif OS_WINDOWS
-  return VirtualFree(arena->base, 0, MEM_RELEASE);
-#else
-  return false;
-#endif
+inline fn void arenaFree(Arena *arena) {
+  os_release((void *)((usize)arena->base - sizeof(Arena)), arena->reserve_size);
 }
 
 fn void *arenaPush(Arena *arena, usize size, usize align) {
   if (!align) {align = DefaultAlignment;}
-  void *aligned_head = forwardAlign((u8 *)arena->base + arena->head, align);
-  usize offset = (u8 *)aligned_head - (u8 *)arena->base;
+  usize res = forwardAlign((usize)arena->base + arena->head, align);
+  usize offset = res - ((usize)arena->base + arena->head);
+  usize new_head = arena->head + size + offset + sizeof(Arena);
 
-  if ((u8 *)aligned_head + size > (u8 *)arena->base + arena->total_size) {
+  if (new_head > arena->reserve_size) {
+    // TODO(lb): handle resizable arena
     return 0;
   }
 
-  void *res = aligned_head;
-  arena->head = offset + size;
+  if (new_head > arena->commits * arena->commit_size) {
+    usize need2commit_bytes = forwardAlign(new_head, arena->commit_size);
+    arena->commits = need2commit_bytes/arena->commit_size;
+    os_commit((void *)((usize)arena->base - sizeof(Arena)), need2commit_bytes);
+  }
 
-  memZero(res, size);
-  return res;
+  arena->head = new_head - sizeof(Arena);
+  memZero((void*)res, size);
+  return (void*)res;
 }
 
 inline fn Scratch tmpBegin(Arena *arena) {

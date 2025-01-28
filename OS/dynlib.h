@@ -12,3 +12,4 @@ fn VoidFunc *os_lib_lookup(OS_Library lib, String8 symbol);
 fn void os_lib_close(OS_Library lib);
 
 #endif // OS_DYNLIB_H
+

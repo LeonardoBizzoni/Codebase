@@ -56,7 +56,8 @@ inline fn String8 str8(u8 *chars, usize len);
 inline fn String8 strFromCstr(char *chars);
 inline fn String8 strFromDateTime(Arena *arena, DateTime dt);
 inline fn String8 strFromUnixTime(Arena *arena, u64 unix_timestamp);
-fn String8 str8_copy(Arena *arena, String8 str);
+
+fn char* strToCstr(Arena *arena, String8 str);
 
 fn bool strEq(String8 s1, String8 s2);
 fn bool strEqCstr(String8 s, const char *cstr);

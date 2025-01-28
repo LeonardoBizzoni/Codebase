@@ -150,14 +150,11 @@ inline fn String8 strFromDateTime(Arena *arena, DateTime dt) {
 		   dt.hour, dt.minute, dt.second, dt.ms);
 }
 
-fn String8 str8_copy(Arena *arena, String8 str){
-  String8 result = {0};
-  
-  result.str = New(arena, u8, str.size + 1);
-  result.size = str.size;
-  memcpy(result.str, str.str, str.size);
-  result.str[str.size] = 0;
-  return result;
+fn char* strToCstr(Arena *arena, String8 str) {
+  char *res = New(arena, char, str.size + 1);
+  memCopy(res, str.str, str.size);
+  res[str.size] = 0;
+  return res;
 }
 
 fn bool strEq(String8 s1, String8 s2) {
@@ -490,20 +487,20 @@ fn String8 capitalizeFromStr(Arena *arena, String8 s) {
       res.str[i] = charToLower(s.str[i]);
     }
   }
-  
+
   return res;
 }
 
 fn StringStream strSplit(Arena *arena, String8 s, char ch) {
   StringStream res = {0};
-  
+
   usize prev = 0;
   for (usize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
         stringstreamAppend(arena, &res, strRange(s, prev, i));
       }
-      
+
       do {
         prev = ++i;
       } while (s.str[i] == ch);
@@ -511,11 +508,11 @@ fn StringStream strSplit(Arena *arena, String8 s, char ch) {
       ++i;
     }
   }
-  
+
   if (prev != s.size) {
     stringstreamAppend(arena, &res, strRange(s, prev, s.size));
   }
-  
+
   return res;
 }
 

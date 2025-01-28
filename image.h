@@ -12,7 +12,7 @@ inline fn u8 *loadImg(String8 path, i32 *width, i32 *height, i32 *componentXpixe
 }
 
 inline fn void destroyImg(u8 *imgdata) {
-  /* stbi_image_free(imgdata); */
+  stbi_image_free(imgdata);
 }
 
 #endif

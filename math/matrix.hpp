@@ -236,7 +236,7 @@ struct Matrix {
 
       stringstreamAppend(arena, &ss, Strlit("\n"));
     }
-    
+
     String8 str = str8FromStream(arena, ss);
     return strFormat(arena, "%ld×%ld Matrix<%s>\n%.*s", R, C, typeid(T).name(),
 		     Strexpand(str));

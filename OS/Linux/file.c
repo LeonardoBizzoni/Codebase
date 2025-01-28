@@ -1,5 +1,3 @@
-#include "../file.h"
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -10,17 +8,17 @@
 
 // =============================================================================
 // File reading and writing/appending
-fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
+fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   i32 access_flags = 0;
 
-  if((flags & os_acfRead) && (flags & os_acfWrite)) {
+  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
     access_flags |= O_RDWR;
-  } else if(flags & os_acfRead) {
+  } else if(flags & OS_acfRead) {
     access_flags |= O_RDONLY;
-  } else if(flags & os_acfWrite) {
+  } else if(flags & OS_acfWrite) {
     access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
   }
-  if(flags & os_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
+  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
 
   i32 fd = open((char*)filepath.str, access_flags,
 		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -28,12 +26,12 @@ fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
     fd = 0;
   }
 
-  os_Handle res = {(u64)fd};
+  OS_Handle res = {(u64)fd};
   return res;
 }
 
-fn String8 fs_read(Arena *arena, os_Handle file) {
-  int fd = file.fd[0];
+fn String8 fs_read(Arena *arena, OS_Handle file) {
+  int fd = file.h[0];
   String8 result = {0};
   if(!fd) { return result; }
 
@@ -49,17 +47,17 @@ fn String8 fs_read(Arena *arena, os_Handle file) {
   return result;
 }
 
-inline fn bool fs_write(os_Handle file, String8 content) {
-  if(!file.fd[0]) { return false; }
-  return write(file.fd[0], content.str, content.size) == (isize)content.size;
+inline fn bool fs_write(OS_Handle file, String8 content) {
+  if(!file.h[0]) { return false; }
+  return write(file.h[0], content.str, content.size) == (isize)content.size;
 }
 
-fn fs_Properties fs_getProp(os_Handle file) {
-  fs_Properties result = {0};
-  if(!file.fd[0]) { return result; }
+fn FS_Properties fs_getProp(OS_Handle file) {
+  FS_Properties result = {0};
+  if(!file.h[0]) { return result; }
 
   struct stat file_stat;
-  if (fstat((i32)file.fd[0], &file_stat) < 0) {
+  if (fstat((i32)file.h[0], &file_stat) < 0) {
     return result;
   }
 
@@ -70,20 +68,20 @@ fn fs_Properties fs_getProp(os_Handle file) {
   result.last_modification_time = (u64)file_stat.st_mtime;
   result.last_status_change_time = (u64)file_stat.st_ctime;
 
-  result.user = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IRUSR) { result.user |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWUSR) { result.user |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXUSR) { result.user |= os_Permissions_Execute; }
+  result.user = OS_Permissions_Unknown;
+  if (file_stat.st_mode & S_IRUSR) { result.user |= OS_Permissions_Read; }
+  if (file_stat.st_mode & S_IWUSR) { result.user |= OS_Permissions_Write; }
+  if (file_stat.st_mode & S_IXUSR) { result.user |= OS_Permissions_Execute; }
 
-  result.group = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IRGRP) { result.group |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWGRP) { result.group |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXGRP) { result.group |= os_Permissions_Execute; }
+  result.group = OS_Permissions_Unknown;
+  if (file_stat.st_mode & S_IRGRP) { result.group |= OS_Permissions_Read; }
+  if (file_stat.st_mode & S_IWGRP) { result.group |= OS_Permissions_Write; }
+  if (file_stat.st_mode & S_IXGRP) { result.group |= OS_Permissions_Execute; }
 
-  result.other = os_Permissions_Unknown;
-  if (file_stat.st_mode & S_IROTH) { result.other |= os_Permissions_Read; }
-  if (file_stat.st_mode & S_IWOTH) { result.other |= os_Permissions_Write; }
-  if (file_stat.st_mode & S_IXOTH) { result.other |= os_Permissions_Execute; }
+  result.other = OS_Permissions_Unknown;
+  if (file_stat.st_mode & S_IROTH) { result.other |= OS_Permissions_Read; }
+  if (file_stat.st_mode & S_IWOTH) { result.other |= OS_Permissions_Write; }
+  if (file_stat.st_mode & S_IXOTH) { result.other |= OS_Permissions_Execute; }
 
   return result;
 }
@@ -97,7 +95,7 @@ fn File fs_fopen(String8 filepath) {
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
   if (fd >= 0) {
-    file.handle.fd[0] = fd;
+    file.handle.h[0] = fd;
     file.path = filepath;
     file.prop = fs_getProp(file.handle);
     file.content = (u8 *)mmap(0, ClampBot(file.prop.size, 1), PROT_READ | PROT_WRITE,
@@ -118,7 +116,7 @@ fn File fs_fopenTmp(Arena *arena) {
   memCopy(pathstr.str, path, Arrsize(path));
 
   File file = {0};
-  file.handle.fd[0] = fd;
+  file.handle.h[0] = fd;
   file.path = pathstr;
   file.prop = fs_getProp(file.handle);
   file.content = (u8*)mmap(0, ClampBot(file.prop.size, 1), PROT_READ | PROT_WRITE,
@@ -127,17 +125,17 @@ fn File fs_fopenTmp(Arena *arena) {
 }
 
 inline fn bool fs_fclose(File *file) {
-  return close(file->handle.fd[0]) >= 0;
+  return close(file->handle.h[0]) >= 0;
 }
 
 inline fn bool fs_fresize(File *file, usize size) {
-  if (ftruncate(file->handle.fd[0], size) < 0) {
+  if (ftruncate(file->handle.h[0], size) < 0) {
     return false;
   }
 
   (void)munmap(file->content, file->prop.size);
   return (bool)(file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
-					  MAP_SHARED, file->handle.fd[0], 0));
+					  MAP_SHARED, file->handle.h[0], 0));
 }
 
 inline fn void fs_fwrite(File *file, String8 content) {
@@ -147,7 +145,7 @@ inline fn void fs_fwrite(File *file, String8 content) {
 }
 
 inline fn bool fs_fileHasChanged(File *file) {
-  fs_Properties prop = fs_getProp(file->handle);
+  FS_Properties prop = fs_getProp(file->handle);
   return (file->prop.last_access_time != prop.last_access_time) ||
 	 (file->prop.last_modification_time != prop.last_modification_time) ||
 	 (file->prop.last_status_change_time != prop.last_status_change_time);
