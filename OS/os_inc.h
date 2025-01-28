@@ -12,7 +12,7 @@
 #  include "BSD/opengl.h"
 #  include "BSD/X11/window.h"
 #elif OS_WINDOWS
-#  include "Win32/win32_thread.h"
+#  include "Win32/os_core_win32.h"
 #else
 #  error os layer is not supported for this platform
 #endif

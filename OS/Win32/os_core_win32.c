@@ -1,5 +1,99 @@
-fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
-  os_Handle result = {0};
+////////////////////////////////
+//- km: Thread functions
+fn OS_W32_Thread* 
+os_w32_thread_alloc(void)
+{
+  OS_W32_Thread *result = w32_state.free_list;
+  if(result)
+  {
+    StackPop(w32_state.free_list);
+  }
+  else
+  {
+    Assert(w32_state.pos < 256);
+    result = &w32_state.thread_pool[w32_state.pos];
+    w32_state.pos += 1;
+  }
+  memset(result, 0, sizeof(*result));
+  return result;
+}
+
+fn void 
+os_w32_thread_release(OS_W32_Thread *thread)
+{
+  StackPush(w32_state.free_list, thread);
+}
+
+fn OS_Handle 
+os_thread_start(ThreadFunc *func, void *arg)
+{
+  OS_W32_Thread *thread = os_w32_thread_alloc();
+  HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, thread, 0, &thread->tid);
+  thread->func = func;
+  thread->arg = arg;
+  thread->handle = handle;
+  OS_Handle result = {(u64)thread};
+  return result;
+}
+
+fn bool
+os_thread_join(OS_Handle handle)
+{
+  OS_W32_Thread *thread = (OS_W32_Thread*)handle.h[0];
+  DWORD wait = WAIT_OBJECT_0;
+  if(thread)
+  {
+    wait = WaitForSingleObject(thread->handle, INFINITE);
+    CloseHandle(thread->handle);
+    os_w32_thread_release(thread);
+  }
+  return wait == WAIT_OBJECT_0;
+}
+
+fn DWORD 
+os_w32_thread_entry_point(void *ptr)
+{
+  OS_W32_Thread *thread = (OS_W32_Thread*)ptr;
+  ThreadFunc *func = thread->func;
+  func(thread->arg);
+  return 0;
+}
+
+////////////////////////////////
+//- km: Dynamic libraries
+
+fn OS_Handle os_lib_open(String8 path){
+  OS_Handle result = {0};
+  Scratch scratch = ScratchBegin(0,0);
+  String16 path16 = UTF16From8(scratch.arena, path);
+  HMODULE module = LoadLibraryExW((WCHAR*)path16.str, 0, 0);
+  if(module != 0){
+    result.h[0] = (u64)module;
+  }
+  ScratchEnd(scratch);
+  return result;
+}
+
+fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol){
+  Scratch scratch = ScratchBegin(0,0);
+  char *symbol_cstr = strToCstr(scratch.arena, symbol);
+  HMODULE module = (HMODULE)lib.h[0];
+  VoidFunc *result = (VoidFunc*)GetProcAddress(module, symbol_cstr);
+  ScratchEnd(scratch);
+  return result;
+}
+
+fn i32 os_lib_close(OS_Handle lib){
+  HMODULE module = (HMODULE)lib.h[0];
+  BOOL result = FreeLibrary(module);
+  return result;
+}
+
+////////////////////////////////
+//- km: File operations
+
+fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
+  OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
   String16 path = UTF16From8(scratch.arena, filepath);
   SECURITY_ATTRIBUTES security_attributes = {sizeof(SECURITY_ATTRIBUTES), 0, 0};
@@ -7,30 +101,30 @@ fn os_Handle fs_open(String8 filepath, os_AccessFlags flags) {
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
   
-  if(flags & os_acfRead) { access_flags |= GENERIC_READ;}
-  if(flags & os_acfWrite) { access_flags |= GENERIC_WRITE; creation_disposition = CREATE_ALWAYS; }
-  if(flags & os_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  if(flags & os_acfAppend) { creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
-  if(flags & os_acfShareRead) { share_mode |= FILE_SHARE_READ; }
-  if(flags & os_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
+  if(flags & OS_acfRead) { access_flags |= GENERIC_READ;}
+  if(flags & OS_acfWrite) { access_flags |= GENERIC_WRITE; creation_disposition = CREATE_ALWAYS; }
+  if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
+  if(flags & OS_acfAppend) { creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_acfShareRead) { share_mode |= FILE_SHARE_READ; }
+  if(flags & OS_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
   
   HANDLE file = CreateFileW((WCHAR*)path.str, access_flags, share_mode, 
                             &security_attributes, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE) {
-    result.fd[0] = (u64)file;
+    result.h[0] = (u64)file;
   }
   
   ScratchEnd(scratch);
   return result;
 }
 
-fn String8 fs_read(Arena *arena, os_Handle file) {
+fn String8 fs_read(Arena *arena, OS_Handle file) {
   String8 result = {0};
   
-  if(file.fd[0] == 0) { return result; }
+  if(file.h[0] == 0) { return result; }
   
   LARGE_INTEGER file_size = {0};
-  HANDLE handle = (HANDLE)file.fd[0];
+  HANDLE handle = (HANDLE)file.h[0];
   
   GetFileSizeEx(handle, &file_size);
   u64 to_read = file_size.QuadPart;
@@ -60,12 +154,12 @@ fn String8 fs_read(Arena *arena, os_Handle file) {
   return result;
 }
 
-fn bool fs_write(os_Handle file, String8 content) {
+fn bool fs_write(OS_Handle file, String8 content) {
   bool result = false;
   
-  if(file.fd[0] == 0) { return result; }
+  if(file.h[0] == 0) { return result; }
   
-  HANDLE handle = (HANDLE)file.fd[0];
+  HANDLE handle = (HANDLE)file.h[0];
   u64 to_write = content.size;
   u64 total_write = 0;
   for(;total_write < to_write;)
@@ -89,9 +183,9 @@ fn bool fs_write(os_Handle file, String8 content) {
   return result;
 }
 
-fn fs_Properties fs_getProp(os_Handle file) {
+fn FS_Properties fs_getProp(OS_Handle file) {
   // TODO(km): need to fill owner,group, and permission flags
-  fs_Properties properties = {0};
+  FS_Properties properties = {0};
   
   return properties;
 }
@@ -112,7 +206,7 @@ fn File fs_fileOpen(Arena *arena, String8 filepath) {
     if(GetFileSizeEx(file, &file_size)) {
       HANDLE file_mapped = CreateFileMappingW(file, 0, PAGE_READWRITE, 0, 0, 0);
       if(file_mapped != INVALID_HANDLE_VALUE) {
-        result.handle.fd[0] = (u64)file_mapped;
+        result.handle.h[0] = (u64)file_mapped;
         result.path = filepath;
         result.prop = fs_getProp(result.handle);
         result.content = (u8*)MapViewOfFileEx(file_mapped, FILE_MAP_ALL_ACCESS, 0, 0, 0, 0);
@@ -183,3 +277,4 @@ os_file_iter_end(OS_FileIter *iter)
   OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter;
   FindClose(w32_iter->handle);
 }
+

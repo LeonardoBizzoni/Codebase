@@ -79,6 +79,15 @@ typedef struct {
   FilenameNode *last;
 } FilenameList;
 
+typedef struct{
+  String8 name;
+  FS_Properties properties;
+} OS_FileInfo;
+
+typedef struct{
+  u8 memory[740];
+} OS_FileIter;
+
 typedef void VoidFunc(void);
 typedef void ThreadFunc(void*);
 

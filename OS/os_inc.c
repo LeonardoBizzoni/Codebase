@@ -11,7 +11,5 @@
 #  include "BSD/thread.c"
 #  include "BSD/X11/window.c"
 #elif OS_WINDOWS
-#  include "Win32/win32_file.c"
-#  include "Win32/win32_dynlib.c"
-#  include "Win32/win32_thread.c"
+#  include "Win32/os_core_win32.c"
 #endif
