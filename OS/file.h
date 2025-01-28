@@ -61,9 +61,9 @@ typedef struct {
 
 // =============================================================================
 // File reading and writing/appending
-       fn os_Handle fs_open(String8 filepath, os_AccessFlags flags);
-       fn String8 fs_read(Arena *arena, os_Handle file);
-inline fn bool fs_write(os_Handle file, String8 content);
+fn os_Handle fs_open(String8 filepath, os_AccessFlags flags);
+fn String8 fs_read(Arena *arena, os_Handle file);
+fn bool fs_write(os_Handle file, String8 content);
 
 fn fs_Properties fs_getProp(os_Handle file);
 
