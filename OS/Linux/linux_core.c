@@ -495,7 +495,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 		Strlit("Semaphores sharable between processes must be named."));
 
       Scratch scratch = ScratchBegin(0, 0);
-      char *path = strToCstr(scratch.arena, name);
+      char *path = cstrFromStr8(scratch.arena, name);
       (void)sem_unlink(path);
       prim->semaphore.sem = sem_open(path, O_CREAT,
 				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
@@ -559,7 +559,7 @@ fn void os_semaphore_free(OS_Handle handle) {
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
-  char *path_cstr = strToCstr(scratch.arena, path);
+  char *path_cstr = cstrFromStr8(scratch.arena, path);
 
   void *handle = dlopen(path_cstr, RTLD_LAZY);
   if(handle){
@@ -572,7 +572,7 @@ fn OS_Handle os_lib_open(String8 path) {
 fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = (void*)lib.h[0];
-  char *symbol_cstr = strToCstr(scratch.arena, symbol);
+  char *symbol_cstr = cstrFromStr8(scratch.arena, symbol);
   VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, symbol_cstr);
   ScratchEnd(scratch);
   return result;

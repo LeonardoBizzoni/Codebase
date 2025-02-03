@@ -144,13 +144,14 @@ inline fn bool fs_fresize(File *file, usize size) {
     return false;
   }
 
+  file->prop.size = size;
   (void)munmap(file->content, file->prop.size);
   return (bool)(file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
 					  MAP_SHARED, file->file_handle.h[0], 0));
 }
 
 inline fn void fs_fwrite(File *file, String8 content) {
-  if (fs_fresize(file, content.size)) { file->prop.size = content.size; }
+  if (file->prop.size < content.size) { fs_fresize(file, content.size); }
   memZero(file->content + content.size, ClampBot(0, (isize)file->prop.size - (isize)content.size));
   (void)memCopy(file->content, content.str, content.size);
 }

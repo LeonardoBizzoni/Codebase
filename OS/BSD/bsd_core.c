@@ -397,7 +397,7 @@ fn void os_rwlock_free(OS_Handle handle) {
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
-  char *path_cstr = strToCstr(scratch.arena, path);
+  char *path_cstr = cstrFromStr8(scratch.arena, path);
   void *handle = dlopen(path_cstr, RTLD_LAZY);
   if(handle){
     result.h[0] = (u64)handle;
@@ -409,7 +409,7 @@ fn OS_Handle os_lib_open(String8 path) {
 fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = (void*)lib.h[0];
-  char *symbol_cstr = strToCstr(scratch.arena, symbol);
+  char *symbol_cstr = cstrFromStr8(scratch.arena, symbol);
   VoidFunc *result = (VoidFunc*)(usize)dlsym(handle, symbol_cstr);
   ScratchEnd(scratch);
   return result;

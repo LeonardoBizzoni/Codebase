@@ -151,7 +151,7 @@ inline fn String8 strFromDateTime(Arena *arena, DateTime dt) {
                    dt.hour, dt.minute, dt.second, dt.ms);
 }
 
-fn char* strToCstr(Arena *arena, String8 str) {
+fn char* cstrFromStr8(Arena *arena, String8 str) {
   char *res = New(arena, char, str.size + 1);
   memCopy(res, str.str, str.size);
   res[str.size] = 0;

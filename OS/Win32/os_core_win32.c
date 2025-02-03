@@ -423,7 +423,7 @@ fn OS_Handle os_lib_open(String8 path){
 
 fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol){
   Scratch scratch = ScratchBegin(0,0);
-  char *symbol_cstr = strToCstr(scratch.arena, symbol);
+  char *symbol_cstr = cstrFromStr8(scratch.arena, symbol);
   HMODULE module = (HMODULE)lib.h[0];
   VoidFunc *result = (VoidFunc*)GetProcAddress(module, symbol_cstr);
   ScratchEnd(scratch);
