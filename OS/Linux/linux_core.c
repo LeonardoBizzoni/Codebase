@@ -129,7 +129,7 @@ fn DateTime os_local_dateTimeNow() {
 fn time64 os_local_fromUTCTime64(time64 t) {
   u64 utc_time = unixFromTime64(t);
   time64 res = time64FromUnix(utc_time + lnx_state.unix_utc_offset);
-  return res | (t & 0x3ff);
+  return res | (t & bitmask10);
 }
 
 fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
@@ -178,7 +178,7 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
 fn time64 os_utc_fromLocalTime64(time64 t) {
   u64 local_time = unixFromTime64(t);
   time64 res = time64FromUnix(local_time - lnx_state.unix_utc_offset);
-  return res | (t & 0x3ff);
+  return res | (t & bitmask10);
 }
 
 fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {

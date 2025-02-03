@@ -53,12 +53,12 @@ os_w32_system_time_from_time64(time64 in) {
   if (year < 1601 || year > 30827) { return res; }
 
   res.wYear = year;
-  res.wMonth = (in >> 32) & 0xf;
-  res.wDay = (in >> 27) & 0x1f;
-  res.wHour = (in >> 22) & 0x1f;
-  res.wMinuine = (in >> 16) & 0x3f;
-  res.wSecond = (in >> 10) & 0x3f;
-  res.wMilliseconds = in & 0x3ff;
+  res.wMonth = (in >> 32) & bitmask4;
+  res.wDay = (in >> 27) & bitmask5;
+  res.wHour = (in >> 22) & bitmask5;
+  res.wMinuine = (in >> 16) & bitmask6;
+  res.wSecond = (in >> 10) & bitmask6;
+  res.wMilliseconds = in & bitmask10;
   return res;
 }
 
@@ -116,9 +116,9 @@ fn time64
 os_utc_localizedTime64(i8 utc_offset) {
   time64 now = os_utc_now();
   i32 year = ((now >> 36) & ~(1 << 27));
-  i8 month = (now >> 32) & 0xf;
-  i8 day = (now >> 27) & 0x1f;
-  i8 hour = ((now >> 22) & 0x1f) + utc_offset;
+  i8 month = (now >> 32) & bitmask4;
+  i8 day = (now >> 27) & bitmask5;
+  i8 hour = ((now >> 22) & bitmask5) + utc_offset;
 
   if (hour < 0) {
     day -= 1;
