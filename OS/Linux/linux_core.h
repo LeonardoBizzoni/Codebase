@@ -7,10 +7,11 @@
 typedef u64 LNX_PrimitiveType;
 enum {
   LNX_Primitive_Process,
-  LNX_Primitive_Thread,
-  LNX_Primitive_Rwlock,
   LNX_Primitive_Mutex,
+  LNX_Primitive_Rwlock,
+  LNX_Primitive_CondVar,
   LNX_Primitive_Timer,
+  LNX_Primitive_Thread,
 };
 
 typedef struct LNX_Primitive {
@@ -18,9 +19,10 @@ typedef struct LNX_Primitive {
   LNX_PrimitiveType type;
 
   union {
+    pid_t proc;
     pthread_mutex_t mutex;
     pthread_rwlock_t rwlock;
-    pid_t proc;
+    pthread_cond_t cond;
     struct timespec timer;
     struct {
       pthread_t handle;

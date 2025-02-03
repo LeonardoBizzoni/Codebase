@@ -413,6 +413,64 @@ fn void os_rwlock_free(OS_Handle handle) {
   lnx_primitiveFree(prim);
 }
 
+fn OS_Handle os_cond_alloc() {
+  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_CondVar);
+  pthread_cond_init(&prim->cond, 0);
+
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn void os_cond_signal(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  (void)pthread_cond_signal(&prim->cond);
+}
+
+fn void os_cond_broadcast(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  (void)pthread_cond_broadcast(&prim->cond);
+}
+
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
+		     u32 wait_at_most_microsec) {
+  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
+  LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
+    if (abstime.tv_nsec >= 1e6) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e6;
+    }
+
+    return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
+  } else {
+    (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex);
+    return true;
+  }
+}
+
+// TODO(lb): pthread doesn't provide a way to use rwlocks with condvars but i still want this
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			    u32 wait_at_most_microsec) {
+  return false;
+}
+
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			     u32 wait_at_most_microsec) {
+  return false;
+}
+
+fn bool os_cond_free(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  i32 res = pthread_cond_destroy(&prim->cond);
+  lnx_primitiveFree(prim);
+  return res == 0;
+}
+
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);

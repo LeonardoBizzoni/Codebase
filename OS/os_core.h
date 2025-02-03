@@ -195,6 +195,17 @@ fn bool os_rwlock_write_trylock(OS_Handle handle);
 fn void os_rwlock_write_unlock(OS_Handle handle);
 fn void os_rwlock_free(OS_Handle handle);
 
+fn OS_Handle os_cond_alloc();
+fn void os_cond_signal(OS_Handle handle);
+fn void os_cond_broadcast(OS_Handle handle);
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
+		     u32 wait_at_most_microsec);
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			    u32 wait_at_most_microsec);
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			     u32 wait_at_most_microsec);
+fn bool os_cond_free(OS_Handle handle);
+
 // =============================================================================
 // Dynamic libraries
 fn OS_Handle os_lib_open(String8 path);
