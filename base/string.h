@@ -28,7 +28,7 @@ inline fn u8 encodeUTF32(u32 *res, Codepoint cp);
 typedef struct String8 {
   u8 *str;
   isize size;
-  
+
 #if CPP
   inline char operator[](usize idx) {
     return (char)str[idx];

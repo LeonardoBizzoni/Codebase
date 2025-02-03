@@ -130,12 +130,13 @@
 #endif
 
 #define AssertAlways(COND) _stmt(if (!(COND)) { _assert_break(); })
-#define AssertAlwaysWithMsg(COND, MSG) _stmt(\
-  if (!(COND)) {\
-    printf("%s", MSG);\
-    _assert_break(); \
+#define AssertAlwaysWithMsg(COND, MSG)                                         \
+  _stmt(if (!(COND)) {                                                         \
+    String8 __msg = MSG;                                                       \
+    fprintf(stderr, "%.*s\n", Strexpand(__msg));                               \
+    _assert_break();                                                           \
   })
-#define StaticAssert(C, ID) global u8 Glue(ID, __LINE__)[(C)?1:-1]
+#define StaticAssert(C, ID) global u8 Glue(ID, __LINE__)[(C) ? 1 : -1]
 
 #ifdef ENABLE_ASSERT
 #  define Assert(COND) AssertAlways(COND)

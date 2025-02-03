@@ -2,6 +2,7 @@
 #define OS_LINUX_CORE_H
 
 #include <dirent.h>
+#include <semaphore.h>
 #include <sys/stat.h>
 
 typedef u64 LNX_PrimitiveType;
@@ -12,6 +13,7 @@ enum {
   LNX_Primitive_CondVar,
   LNX_Primitive_Timer,
   LNX_Primitive_Thread,
+  LNX_Primitive_Semaphore,
 };
 
 typedef struct LNX_Primitive {
@@ -29,6 +31,12 @@ typedef struct LNX_Primitive {
       ThreadFunc *func;
       void *args;
     } thread;
+    struct {
+      OS_SemaphoreKind kind;
+      u32 max_count;
+      u32 count;
+      sem_t *sem;
+    } semaphore;
   };
 } LNX_Primitive;
 

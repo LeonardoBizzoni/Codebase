@@ -29,6 +29,12 @@ typedef struct {
   u32 exit_code;
 } OS_ProcStatus;
 
+typedef u8 OS_SemaphoreKind;
+enum {
+  OS_SemaphoreKind_Thread,
+  OS_SemaphoreKind_Process,
+};
+
 typedef u8 OS_TimerGranularity;
 enum {
   OS_TimerGranularity_min,
@@ -205,6 +211,13 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			     u32 wait_at_most_microsec);
 fn bool os_cond_free(OS_Handle handle);
+
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
+				u32 max_count, String8 name);
+fn bool os_semaphore_signal(OS_Handle sem);
+fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
+fn bool os_semaphore_trywait(OS_Handle sem);
+fn void os_semaphore_free(OS_Handle sem);
 
 // =============================================================================
 // Dynamic libraries

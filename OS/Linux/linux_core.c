@@ -1,6 +1,8 @@
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <semaphore.h>
 #include <sys/wait.h>
 #include <sys/sysinfo.h>
 
@@ -415,7 +417,10 @@ fn void os_rwlock_free(OS_Handle handle) {
 
 fn OS_Handle os_cond_alloc() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_CondVar);
-  pthread_cond_init(&prim->cond, 0);
+  if (pthread_cond_init(&prim->cond, 0)) {
+    lnx_primitiveFree(prim);
+    prim = 0;
+  }
 
   OS_Handle res = {(u64)prim};
   return res;
@@ -469,6 +474,84 @@ fn bool os_cond_free(OS_Handle handle) {
   i32 res = pthread_cond_destroy(&prim->cond);
   lnx_primitiveFree(prim);
   return res == 0;
+}
+
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
+				u32 max_count, String8 name) {
+  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Semaphore);
+  prim->semaphore.kind = kind;
+  prim->semaphore.max_count = max_count;
+  switch (kind) {
+    case OS_SemaphoreKind_Thread: {
+      prim->semaphore.sem = (sem_t *)os_reserve(0, sizeof(sem_t));
+      os_commit(prim->semaphore.sem, sizeof(sem_t));
+      if (sem_init(prim->semaphore.sem, 0, init_count)) {
+	os_release(prim->semaphore.sem, sizeof(sem_t));
+	prim->semaphore.sem = 0;
+      }
+    } break;
+    case OS_SemaphoreKind_Process: {
+      AssertMsg(name.size > 0,
+		Strlit("Semaphores sharable between processes must be named."));
+
+      Scratch scratch = ScratchBegin(0, 0);
+      prim->semaphore.sem = sem_open(strToCstr(scratch.arena, name), O_CREAT,
+				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
+      if (prim->semaphore.sem == SEM_FAILED) {
+	prim->semaphore.sem = 0;
+      }
+      ScratchEnd(scratch);
+    } break;
+  }
+
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn bool os_semaphore_signal(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
+      sem_post(prim->semaphore.sem)) {
+    return false;
+  }
+  return ++prim->semaphore.count;
+}
+
+fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
+    if (abstime.tv_nsec >= 1e6) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e6;
+    }
+
+    return sem_timedwait(prim->semaphore.sem, &abstime);
+  } else {
+    return sem_wait(prim->semaphore.sem);
+  }
+}
+
+fn bool os_semaphore_trywait(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  return sem_trywait(prim->semaphore.sem);
+}
+
+fn void os_semaphore_free(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  switch (prim->semaphore.kind) {
+    case OS_SemaphoreKind_Thread: {
+      (void)sem_destroy(prim->semaphore.sem);
+      os_release(prim->semaphore.sem, sizeof(sem_t));
+    } break;
+    case OS_SemaphoreKind_Process: {
+      (void)sem_close(prim->semaphore.sem);
+    } break;
+  }
+  lnx_primitiveFree(prim);
 }
 
 fn OS_Handle os_lib_open(String8 path) {
