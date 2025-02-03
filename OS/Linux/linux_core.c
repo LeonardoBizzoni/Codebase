@@ -5,8 +5,66 @@
 #include <semaphore.h>
 #include <sys/wait.h>
 #include <sys/sysinfo.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
 
 global LNX_State lnx_state = {0};
+
+// =============================================================================
+// Doing the job of GLIBC
+
+/*
+       i32 syscall(SYS_futex, uint32_t *uaddr, int futex_op, uint32_t val,
+                  (struct timespec *timeout | uint32_t val2),
+                  uint32_t *uaddr2, uint32_t val3);
+*/
+#define lnx_futex(UADDR, OP, VAL, TIMEOUT, UADDR2, VAL3) \
+  syscall(SYS_futex, UADDR, OP, VAL, TIMEOUT, UADDR2, VAL3)
+
+// ----------------------
+// WAIT
+inline fn i32 lnx_futex_wait(u32 *futex_addr, u32 expected_val, bool isPrivate) {
+  return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAIT_PRIVATE : FUTEX_WAIT),
+	       expected_val, 0, 0, 0);
+}
+
+inline fn i32 lnx_futex_timedwait(u32 *futex_addr, u32 expected_val,
+				  struct timespec *timeout, bool isPrivate) {
+  return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAIT_BITSET_PRIVATE : FUTEX_WAIT_BITSET),
+		   expected_val, timeout, 0, FUTEX_BITSET_MATCH_ANY);
+}
+
+// ----------------------
+// WAKE
+inline fn i32 lnx_futex_wake(u32 *futex_addr, u32 waiters2wake_count, bool isPrivate) {
+  return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAKE_PRIVATE : FUTEX_WAKE),
+	       waiters2wake_count, 0, 0, 0);
+}
+
+inline fn i32 lnx_futex_signal(u32 *futex_addr, bool isPrivate) {
+  return lnx_futex_wake(futex_addr, 1, isPrivate);
+}
+
+inline fn i32 lnx_futex_broadcast(u32 *futex_addr, bool isPrivate) {
+  return lnx_futex_wake(futex_addr, I32_MAX, isPrivate);
+}
+
+// ----------------------
+// REQUEUE
+inline fn i32 lnx_futex_cmp_requeue(u32 *futex_from, u32 *futex_to, u32 expected_value,
+				    u32 waiters2wake_count, u32 max_requeued_waiters,
+				    bool isPrivate) {
+  return lnx_futex(futex_from, (isPrivate ? FUTEX_CMP_REQUEUE_PRIVATE : FUTEX_CMP_REQUEUE),
+		   waiters2wake_count, max_requeued_waiters, futex_to, expected_value);
+}
+
+inline fn i32 lnx_futex_requeue(u32 *futex_from, u32 *futex_to, u32 waiters2wake_count,
+				u32 max_requeued_waiters, bool isPrivate) {
+  return lnx_futex(futex_from, (isPrivate ? FUTEX_REQUEUE_PRIVATE : FUTEX_REQUEUE),
+		   waiters2wake_count, max_requeued_waiters, futex_to, 0);
+}
+
+// =============================================================================
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
   pthread_mutex_lock(&lnx_state.primitive_lock);
