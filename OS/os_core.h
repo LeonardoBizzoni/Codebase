@@ -114,7 +114,7 @@ typedef struct {
   FS_Properties prop;
   String8 path;
   u8 *content;
-} File;
+} File, SharedMem;
 
 typedef struct FilenameNode {
   String8 value;
@@ -218,6 +218,9 @@ fn bool os_semaphore_signal(OS_Handle sem);
 fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
 fn bool os_semaphore_trywait(OS_Handle sem);
 fn void os_semaphore_free(OS_Handle sem);
+
+fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags);
+fn bool os_sharedmem_close(SharedMem *shm);
 
 // =============================================================================
 // Dynamic libraries

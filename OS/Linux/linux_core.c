@@ -556,6 +556,41 @@ fn void os_semaphore_free(OS_Handle handle) {
   lnx_primitiveFree(prim);
 }
 
+fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
+  SharedMem res = {0};
+  res.path = name;
+
+  i32 access_flags = 0;
+  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
+    access_flags |= O_RDWR;
+  } else if(flags & OS_acfRead) {
+    access_flags |= O_RDONLY;
+  } else if(flags & OS_acfWrite) {
+    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
+  }
+  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
+
+  Scratch scratch = ScratchBegin(0, 0);
+  res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name), access_flags,
+				  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  ScratchEnd(scratch);
+
+  (void)ftruncate(res.file_handle.h[0], size);
+  res.prop = fs_getProp(res.file_handle);
+  res.content = (u8*)mmap(0, ClampBot(res.prop.size, 1), PROT_READ | PROT_WRITE,
+			   MAP_SHARED, res.file_handle.h[0], 0);
+
+  return res;
+}
+
+fn bool os_sharedmem_close(SharedMem *shm) {
+  Scratch scratch = ScratchBegin(0, 0);
+  bool res = munmap(shm->content, shm->prop.size) == 0 &&
+	     shm_unlink(cstrFromStr8(scratch.arena, shm->path)) == 0;
+  ScratchEnd(scratch);
+  return res;
+}
+
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
