@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
 #include <dlfcn.h>
@@ -86,10 +87,14 @@ fn String8 bsd_gethostname() {
   return namestr;
 }
 
+// =============================================================================
+// System information retrieval
 fn OS_SystemInfo *os_getSystemInfo() {
   return &bsd_state.info;
 }
 
+// =============================================================================
+// DateTime
 fn time64 os_local_now() {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
@@ -214,10 +219,8 @@ fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end
   return res;
 }
 
-fn DateTime os_currentDateTime() {
-  return dateTimeFromUnix(time(0));
-}
-
+// =============================================================================
+// Memory allocation
 fn void* os_reserve(usize base_addr, usize size) {
   void *res = mmap((void *)base_addr, size, PROT_NONE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -251,6 +254,8 @@ fn void os_decommit(void *base, usize size) {
   (void)madvise(base, size, MADV_DONTNEED);
 }
 
+// =============================================================================
+// Threads & Processes stuff
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
   Assert(thread_main);
 
@@ -394,6 +399,186 @@ fn void os_rwlock_free(OS_Handle handle) {
   bsd_primitiveFree(prim);
 }
 
+
+fn OS_Handle os_cond_alloc() {
+  BSD_Primitive *prim = bsd_primitiveAlloc(BSD_Primitive_CondVar);
+  if (pthread_cond_init(&prim->cond, 0)) {
+    bsd_primitiveFree(prim);
+    prim = 0;
+  }
+
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn void os_cond_signal(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  (void)pthread_cond_signal(&prim->cond);
+}
+
+fn void os_cond_broadcast(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  (void)pthread_cond_broadcast(&prim->cond);
+}
+
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
+		     u32 wait_at_most_microsec) {
+  BSD_Primitive *cond_prim = (BSD_Primitive *)cond_handle.h[0];
+  BSD_Primitive *mutex_prim = (BSD_Primitive *)mutex_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
+    if (abstime.tv_nsec >= 1e6) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e6;
+    }
+
+    return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
+  } else {
+    (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex);
+    return true;
+  }
+}
+
+// TODO(lb): find a workaround for pthread_cond with rwlock
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			    u32 wait_at_most_microsec) {
+  return false;
+}
+
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			     u32 wait_at_most_microsec) {
+  return false;
+}
+
+fn bool os_cond_free(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  i32 res = pthread_cond_destroy(&prim->cond);
+  bsd_primitiveFree(prim);
+  return res == 0;
+}
+
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
+				u32 max_count, String8 name) {
+  BSD_Primitive *prim = bsd_primitiveAlloc(BSD_Primitive_Semaphore);
+  prim->semaphore.kind = kind;
+  prim->semaphore.max_count = max_count;
+  switch (kind) {
+    case OS_SemaphoreKind_Thread: {
+      prim->semaphore.sem = (sem_t *)os_reserve(0, sizeof(sem_t));
+      os_commit(prim->semaphore.sem, sizeof(sem_t));
+      if (sem_init(prim->semaphore.sem, 0, init_count)) {
+	os_release(prim->semaphore.sem, sizeof(sem_t));
+	prim->semaphore.sem = 0;
+      }
+    } break;
+    case OS_SemaphoreKind_Process: {
+      AssertMsg(name.size > 0,
+		Strlit("Semaphores sharable between processes must be named."));
+
+      Scratch scratch = ScratchBegin(0, 0);
+      char *path = cstrFromStr8(scratch.arena, name);
+      (void)sem_unlink(path);
+      prim->semaphore.sem = sem_open(path, O_CREAT,
+				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
+      if (prim->semaphore.sem == SEM_FAILED) {
+	prim->semaphore.sem = 0;
+      }
+      ScratchEnd(scratch);
+    } break;
+  }
+
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn bool os_semaphore_signal(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
+      sem_post(prim->semaphore.sem)) {
+    return false;
+  }
+  return ++prim->semaphore.count;
+}
+
+fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
+    if (abstime.tv_nsec >= 1e6) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e6;
+    }
+
+    return sem_timedwait(prim->semaphore.sem, &abstime);
+  } else {
+    return sem_wait(prim->semaphore.sem);
+  }
+}
+
+fn bool os_semaphore_trywait(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  return sem_trywait(prim->semaphore.sem);
+}
+
+fn void os_semaphore_free(OS_Handle handle) {
+  BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
+  switch (prim->semaphore.kind) {
+    case OS_SemaphoreKind_Thread: {
+      (void)sem_destroy(prim->semaphore.sem);
+      os_release(prim->semaphore.sem, sizeof(sem_t));
+    } break;
+    case OS_SemaphoreKind_Process: {
+      (void)sem_close(prim->semaphore.sem);
+    } break;
+  }
+  bsd_primitiveFree(prim);
+}
+
+fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
+  SharedMem res = {0};
+  res.path = name;
+
+  i32 access_flags = 0;
+  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
+    access_flags |= O_RDWR;
+  } else if(flags & OS_acfRead) {
+    access_flags |= O_RDONLY;
+  } else if(flags & OS_acfWrite) {
+    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
+  }
+  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
+
+  Scratch scratch = ScratchBegin(0, 0);
+  res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name), access_flags,
+				  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  ScratchEnd(scratch);
+
+  (void)ftruncate(res.file_handle.h[0], size);
+  res.prop = fs_getProp(res.file_handle);
+  res.content = (u8*)mmap(0, ClampBot(res.prop.size, 1), PROT_READ | PROT_WRITE,
+			   MAP_SHARED, res.file_handle.h[0], 0);
+
+  return res;
+}
+
+fn bool os_sharedmem_close(SharedMem *shm) {
+  Scratch scratch = ScratchBegin(0, 0);
+  bool res = munmap(shm->content, shm->prop.size) == 0 &&
+	     shm_unlink(cstrFromStr8(scratch.arena, shm->path)) == 0;
+  ScratchEnd(scratch);
+  return res;
+}
+
+
+// =============================================================================
+// Dynamic libraries
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);

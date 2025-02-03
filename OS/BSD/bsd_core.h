@@ -2,6 +2,7 @@
 #define OS_BSD_CORE_H
 
 #include <dirent.h>
+#include <semaphore.h>
 #include <sys/stat.h>
 
 #ifndef MEMFILES_ALLOWED
@@ -11,10 +12,12 @@
 typedef u64 BSD_PrimitiveType;
 enum {
   BSD_Primitive_Process,
-  BSD_Primitive_Thread,
-  BSD_Primitive_Rwlock,
   BSD_Primitive_Mutex,
+  BSD_Primitive_Rwlock,
+  BSD_Primitive_CondVar,
   BSD_Primitive_Timer,
+  BSD_Primitive_Thread,
+  BSD_Primitive_Semaphore,
 };
 
 typedef struct {
@@ -27,15 +30,22 @@ typedef struct BSD_Primitive {
   BSD_PrimitiveType type;
 
   union {
+    pid_t proc;
     pthread_mutex_t mutex;
     pthread_rwlock_t rwlock;
-    pid_t proc;
+    pthread_cond_t cond;
     struct timespec timer;
     struct {
       pthread_t handle;
       ThreadFunc *func;
       void *args;
     } thread;
+    struct {
+      OS_SemaphoreKind kind;
+      u32 max_count;
+      u32 count;
+      sem_t *sem;
+    } semaphore;
   };
 } BSD_Primitive;
 

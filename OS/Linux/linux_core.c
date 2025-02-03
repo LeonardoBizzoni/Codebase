@@ -106,10 +106,14 @@ fn void lnx_parseMeminfo() {
   }
 }
 
+// =============================================================================
+// System information retrieval
 fn OS_SystemInfo *os_getSystemInfo() {
   return &lnx_state.info;
 }
 
+// =============================================================================
+// DateTime
 fn time64 os_local_now() {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
@@ -234,6 +238,8 @@ fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end
   return res;
 }
 
+// =============================================================================
+// Memory allocation
 fn void* os_reserve(usize base_addr, usize size) {
   void *res = mmap((void *)base_addr, size, PROT_NONE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -268,6 +274,8 @@ fn void os_decommit(void *base, usize size) {
   (void)madvise(base, size, MADV_DONTNEED);
 }
 
+// =============================================================================
+// Threads & Processes stuff
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
   Assert(thread_main);
 
@@ -458,7 +466,6 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
   }
 }
 
-// TODO(lb): pthread doesn't provide a way to use rwlocks with condvars but i still want this
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			    u32 wait_at_most_microsec) {
   return false;
@@ -591,6 +598,8 @@ fn bool os_sharedmem_close(SharedMem *shm) {
   return res;
 }
 
+// =============================================================================
+// Dynamic libraries
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
