@@ -102,12 +102,14 @@
 #if COMPILER_GCC
 #  define AlignOf(TYPE) __alignof__(TYPE)
 #elif COMPILER_CLANG
-#  define AlignOf(TYPE) _Alignof(TYPE)
+#  define AlignOf(TYPE) __alignof(TYPE)
 #elif COMPILER_CL
 #  define AlignOf(TYPE) __alignof(TYPE)
 #else
 #  define AlignOf(TYPE) 1
 #endif
+
+#define atomic _Atomic
 
 #if COMPILER_CL
 #  define threadvar __declspec(thread)
