@@ -495,7 +495,9 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 		Strlit("Semaphores sharable between processes must be named."));
 
       Scratch scratch = ScratchBegin(0, 0);
-      prim->semaphore.sem = sem_open(strToCstr(scratch.arena, name), O_CREAT,
+      char *path = strToCstr(scratch.arena, name);
+      (void)sem_unlink(path);
+      prim->semaphore.sem = sem_open(path, O_CREAT,
 				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
       if (prim->semaphore.sem == SEM_FAILED) {
 	prim->semaphore.sem = 0;
