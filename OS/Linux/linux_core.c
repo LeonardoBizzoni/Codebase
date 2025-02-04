@@ -453,10 +453,10 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
-    if (abstime.tv_nsec >= 1e6) {
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e6;
+      abstime.tv_nsec -= 1e9;
     }
 
     return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
@@ -532,10 +532,10 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
-    if (abstime.tv_nsec >= 1e6) {
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e6;
+      abstime.tv_nsec -= 1e9;
     }
 
     return sem_timedwait(prim->semaphore.sem, &abstime);

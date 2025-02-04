@@ -14,8 +14,8 @@ enum {
   BSD_Primitive_Process,
   BSD_Primitive_Mutex,
   BSD_Primitive_Rwlock,
-  BSD_Primitive_CondVar,
   BSD_Primitive_Timer,
+  BSD_Primitive_CondVar,
   BSD_Primitive_Thread,
   BSD_Primitive_Semaphore,
 };
@@ -33,8 +33,11 @@ typedef struct BSD_Primitive {
     pid_t proc;
     pthread_mutex_t mutex;
     pthread_rwlock_t rwlock;
-    pthread_cond_t cond;
     struct timespec timer;
+    struct {
+      pthread_cond_t cond;
+      pthread_mutex_t mutex;
+    } condvar;
     struct {
       pthread_t handle;
       ThreadFunc *func;

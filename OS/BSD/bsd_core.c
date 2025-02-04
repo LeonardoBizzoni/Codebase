@@ -351,7 +351,7 @@ fn void os_mutex_unlock(OS_Handle handle) {
 
 fn void os_mutex_free(OS_Handle handle) {
   BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
-  pthread_mutex_destroy(&prim->mutex);
+  (void)pthread_mutex_destroy(&prim->mutex);
   bsd_primitiveFree(prim);
 }
 
@@ -402,9 +402,11 @@ fn void os_rwlock_free(OS_Handle handle) {
 
 fn OS_Handle os_cond_alloc() {
   BSD_Primitive *prim = bsd_primitiveAlloc(BSD_Primitive_CondVar);
-  if (pthread_cond_init(&prim->cond, 0)) {
+  if (pthread_cond_init(&prim->condvar.cond, 0)) {
     bsd_primitiveFree(prim);
     prim = 0;
+  } else {
+    (void)pthread_mutex_init(&prim->condvar.mutex, 0);
   }
 
   OS_Handle res = {(u64)prim};
@@ -413,12 +415,12 @@ fn OS_Handle os_cond_alloc() {
 
 fn void os_cond_signal(OS_Handle handle) {
   BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
-  (void)pthread_cond_signal(&prim->cond);
+  (void)pthread_cond_signal(&prim->condvar.cond);
 }
 
 fn void os_cond_broadcast(OS_Handle handle) {
   BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
-  (void)pthread_cond_broadcast(&prim->cond);
+  (void)pthread_cond_broadcast(&prim->condvar.cond);
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
@@ -430,33 +432,87 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
-    if (abstime.tv_nsec >= 1e6) {
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e6;
+      abstime.tv_nsec -= 1e9;
     }
 
-    return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
+    return pthread_cond_timedwait(&cond_prim->condvar.cond, &mutex_prim->mutex, &abstime) == 0;
   } else {
-    (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &mutex_prim->mutex);
     return true;
   }
 }
 
-// TODO(lb): find a workaround for pthread_cond with rwlock
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			    u32 wait_at_most_microsec) {
-  return false;
+  BSD_Primitive *cond_prim = (BSD_Primitive *)cond_handle.h[0];
+  BSD_Primitive *rwlock_prim = (BSD_Primitive *)rwlock_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e9;
+    }
+
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
+			       &abstime) != 0) {
+      (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+      return false;
+    }
+    (void)pthread_rwlock_rdlock(&rwlock_prim->rwlock);
+  } else {
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex);
+    (void)pthread_rwlock_rdlock(&rwlock_prim->rwlock);
+  }
+
+  (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+  return true;
 }
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			     u32 wait_at_most_microsec) {
-  return false;
+  BSD_Primitive *cond_prim = (BSD_Primitive *)cond_handle.h[0];
+  BSD_Primitive *rwlock_prim = (BSD_Primitive *)rwlock_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e9;
+    }
+
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
+			       &abstime) != 0) {
+      (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+      return false;
+    }
+    (void)pthread_rwlock_wrlock(&rwlock_prim->rwlock);
+  } else {
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex);
+    (void)pthread_rwlock_wrlock(&rwlock_prim->rwlock);
+  }
+
+  (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+  return true;
 }
 
 fn bool os_cond_free(OS_Handle handle) {
   BSD_Primitive *prim = (BSD_Primitive *)handle.h[0];
-  i32 res = pthread_cond_destroy(&prim->cond);
+  i32 res = pthread_cond_destroy(&prim->condvar.cond) &
+	    pthread_mutex_destroy(&prim->condvar.mutex);
   bsd_primitiveFree(prim);
   return res == 0;
 }
@@ -510,10 +566,10 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
     abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
-    if (abstime.tv_nsec >= 1e6) {
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e6;
+      abstime.tv_nsec -= 1e9;
     }
 
     return sem_timedwait(prim->semaphore.sem, &abstime);
