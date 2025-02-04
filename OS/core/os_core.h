@@ -52,7 +52,7 @@ typedef struct {
   String8 hostname;
 } OS_SystemInfo;
 
-typedef struct{
+typedef struct {
   i64 count;
   String8 exe;
   String8 *args;

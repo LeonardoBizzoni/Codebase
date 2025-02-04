@@ -109,20 +109,20 @@ fn Viewport openglViewport(String8 name, usize initial_width,
   }
 
   XSetWindowAttributes swa = {.event_mask = ExposureMask |
-					     KeyPressMask |
-					     ButtonPressMask |
-					     PointerMotionMask,
+					    KeyPressMask |
+					    ButtonPressMask |
+					    PointerMotionMask,
                               .colormap = cmap };
   /* ========================================================================= */
 
   viewport.xwindow = XCreateWindow(viewport.xdisplay, viewport.xroot,
-				      0, 0,
-				      initial_width, initial_height,
-				      0, vi->depth,
-				      InputOutput, vi->visual,
-				      CWBackPixel | CWColormap | CWBorderPixel |
-				      CWEventMask,
-				      &swa);
+				   0, 0,
+				   initial_width, initial_height,
+				   0, vi->depth,
+				   InputOutput, vi->visual,
+				   CWBackPixel | CWColormap | CWBorderPixel |
+				   CWEventMask,
+				   &swa);
 
   /* Set the window name */
   XStoreName(viewport.xdisplay, viewport.xwindow, (char *)name.str);

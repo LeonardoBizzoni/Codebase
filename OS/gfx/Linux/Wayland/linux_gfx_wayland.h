@@ -1,0 +1,4 @@
+#ifndef OS_GFX_LINUX_WAYLAND_H
+#define OS_GFX_LINUX_WAYLAND_H
+
+#endif

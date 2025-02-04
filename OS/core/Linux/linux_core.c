@@ -646,11 +646,13 @@ i32 main(i32 argc, char **argv) {
 
   struct timespec tms;
   struct tm lt = {0};
-
   (void)clock_gettime(CLOCK_REALTIME, &tms);
   (void)localtime_r(&tms.tv_sec, &lt);
-
   lnx_state.unix_utc_offset = lt.tm_gmtoff;
+
+#if OS_GUI
+  lnx_gfx_init();
+#endif
 
   start(&cli);
 }
