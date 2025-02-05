@@ -49,6 +49,37 @@ inline fn i32 lnx_futex_broadcast(u32 *futex_addr, bool isPrivate) {
   return lnx_futex_wake(futex_addr, I32_MAX, isPrivate);
 }
 
+#define FUTEX_OP_SET        0  /* uaddr2 = oparg; */
+#define FUTEX_OP_ADD        1  /* uaddr2 += oparg; */
+#define FUTEX_OP_OR         2  /* uaddr2 |= oparg; */
+#define FUTEX_OP_ANDN       3  /* uaddr2 &= ~oparg; */
+#define FUTEX_OP_XOR        4  /* uaddr2 ^= oparg; */
+#define FUTEX_OP_ARG_SHIFT  8  /* Use (1 << oparg) as operand */
+
+#define FUTEX_OP_CMP_EQ     0  /* if (oldval_uaddr2 == cmparg) wake */
+#define FUTEX_OP_CMP_NE     1  /* if (oldval_uaddr2 != cmparg) wake */
+#define FUTEX_OP_CMP_LT     2  /* if (oldval_uaddr2 < cmparg) wake */
+#define FUTEX_OP_CMP_LE     3  /* if (oldval_uaddr2 <= cmparg) wake */
+#define FUTEX_OP_CMP_GT     4  /* if (oldval_uaddr2 > cmparg) wake */
+#define FUTEX_OP_CMP_GE     5  /* if (oldval_uaddr2 >= cmparg) wake */
+
+#define FUTEX_OP(op, oparg, cmp, cmparg) \
+  (((op & 0xf) << 28) | \
+   ((cmp & 0xf) << 24) | \
+   ((oparg & 0xfff) << 12) | \
+   (cmparg & 0xfff))
+
+     /* uint32_t oldval = *(uint32_t *) uaddr2; */
+     /* *(uint32_t *) uaddr2 = oldval op oparg; */
+     /* futex(uaddr, FUTEX_WAKE, val, 0, 0, 0); */
+     /* if (oldval cmp cmparg) */
+     /*     futex(uaddr2, FUTEX_WAKE, val2, 0, 0, 0); */
+inline fn i32 lnx_futex_wake_op(u32 *futex_addr, u32 waiters2wake_count, u32 *futex_addr2,
+				 u32 waiters2wake_count2, u32 op, bool isPrivate) {
+  return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAKE_OP_PRIVATE : FUTEX_WAKE_OP),
+		   waiters2wake_count, waiters2wake_count2, futex_addr2, op);
+}
+
 // ----------------------
 // REQUEUE
 inline fn i32 lnx_futex_cmp_requeue(u32 *futex_from, u32 *futex_to, u32 expected_value,
