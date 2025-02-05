@@ -109,8 +109,6 @@
 #  define AlignOf(TYPE) 1
 #endif
 
-#define atomic _Atomic
-
 #if COMPILER_CL
 #  define threadvar __declspec(thread)
 #elif COMPILER_CLANG || COMPILER_GCC
@@ -384,5 +382,47 @@ global const u64 bit61 = (1ull<<60);
 global const u64 bit62 = (1ull<<61);
 global const u64 bit63 = (1ull<<62);
 global const u64 bit64 = (1ull<<63);
+
+#if !CPP
+#  if COMPILER_GCC || COMPILER_CLANG
+#    include <stdatomic.h>
+#    define atomic(T) _Atomic(T)
+#  elif COMPILER_CL
+#  else
+#    error your compiler does not support atomic types/operations
+#  endif
+#else
+#  include <atomic>
+#  define atomic(T) std::atomic<T>
+#  define atomic_load(atomic_ptr) ((atomic_ptr)->load(std::memory_order_seq_cst))
+#  define atomic_store(atomic_ptr, newval) \
+     ((atomic_ptr)->store(newval, std::memory_order_seq_cst))
+#  define atomic_compare_exchange_strong(atomic_ptr, expected_valptr, newval) \
+     ((atomic_ptr)->compare_exchange_strong(*expected_valptr, newval, \
+                                            std::memory_order_seq_cst, \
+                                            std::memory_order_seq_cst))
+
+#  define atomic_add_fetch(atomic_ptr, val) \
+     (val + (atomic_ptr)->fetch_add(val, std::memory_order_seq_cst))
+#  define atomic_sub_fetch(atomic_ptr, val) \
+     (val - (atomic_ptr)->fetch_sub(val, std::memory_order_seq_cst))
+#  define atomic_and_fetch(atomic_ptr, val) \
+     (val & (atomic_ptr)->fetch_and(val, std::memory_order_seq_cst))
+#  define atomic_xor_fetch(atomic_ptr, val) \
+     (val ^ (atomic_ptr)->fetch_xor(val, std::memory_order_seq_cst))
+#  define atomic_or_fetch(atomic_ptr, val) \
+     (val | (atomic_ptr)->fetch_or(val, std::memory_order_seq_cst))
+
+#  define atomic_fetch_add(atomic_ptr, val) \
+     ((atomic_ptr)->fetch_add(val, std::memory_order_seq_cst))
+#  define atomic_fetch_sub(atomic_ptr, val) \
+     ((atomic_ptr)->fetch_sub(val, std::memory_order_seq_cst))
+#  define atomic_fetch_and(atomic_ptr, val) \
+     ((atomic_ptr)->fetch_and(val, std::memory_order_seq_cst))
+#  define atomic_fetch_xor(atomic_ptr, val) \
+     ((atomic_ptr)->fetch_xor(val, std::memory_order_seq_cst))
+#  define atomic_fetch_or(atomic_ptr, val) \
+     ((atomic_ptr)->fetch_or(val, std::memory_order_seq_cst))
+#endif
 
 #endif

@@ -5,6 +5,9 @@
 #include <semaphore.h>
 #include <sys/stat.h>
 
+#define LNX_MUTEX_UNLOCKED 0UL
+#define LNX_MUTEX_LOCKED 1UL
+
 typedef u64 LNX_PrimitiveType;
 enum {
   LNX_Primitive_Process,

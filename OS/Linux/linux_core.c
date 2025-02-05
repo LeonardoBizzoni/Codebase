@@ -23,12 +23,12 @@ global LNX_State lnx_state = {0};
 
 // ----------------------
 // WAIT
-inline fn i32 lnx_futex_wait(u32 *futex_addr, u32 expected_val, bool isPrivate) {
+inline fn i32 lnx_futex_wait(atomic(u32) *futex_addr, u32 expected_val, bool isPrivate) {
   return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAIT_PRIVATE : FUTEX_WAIT),
 	       expected_val, 0, 0, 0);
 }
 
-inline fn i32 lnx_futex_timedwait(u32 *futex_addr, u32 expected_val,
+inline fn i32 lnx_futex_timedwait(atomic(u32) *futex_addr, u32 expected_val,
 				  struct timespec *timeout, bool isPrivate) {
   return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAIT_BITSET_PRIVATE : FUTEX_WAIT_BITSET),
 		   expected_val, timeout, 0, FUTEX_BITSET_MATCH_ANY);
@@ -36,16 +36,16 @@ inline fn i32 lnx_futex_timedwait(u32 *futex_addr, u32 expected_val,
 
 // ----------------------
 // WAKE
-inline fn i32 lnx_futex_wake(u32 *futex_addr, u32 waiters2wake_count, bool isPrivate) {
+inline fn i32 lnx_futex_wake(atomic(u32) *futex_addr, u32 waiters2wake_count, bool isPrivate) {
   return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAKE_PRIVATE : FUTEX_WAKE),
 	       waiters2wake_count, 0, 0, 0);
 }
 
-inline fn i32 lnx_futex_signal(u32 *futex_addr, bool isPrivate) {
+inline fn i32 lnx_futex_signal(atomic(u32) *futex_addr, bool isPrivate) {
   return lnx_futex_wake(futex_addr, 1, isPrivate);
 }
 
-inline fn i32 lnx_futex_broadcast(u32 *futex_addr, bool isPrivate) {
+inline fn i32 lnx_futex_broadcast(atomic(u32) *futex_addr, bool isPrivate) {
   return lnx_futex_wake(futex_addr, I32_MAX, isPrivate);
 }
 
@@ -74,28 +74,59 @@ inline fn i32 lnx_futex_broadcast(u32 *futex_addr, bool isPrivate) {
      /* futex(uaddr, FUTEX_WAKE, val, 0, 0, 0); */
      /* if (oldval cmp cmparg) */
      /*     futex(uaddr2, FUTEX_WAKE, val2, 0, 0, 0); */
-inline fn i32 lnx_futex_wake_op(u32 *futex_addr, u32 waiters2wake_count, u32 *futex_addr2,
-				 u32 waiters2wake_count2, u32 op, bool isPrivate) {
+inline fn i32 lnx_futex_wake_op(atomic(u32) *futex_addr, u32 waiters2wake_count,
+				atomic(u32) *futex_addr2, u32 waiters2wake_count2,
+				u32 op, bool isPrivate) {
   return lnx_futex(futex_addr, (isPrivate ? FUTEX_WAKE_OP_PRIVATE : FUTEX_WAKE_OP),
 		   waiters2wake_count, waiters2wake_count2, futex_addr2, op);
 }
 
 // ----------------------
 // REQUEUE
-inline fn i32 lnx_futex_cmp_requeue(u32 *futex_from, u32 *futex_to, u32 expected_value,
-				    u32 waiters2wake_count, u32 max_requeued_waiters,
-				    bool isPrivate) {
+inline fn i32 lnx_futex_cmp_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
+				    u32 expected_value, u32 waiters2wake_count,
+				    u32 max_requeued_waiters, bool isPrivate) {
   return lnx_futex(futex_from, (isPrivate ? FUTEX_CMP_REQUEUE_PRIVATE : FUTEX_CMP_REQUEUE),
 		   waiters2wake_count, max_requeued_waiters, futex_to, expected_value);
 }
 
-inline fn i32 lnx_futex_requeue(u32 *futex_from, u32 *futex_to, u32 waiters2wake_count,
-				u32 max_requeued_waiters, bool isPrivate) {
+inline fn i32 lnx_futex_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
+				u32 waiters2wake_count, u32 max_requeued_waiters, bool isPrivate) {
   return lnx_futex(futex_from, (isPrivate ? FUTEX_REQUEUE_PRIVATE : FUTEX_REQUEUE),
 		   waiters2wake_count, max_requeued_waiters, futex_to, 0);
 }
 
 // =============================================================================
+
+typedef struct {
+  atomic(u32) futex;
+  atomic(pthread_t) owner;
+} LNX_Mutex;
+
+fn void lnx_futeximp_mutex_lock(LNX_Mutex *m) {
+  pthread_t tid = pthread_self();
+  if (tid == atomic_load(&m->owner)) {
+    atomic_fetch_add(&m->futex, 1);
+    return;
+  }
+
+  u32 unlocked = LNX_MUTEX_UNLOCKED;
+  while (!atomic_compare_exchange_strong(&m->futex, &unlocked, LNX_MUTEX_LOCKED)) {
+    lnx_futex_wait(&m->futex, LNX_MUTEX_LOCKED, true);
+  }
+  atomic_store(&m->owner, tid);
+}
+
+fn void lnx_futeximp_mutex_unlock(LNX_Mutex *m) {
+  Assert(pthread_self() == atomic_load(&m->owner));
+  if (atomic_load(&m->futex) > LNX_MUTEX_LOCKED) {
+    atomic_fetch_sub(&m->futex, 1);
+    return;
+  }
+
+  atomic_store(&m->futex, LNX_MUTEX_UNLOCKED);
+  lnx_futex_signal(&m->futex, true);
+}
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
   pthread_mutex_lock(&lnx_state.primitive_lock);
