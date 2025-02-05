@@ -394,6 +394,12 @@ global const u64 bit64 = (1ull<<63);
 #else
 #  include <atomic>
 #  define atomic(T) std::atomic<T>
+
+   template<typename T>
+   fn constexpr void atomic_init(std::atomic<T> *ptr, T init) {
+     *ptr = std::atomic<T>(init);
+   }
+
 #  define atomic_load(atomic_ptr) ((atomic_ptr)->load(std::memory_order_seq_cst))
 #  define atomic_store(atomic_ptr, newval) \
      ((atomic_ptr)->store(newval, std::memory_order_seq_cst))
