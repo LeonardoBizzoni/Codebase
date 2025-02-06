@@ -70,12 +70,12 @@ inline fn i32 lnx_futex_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
 
 // =============================================================================
 
-fn void lnx_futeximp_mutex_init(LNX_Mutex *m) {
+fn void lnx_futeximpl_mutex_init(LNX_Mutex *m) {
   atomic_init(&m->futex, LNX_MUTEX_UNLOCKED);
   m->owner = 0;
 }
 
-fn void lnx_futeximp_mutex_lock(LNX_Mutex *m) {
+fn void lnx_futeximpl_mutex_lock(LNX_Mutex *m) {
   pthread_t tid = pthread_self();
   if (tid == atomic_load(&m->owner)) {
     atomic_fetch_add(&m->futex, 1);
@@ -89,7 +89,22 @@ fn void lnx_futeximp_mutex_lock(LNX_Mutex *m) {
   atomic_store(&m->owner, tid);
 }
 
-fn void lnx_futeximp_mutex_unlock(LNX_Mutex *m) {
+fn bool lnx_futeximpl_mutex_trylock(LNX_Mutex *m) {
+  pthread_t tid = pthread_self();
+  if (tid == atomic_load(&m->owner)) {
+    atomic_fetch_add(&m->futex, 1);
+    return true;
+  }
+
+  u32 unlocked = LNX_MUTEX_UNLOCKED;
+  if (!atomic_compare_exchange_strong(&m->futex, &unlocked, LNX_MUTEX_LOCKED)) {
+    return false;
+  }
+  atomic_store(&m->owner, tid);
+  return true;
+}
+
+fn void lnx_futeximpl_mutex_unlock(LNX_Mutex *m) {
   Assert(pthread_self() == atomic_load(&m->owner));
   if (atomic_load(&m->futex) > LNX_MUTEX_LOCKED) {
     atomic_fetch_sub(&m->futex, 1);
@@ -101,23 +116,23 @@ fn void lnx_futeximp_mutex_unlock(LNX_Mutex *m) {
 }
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
-  lnx_futeximp_mutex_lock(&lnx_state.primitive_lock);
+  lnx_futeximpl_mutex_lock(&lnx_state.primitive_lock);
   LNX_Primitive *res = lnx_state.primitive_freelist;
   if (res) {
     StackPop(lnx_state.primitive_freelist);
   } else {
     res = New(lnx_state.arena, LNX_Primitive);
   }
-  lnx_futeximp_mutex_unlock(&lnx_state.primitive_lock);
+  lnx_futeximpl_mutex_unlock(&lnx_state.primitive_lock);
 
   res->type = type;
   return res;
 }
 
 fn void lnx_primitiveFree(LNX_Primitive *ptr) {
-  lnx_futeximp_mutex_lock(&lnx_state.primitive_lock);
+  lnx_futeximpl_mutex_lock(&lnx_state.primitive_lock);
   StackPush(lnx_state.primitive_freelist, ptr);
-  lnx_futeximp_mutex_unlock(&lnx_state.primitive_lock);
+  lnx_futeximpl_mutex_unlock(&lnx_state.primitive_lock);
 }
 
 fn void* lnx_threadEntry(void *args) {
@@ -429,37 +444,28 @@ fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc) {
 
 fn OS_Handle os_mutex_alloc() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Mutex);
-  pthread_mutexattr_t attr;
-  if (pthread_mutexattr_init(&attr) != 0 ||
-      pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) != 0) {
-    lnx_primitiveFree(prim);
-    prim = 0;
-  } else {
-    (void)pthread_mutex_init(&prim->mutex, &attr);
-  }
-
+  lnx_futeximpl_mutex_init(&prim->mutex);
   OS_Handle res = {(u64)prim};
   return res;
 }
 
 fn void os_mutex_lock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_mutex_lock(&prim->mutex);
+  lnx_futeximpl_mutex_lock(&prim->mutex);
 }
 
 fn bool os_mutex_trylock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return pthread_mutex_trylock(&prim->mutex) == 0;
+  return lnx_futeximpl_mutex_trylock(&prim->mutex);
 }
 
 fn void os_mutex_unlock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_mutex_unlock(&prim->mutex);
+  lnx_futeximpl_mutex_unlock(&prim->mutex);
 }
 
 fn void os_mutex_free(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  pthread_mutex_destroy(&prim->mutex);
   lnx_primitiveFree(prim);
 }
 
@@ -530,24 +536,25 @@ fn void os_cond_broadcast(OS_Handle handle) {
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 		     u32 wait_at_most_microsec) {
-  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
-  LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0];
+  /* LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0]; */
+  /* LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0]; */
 
-  if (wait_at_most_microsec) {
-    struct timespec abstime;
-    (void)clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6));
-    if (abstime.tv_nsec >= 1e6) {
-      abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e6;
-    }
+  /* if (wait_at_most_microsec) { */
+  /*   struct timespec abstime; */
+  /*   (void)clock_gettime(CLOCK_REALTIME, &abstime); */
+  /*   abstime.tv_sec += wait_at_most_microsec/1e6; */
+  /*   abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6)); */
+  /*   if (abstime.tv_nsec >= 1e6) { */
+  /*     abstime.tv_sec += 1; */
+  /*     abstime.tv_nsec -= 1e6; */
+  /*   } */
 
-    return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
-  } else {
-    (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex);
-    return true;
-  }
+  /*   return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0; */
+  /* } else { */
+  /*   (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex); */
+  /*   return true; */
+  /* } */
+  return false;
 }
 
 // TODO(lb): pthread doesn't provide a way to use rwlocks with condvars but i still want this
@@ -716,7 +723,7 @@ i32 main(i32 argc, char **argv) {
   lnx_state.info.hostname = lnx_gethostname();
 
   lnx_state.arena = ArenaBuild();
-  lnx_futeximp_mutex_init(&lnx_state.primitive_lock);
+  lnx_futeximpl_mutex_init(&lnx_state.primitive_lock);
   lnx_parseMeminfo();
 
   CmdLine cli = {0};

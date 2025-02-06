@@ -30,7 +30,7 @@ typedef struct LNX_Primitive {
 
   union {
     pid_t proc;
-    pthread_mutex_t mutex;
+    LNX_Mutex mutex;
     pthread_rwlock_t rwlock;
     pthread_cond_t cond;
     struct timespec timer;
@@ -107,9 +107,9 @@ inline fn i32 lnx_futex_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
 				u32 waiters2wake_count, u32 max_requeued_waiters,
 				bool isPrivate);
 
-fn void lnx_futeximp_mutex_init(LNX_Mutex *m);
-fn void lnx_futeximp_mutex_lock(LNX_Mutex *m);
-fn void lnx_futeximp_mutex_unlock(LNX_Mutex *m);
+fn void lnx_futeximpl_mutex_init(LNX_Mutex *m);
+fn void lnx_futeximpl_mutex_lock(LNX_Mutex *m);
+fn void lnx_futeximpl_mutex_unlock(LNX_Mutex *m);
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type);
 fn void lnx_primitiveFree(LNX_Primitive *ptr);
