@@ -69,42 +69,28 @@ inline fn i32 lnx_futex_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
 }
 
 // =============================================================================
-
-fn void lnx_futeximpl_mutex_init(LNX_Mutex *m) {
-  atomic_init(&m->futex, LNX_MUTEX_UNLOCKED);
+// Mutex implementation
+fn void lnx_futeximpl_mutex_init(LNX_Lock *m) {
+  m->futex = LNX_MUTEX_UNLOCKED;
   m->owner = 0;
 }
 
-fn void lnx_futeximpl_mutex_lock(LNX_Mutex *m) {
+fn void lnx_futeximpl_mutex_lock(LNX_Lock *m) {
   pthread_t tid = pthread_self();
   if (tid == atomic_load(&m->owner)) {
     atomic_fetch_add(&m->futex, 1);
     return;
   }
 
-  u32 unlocked = LNX_MUTEX_UNLOCKED;
-  while (!atomic_compare_exchange_strong(&m->futex, &unlocked, LNX_MUTEX_LOCKED)) {
+  for (u32 current = LNX_MUTEX_UNLOCKED;
+       !atomic_cas(&m->futex, &current, LNX_MUTEX_LOCKED);
+       current = LNX_MUTEX_UNLOCKED) {
     lnx_futex_wait(&m->futex, LNX_MUTEX_LOCKED, true);
   }
   atomic_store(&m->owner, tid);
 }
 
-fn bool lnx_futeximpl_mutex_trylock(LNX_Mutex *m) {
-  pthread_t tid = pthread_self();
-  if (tid == atomic_load(&m->owner)) {
-    atomic_fetch_add(&m->futex, 1);
-    return true;
-  }
-
-  u32 unlocked = LNX_MUTEX_UNLOCKED;
-  if (!atomic_compare_exchange_strong(&m->futex, &unlocked, LNX_MUTEX_LOCKED)) {
-    return false;
-  }
-  atomic_store(&m->owner, tid);
-  return true;
-}
-
-fn void lnx_futeximpl_mutex_unlock(LNX_Mutex *m) {
+fn void lnx_futeximpl_mutex_unlock(LNX_Lock *m) {
   Assert(pthread_self() == atomic_load(&m->owner));
   if (atomic_load(&m->futex) > LNX_MUTEX_LOCKED) {
     atomic_fetch_sub(&m->futex, 1);
@@ -115,6 +101,7 @@ fn void lnx_futeximpl_mutex_unlock(LNX_Mutex *m) {
   lnx_futex_signal(&m->futex, true);
 }
 
+// =============================================================================
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
   lnx_futeximpl_mutex_lock(&lnx_state.primitive_lock);
   LNX_Primitive *res = lnx_state.primitive_freelist;
@@ -456,7 +443,18 @@ fn void os_mutex_lock(OS_Handle handle) {
 
 fn bool os_mutex_trylock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return lnx_futeximpl_mutex_trylock(&prim->mutex);
+  pthread_t tid = pthread_self();
+  if (tid == atomic_load(&prim->mutex.owner)) {
+    atomic_fetch_add(&prim->mutex.futex, 1);
+    return true;
+  }
+
+  u32 unlocked = LNX_MUTEX_UNLOCKED;
+  if (!atomic_cas(&prim->mutex.futex, &unlocked, LNX_MUTEX_LOCKED)) {
+    return false;
+  }
+  atomic_store(&prim->mutex.owner, tid);
+  return true;
 }
 
 fn void os_mutex_unlock(OS_Handle handle) {
@@ -471,45 +469,63 @@ fn void os_mutex_free(OS_Handle handle) {
 
 fn OS_Handle os_rwlock_alloc() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Rwlock);
-  pthread_rwlock_init(&prim->rwlock, 0);
-
+  prim->rwlock = LNX_RWLOCK_OPEN;
   OS_Handle res = {(u64)prim};
   return res;
 }
 
 fn void os_rwlock_read_lock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_rwlock_rdlock(&prim->rwlock);
-}
-
-fn bool os_rwlock_read_trylock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return pthread_rwlock_tryrdlock(&prim->rwlock) == 0;
-}
-
-fn void os_rwlock_read_unlock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_rwlock_unlock(&prim->rwlock);
+  for (u32 current;
+       (current = atomic_load(&prim->rwlock)) == LNX_RWLOCK_CLOSED ||
+       !atomic_cas(&prim->rwlock, &current, current + 1);
+   ) {
+    while (!lnx_futex_wait(&prim->rwlock, current, true));
+  }
 }
 
 fn void os_rwlock_write_lock(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_rwlock_wrlock(&prim->rwlock);
+  u32 open = LNX_RWLOCK_OPEN;
+  for (u32 current = open;
+       !atomic_cas(&prim->rwlock, &current, LNX_RWLOCK_CLOSED);
+       current = open) {
+    while (!lnx_futex_wait(&prim->rwlock, current, true));
+    if (atomic_load(&prim->rwlock) != open) { lnx_futex_signal(&prim->rwlock, true); }
+  }
+}
+
+fn void os_rwlock_unlock(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  u32 current, wanted;
+  do {
+    current = atomic_load(&prim->rwlock);
+    switch (current) {
+    case LNX_RWLOCK_OPEN: return;
+    case LNX_RWLOCK_CLOSED: {
+      wanted = LNX_RWLOCK_OPEN;
+    } break;
+    default: wanted = current - 1;
+    }
+  } while (!atomic_cas(&prim->rwlock, &current, wanted));
+  lnx_futex_signal(&prim->rwlock, true);
+}
+
+fn bool os_rwlock_read_trylock(OS_Handle handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  u32 current = atomic_load(&prim->rwlock);
+  if (current == LNX_RWLOCK_CLOSED) { return false; }
+  return atomic_cas(&prim->rwlock, &current, current + 1);
 }
 
 fn bool os_rwlock_write_trylock(OS_Handle handle) {
+  u32 open = LNX_RWLOCK_OPEN;
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return pthread_rwlock_trywrlock(&prim->rwlock) == 0;
-}
-
-fn void os_rwlock_write_unlock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_rwlock_unlock(&prim->rwlock);
+  return atomic_cas(&prim->rwlock, &open, LNX_RWLOCK_CLOSED);
 }
 
 fn void os_rwlock_free(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  pthread_rwlock_destroy(&prim->rwlock);
   lnx_primitiveFree(prim);
 }
 
