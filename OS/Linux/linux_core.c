@@ -568,28 +568,9 @@ fn void os_cond_broadcast(OS_Handle handle) {
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 		     u32 wait_at_most_microsec) {
-  /* LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0]; */
-  /* LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0]; */
-
-  /* if (wait_at_most_microsec) { */
-  /*   struct timespec abstime; */
-  /*   (void)clock_gettime(CLOCK_REALTIME, &abstime); */
-  /*   abstime.tv_sec += wait_at_most_microsec/1e6; */
-  /*   abstime.tv_nsec += 1e3 * (wait_at_most_microsec - 1e6 * (wait_at_most_microsec/1e6)); */
-  /*   if (abstime.tv_nsec >= 1e6) { */
-  /*     abstime.tv_sec += 1; */
-  /*     abstime.tv_nsec -= 1e6; */
-  /*   } */
-
-  /*   return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0; */
-  /* } else { */
-  /*   (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex); */
-  /*   return true; */
-  /* } */
   return false;
 }
 
-// TODO(lb): pthread doesn't provide a way to use rwlocks with condvars but i still want this
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			    u32 wait_at_most_microsec) {
   return false;
@@ -614,12 +595,9 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
   prim->semaphore.max_count = max_count;
   switch (kind) {
     case OS_SemaphoreKind_Thread: {
-      prim->semaphore.sem = (sem_t *)os_reserve(0, sizeof(sem_t));
-      os_commit(prim->semaphore.sem, sizeof(sem_t));
-      if (sem_init(prim->semaphore.sem, 0, init_count)) {
-	os_release(prim->semaphore.sem, sizeof(sem_t));
-	prim->semaphore.sem = 0;
-      }
+      prim->semaphore.sem = (atomic(u32)*)os_reserve(0, sizeof(atomic(u32)));
+      os_commit(prim->semaphore.sem, sizeof(atomic(u32)));
+      atomic_store(prim->semaphore.sem, init_count);
     } break;
     case OS_SemaphoreKind_Process: {
       AssertMsg(name.size > 0,
@@ -627,12 +605,12 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 
       Scratch scratch = ScratchBegin(0, 0);
       char *path = cstrFromStr8(scratch.arena, name);
-      (void)sem_unlink(path);
-      prim->semaphore.sem = sem_open(path, O_CREAT,
-				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
-      if (prim->semaphore.sem == SEM_FAILED) {
-	prim->semaphore.sem = 0;
-      }
+      /* (void)sem_unlink(path); */
+      /* prim->semaphore.sem = sem_open(path, O_CREAT, */
+      /* 				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count); */
+      /* if (prim->semaphore.sem == SEM_FAILED) { */
+      /* 	prim->semaphore.sem = 0; */
+      /* } */
       ScratchEnd(scratch);
     } break;
   }
@@ -643,11 +621,14 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 
 fn bool os_semaphore_signal(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
-      sem_post(prim->semaphore.sem)) {
-    return false;
+  u32 value = atomic_load(prim->semaphore.sem);
+  if (value < prim->semaphore.max_count &&
+      atomic_cas(prim->semaphore.sem, &value, value + 1)) {
+    lnx_futex_signal(prim->semaphore.sem,
+		     prim->semaphore.kind == OS_SemaphoreKind_Thread);
+    return true;
   }
-  return ++prim->semaphore.count;
+  return false;
 }
 
 fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
@@ -662,26 +643,44 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
       abstime.tv_nsec -= 1e6;
     }
 
-    return sem_timedwait(prim->semaphore.sem, &abstime);
+    for (u32 value = atomic_load(prim->semaphore.sem);
+	 value == 0 || !atomic_cas(prim->semaphore.sem, &value, value - 1);
+     ) {
+      if (lnx_futex_timedwait(prim->semaphore.sem, 0, &abstime,
+			      prim->semaphore.kind == OS_SemaphoreKind_Thread)) {
+	return false;
+      }
+    }
+    return true;
   } else {
-    return sem_wait(prim->semaphore.sem);
+    for (u32 value = atomic_load(prim->semaphore.sem);
+	 value == 0 || !atomic_cas(prim->semaphore.sem, &value, value - 1);
+     ) {
+      lnx_futex_wait(prim->semaphore.sem, 0,
+		     prim->semaphore.kind == OS_SemaphoreKind_Thread);
+    }
+    return true;
   }
 }
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return sem_trywait(prim->semaphore.sem);
+  u32 value = atomic_load(prim->semaphore.sem);
+  if (value && atomic_cas(prim->semaphore.sem, &value, value - 1)) {
+    return lnx_futex_wait((atomic(u32)*)prim->semaphore.sem, 0,
+			  prim->semaphore.kind == OS_SemaphoreKind_Thread) == 0;
+  }
+  return false;
 }
 
 fn void os_semaphore_free(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   switch (prim->semaphore.kind) {
     case OS_SemaphoreKind_Thread: {
-      (void)sem_destroy(prim->semaphore.sem);
-      os_release(prim->semaphore.sem, sizeof(sem_t));
+      os_release(prim->semaphore.sem, sizeof(atomic(i32)));
     } break;
     case OS_SemaphoreKind_Process: {
-      (void)sem_close(prim->semaphore.sem);
+      /* (void)sem_close(prim->semaphore.sem); */
     } break;
   }
   lnx_primitiveFree(prim);

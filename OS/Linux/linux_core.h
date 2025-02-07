@@ -17,12 +17,6 @@ typedef struct {
 #define LNX_RWLOCK_OPEN   0UL
 #define LNX_RWLOCK_CLOSED 1UL
 
-typedef struct {
-  atomic(u32) futex;
-  LNX_Mutex critical;
-  u32 readers;
-} LNX_Rwlock;
-
 typedef u64 LNX_PrimitiveType;
 enum {
   LNX_Primitive_Process,
@@ -41,9 +35,13 @@ typedef struct LNX_Primitive {
   union {
     pid_t proc;
     LNX_Mutex mutex;
-    LNX_Rwlock rwlock;
     pthread_cond_t cond;
     struct timespec timer;
+    struct {
+      atomic(u32) futex;
+      LNX_Mutex critical;
+      u32 readers;
+    } rwlock;
     struct {
       pthread_t handle;
       ThreadFunc *func;
@@ -52,8 +50,7 @@ typedef struct LNX_Primitive {
     struct {
       OS_SemaphoreKind kind;
       u32 max_count;
-      u32 count;
-      sem_t *sem;
+      atomic(u32) *sem;
     } semaphore;
   };
 } LNX_Primitive;
