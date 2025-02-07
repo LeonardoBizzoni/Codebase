@@ -8,13 +8,20 @@
 #define LNX_MUTEX_UNLOCKED 0UL
 #define LNX_MUTEX_LOCKED 1UL
 
-#define LNX_RWLOCK_CLOSED 0UL
-#define LNX_RWLOCK_OPEN   1UL
+typedef struct {
+  atomic(u32) futex;
+  pthread_t owner;
+  u32 count;
+} LNX_Mutex;
+
+#define LNX_RWLOCK_OPEN   0UL
+#define LNX_RWLOCK_CLOSED 1UL
 
 typedef struct {
   atomic(u32) futex;
-  atomic(pthread_t) owner;
-} LNX_Lock;
+  LNX_Mutex critical;
+  u32 readers;
+} LNX_Rwlock;
 
 typedef u64 LNX_PrimitiveType;
 enum {
@@ -33,8 +40,8 @@ typedef struct LNX_Primitive {
 
   union {
     pid_t proc;
-    LNX_Lock mutex;
-    atomic(u32) rwlock;
+    LNX_Mutex mutex;
+    LNX_Rwlock rwlock;
     pthread_cond_t cond;
     struct timespec timer;
     struct {
@@ -60,7 +67,7 @@ typedef struct {
 typedef struct {
   Arena *arena;
   OS_SystemInfo info;
-  LNX_Lock primitive_lock;
+  LNX_Mutex primitive_lock;
   LNX_Primitive *primitive_freelist;
 
   u64 unix_utc_offset;
@@ -110,9 +117,9 @@ inline fn i32 lnx_futex_requeue(atomic(u32) *futex_from, atomic(u32) *futex_to,
 				u32 waiters2wake_count, u32 max_requeued_waiters,
 				bool isPrivate);
 
-fn void lnx_futeximpl_mutex_init(LNX_Lock *m);
-fn void lnx_futeximpl_mutex_lock(LNX_Lock *m);
-fn void lnx_futeximpl_mutex_unlock(LNX_Lock *m);
+fn void lnx_futeximpl_mutex_init(LNX_Mutex *m);
+fn void lnx_futeximpl_mutex_lock(LNX_Mutex *m);
+fn void lnx_futeximpl_mutex_unlock(LNX_Mutex *m);
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type);
 fn void lnx_primitiveFree(LNX_Primitive *ptr);

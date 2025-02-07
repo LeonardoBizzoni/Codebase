@@ -194,10 +194,11 @@ fn void os_mutex_free(OS_Handle handle);
 
 fn OS_Handle os_rwlock_alloc();
 fn void os_rwlock_read_lock(OS_Handle handle);
-fn void os_rwlock_write_lock(OS_Handle handle);
-fn void os_rwlock_unlock(OS_Handle handle);
 fn bool os_rwlock_read_trylock(OS_Handle handle);
+fn void os_rwlock_read_unlock(OS_Handle handle);
+fn void os_rwlock_write_lock(OS_Handle handle);
 fn bool os_rwlock_write_trylock(OS_Handle handle);
+fn void os_rwlock_write_unlock(OS_Handle handle);
 fn void os_rwlock_free(OS_Handle handle);
 
 fn OS_Handle os_cond_alloc();
