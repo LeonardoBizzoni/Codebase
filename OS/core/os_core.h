@@ -229,6 +229,10 @@ fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol);
 fn i32 os_lib_close(OS_Handle lib);
 
 // =============================================================================
+// Misc
+fn String8 os_currentDir(Arena *arena);
+
+// =============================================================================
 // File reading and writing/appending
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags);
 fn bool fs_close(OS_Handle fd);

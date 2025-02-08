@@ -24,8 +24,11 @@ typedef struct LNX_Primitive {
     pid_t proc;
     pthread_mutex_t mutex;
     pthread_rwlock_t rwlock;
-    pthread_cond_t cond;
     struct timespec timer;
+    struct {
+      pthread_cond_t cond;
+      pthread_mutex_t mutex;
+    } condvar;
     struct {
       pthread_t handle;
       ThreadFunc *func;

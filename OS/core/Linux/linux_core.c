@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <semaphore.h>
 #include <sys/wait.h>
 #include <sys/sysinfo.h>
@@ -425,7 +426,7 @@ fn void os_rwlock_free(OS_Handle handle) {
 
 fn OS_Handle os_cond_alloc() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_CondVar);
-  if (pthread_cond_init(&prim->cond, 0)) {
+  if (pthread_cond_init(&prim->condvar.cond, 0)) {
     lnx_primitiveFree(prim);
     prim = 0;
   }
@@ -436,12 +437,12 @@ fn OS_Handle os_cond_alloc() {
 
 fn void os_cond_signal(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_cond_signal(&prim->cond);
+  (void)pthread_cond_signal(&prim->condvar.cond);
 }
 
 fn void os_cond_broadcast(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  (void)pthread_cond_broadcast(&prim->cond);
+  (void)pthread_cond_broadcast(&prim->condvar.cond);
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
@@ -459,26 +460,80 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
       abstime.tv_nsec -= 1e9;
     }
 
-    return pthread_cond_timedwait(&cond_prim->cond, &mutex_prim->mutex, &abstime) == 0;
+    return pthread_cond_timedwait(&cond_prim->condvar.cond, &mutex_prim->mutex, &abstime) == 0;
   } else {
-    (void)pthread_cond_wait(&cond_prim->cond, &mutex_prim->mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &mutex_prim->mutex);
     return true;
   }
 }
 
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			    u32 wait_at_most_microsec) {
-  return false;
+  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
+  LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e9;
+    }
+
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
+			       &abstime) != 0) {
+      (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+      return false;
+    }
+    (void)pthread_rwlock_rdlock(&rwlock_prim->rwlock);
+  } else {
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex);
+    (void)pthread_rwlock_rdlock(&rwlock_prim->rwlock);
+  }
+
+  (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+  return true;
 }
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 			     u32 wait_at_most_microsec) {
-  return false;
+  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
+  LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
+
+  if (wait_at_most_microsec) {
+    struct timespec abstime;
+    (void)clock_gettime(CLOCK_REALTIME, &abstime);
+    abstime.tv_sec += wait_at_most_microsec/1e6;
+    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= 1e9) {
+      abstime.tv_sec += 1;
+      abstime.tv_nsec -= 1e9;
+    }
+
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
+			       &abstime) != 0) {
+      (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+      return false;
+    }
+    (void)pthread_rwlock_wrlock(&rwlock_prim->rwlock);
+  } else {
+    pthread_mutex_lock(&cond_prim->condvar.mutex);
+    (void)pthread_cond_wait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex);
+    (void)pthread_rwlock_wrlock(&rwlock_prim->rwlock);
+  }
+
+  (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
+  return true;
 }
 
 fn bool os_cond_free(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  i32 res = pthread_cond_destroy(&prim->cond);
+  i32 res = pthread_cond_destroy(&prim->condvar.cond);
   lnx_primitiveFree(prim);
   return res == 0;
 }
@@ -627,6 +682,19 @@ fn i32 os_lib_close(OS_Handle lib) {
   return dlclose(handle);
 }
 
+// =============================================================================
+// Misc
+fn String8 os_currentDir(Arena *arena) {
+  char *wd = getcwd(0, 0);
+  isize size = str8len(wd);
+  u8 *copy = New(arena, u8, size);
+  memCopy(copy, wd, size);
+  free(wd);
+  String8 res = str8(copy, size);
+  return res;
+}
+
+// =============================================================================
 i32 main(i32 argc, char **argv) {
   lnx_state.info.core_count = get_nprocs();
   lnx_state.info.page_size = getpagesize();
