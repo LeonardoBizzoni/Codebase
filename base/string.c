@@ -534,7 +534,7 @@ fn usize strFindFirstSubstr(String8 haystack, String8 needle) {
 
   for (isize i = 0; i < haystack.size; ++i) {
     if (haystack.str[i] == needle.str[0]) {
-      for (isize j = 0; i < needle.size; ++j) {
+      for (isize j = 0; j < needle.size; ++j) {
         if (haystack.str[i + j] != needle.str[j]) {
           goto outer;
         }
