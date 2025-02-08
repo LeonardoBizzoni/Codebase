@@ -553,8 +553,8 @@ fs_iter_begin(Arena *arena, String8 path)
   Scratch scratch = ScratchBegin(&arena, 1);
   StringStream list = {0};
 
-  stringstreamAppend(scratch.arena, &list, path);
-  stringstreamAppend(scratch.arena, &list, Strlit("\\*"));
+  strstream_append_str(scratch.arena, &list, path);
+  strstream_append_str(scratch.arena, &list, Strlit("\\*"));
   path = str8FromStream(scratch.arena, list);
 
   String16 path16 = UTF16From8(scratch.arena, path);

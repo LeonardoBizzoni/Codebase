@@ -212,17 +212,17 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
     StringStream ss = {0};
     Scratch scratch = ScratchBegin(0, 0);
-    stringstreamAppend(scratch.arena, &ss, str8(file->content, file->prop.size));
-    stringstreamAppend(scratch.arena, &ss, row_entries[i++]);
+    strstream_append_str(scratch.arena, &ss, str8(file->content, file->prop.size));
+    strstream_append_str(scratch.arena, &ss, row_entries[i++]);
 
     for (; i < row.node_count; ++i) {
       if (i == feature2split_by) {
         continue;
       }
-      stringstreamAppend(scratch.arena, &ss, Strlit(","));
-      stringstreamAppend(scratch.arena, &ss, row_entries[i]);
+      strstream_append_str(scratch.arena, &ss, Strlit(","));
+      strstream_append_str(scratch.arena, &ss, row_entries[i]);
     }
-    stringstreamAppend(scratch.arena, &ss, Strlit("\n"));
+    strstream_append_str(scratch.arena, &ss, Strlit("\n"));
     fs_fwrite(file, str8FromStream(scratch.arena, ss));
     ScratchEnd(scratch);
   }

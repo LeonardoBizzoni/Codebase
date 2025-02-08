@@ -230,11 +230,11 @@ struct Matrix {
     StringStream ss = {0};
     for (usize i = 0; i < R; ++i) {
       for (usize j = 0; j < C; ++j) {
-	stringstreamAppend(arena, &ss,
+	strstream_append_str(arena, &ss,
 			   strFormat(arena, format_for_each_elem, (*this)[i, j]));
       }
 
-      stringstreamAppend(arena, &ss, Strlit("\n"));
+      strstream_append_str(arena, &ss, Strlit("\n"));
     }
 
     String8 str = str8FromStream(arena, ss);

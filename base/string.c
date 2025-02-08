@@ -119,15 +119,21 @@ fn String8 str8FromStream(Arena *arena, StringStream stream) {
   return str8(str, stream.total_size);
 }
 
-fn void stringstreamAppend(Arena *arena, StringStream *strlist, String8 other) {
-  Assert(arena);
-  Assert(strlist);
-
+fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other) {
   strlist->node_count += 1;
   strlist->total_size += other.size;
   StringNode *str = New(arena, StringNode);
   str->value = other;
   DLLPushBack(strlist->first, strlist->last, str);
+}
+
+fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStream other) {
+  if (!other.first) { return; }
+  for (StringNode *curr = other.first; curr; curr = curr->next) {
+    strlist->node_count += curr->value.size;
+  }
+  strlist->node_count += other.node_count;
+  DLLPushBack(strlist->first, strlist->last, other.first);
 }
 
 inline fn String8 str8(u8 *chars, isize len) {
@@ -499,7 +505,7 @@ fn StringStream strSplit(Arena *arena, String8 s, char ch) {
   for (isize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
-        stringstreamAppend(arena, &res, strRange(s, prev, i));
+        strstream_append_str(arena, &res, strRange(s, prev, i));
       }
 
       do {
@@ -511,7 +517,7 @@ fn StringStream strSplit(Arena *arena, String8 s, char ch) {
   }
 
   if (prev != s.size) {
-    stringstreamAppend(arena, &res, strRange(s, prev, s.size));
+    strstream_append_str(arena, &res, strRange(s, prev, s.size));
   }
 
   return res;
