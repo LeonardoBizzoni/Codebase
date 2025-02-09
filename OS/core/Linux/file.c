@@ -104,11 +104,20 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
   File file = {0};
+  i32 flags = fcntl(fd.h[0], F_GETFL);
+  if (flags < 0) { return file; }
+  flags &= O_ACCMODE;
+  if (!flags) {
+    flags = PROT_READ;
+  } else {
+    flags = PROT_READ | PROT_WRITE;
+  }
+
   file.file_handle = fd;
   file.path = fs_pathFromHandle(arena, fd);
   file.prop = fs_getProp(file.file_handle);
   file.content = (u8 *)mmap(0, ClampBot(file.prop.size, 1),
-			    PROT_READ | PROT_WRITE, MAP_SHARED, fd.h[0], 0);
+			    flags, MAP_SHARED, fd.h[0], 0);
   file.mmap_handle.h[0] = (u64)file.content;
 
   return file;
