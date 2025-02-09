@@ -222,6 +222,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 
+  if (!iter->dir) { return false; }
   Scratch scratch = ScratchBegin(&arena, 1);
   do {
     do {
@@ -249,5 +250,5 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
 
 fn void fs_iter_end(OS_FileIter *os_iter) {
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
-  closedir(iter->dir);
+  if (iter->dir) { closedir(iter->dir); }
 }
