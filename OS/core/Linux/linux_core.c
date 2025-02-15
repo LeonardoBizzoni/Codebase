@@ -292,13 +292,15 @@ fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
 
 fn void os_thread_kill(OS_Handle thd_handle) {
   LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != LNX_Primitive_Thread) { return; }
   (void)pthread_kill(prim->thread.handle, 0);
   lnx_primitiveFree(prim);
 }
 
 fn bool os_thread_join(OS_Handle thd_handle) {
   LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
-  i32 res = pthread_join(prim->thread.handle, 0);
+  if (!prim || prim->type != LNX_Primitive_Thread) { return false; }
+  bool res = pthread_join(prim->thread.handle, 0) == 0;
   lnx_primitiveFree(prim);
   return res;
 }
@@ -590,15 +592,15 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
       abstime.tv_nsec -= 1e9;
     }
 
-    return sem_timedwait(prim->semaphore.sem, &abstime);
+    return sem_timedwait(prim->semaphore.sem, &abstime) == 0;
   } else {
-    return sem_wait(prim->semaphore.sem);
+    return sem_wait(prim->semaphore.sem) == 0;
   }
 }
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  return sem_trywait(prim->semaphore.sem);
+  return sem_trywait(prim->semaphore.sem) == 0;
 }
 
 fn void os_semaphore_free(OS_Handle handle) {
