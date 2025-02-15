@@ -1,3 +1,5 @@
+#include "core/os_core.c"
+
 #if OS_LINUX
 #  include "core/Linux/linux_core.c"
 #  include "core/Linux/file.c"

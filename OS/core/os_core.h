@@ -52,6 +52,14 @@ typedef struct {
   String8 hostname;
 } OS_SystemInfo;
 
+typedef u8 OS_LogLevel;
+enum {
+  OS_LogLevel_Log,
+  OS_LogLevel_Info,
+  OS_LogLevel_Warn,
+  OS_LogLevel_Error,
+};
+
 typedef struct {
   i64 count;
   String8 exe;
