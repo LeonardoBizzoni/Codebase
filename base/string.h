@@ -52,6 +52,8 @@ typedef struct StringStream {
 fn String8 str8FromStream(Arena *arena, StringStream stream);
 fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other);
 fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStream other);
+fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch);
+fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str);
 
 inline fn String8 str8(u8 *chars, isize len);
 inline fn String8 strFromCstr(char *chars);

@@ -145,6 +145,7 @@
 #  define AssertMsg(COND, MSG) AssertAlwaysWithMsg(COND, MSG)
 #else
 #  define Assert(COND) (void)(COND)
+#  define AssertMsg(COND, MSG) Assert(COND)
 #endif
 
 #define Stringify_(S) (#S)

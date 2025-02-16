@@ -136,6 +136,41 @@ fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStrea
   DLLPushBack(strlist->first, strlist->last, other.first);
 }
 
+fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
+  String8 res = {
+    .str = New(arena, u8, strlist.total_size + strlist.node_count - 1),
+    .size = strlist.total_size + strlist.node_count - 1,
+  };
+
+  usize i = 0;
+  for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
+    memCopy(&res.str[i], curr->value.str, curr->value.size);
+    i += curr->value.size;
+    res.str[i++] = ch;
+  }
+  memCopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+
+  return res;
+}
+
+fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
+  String8 res = {
+    .str = New(arena, u8, strlist.total_size + str.size * (strlist.node_count - 1)),
+    .size = strlist.total_size + str.size * (strlist.node_count - 1),
+  };
+
+  usize i = 0;
+  for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
+    memCopy(&res.str[i], curr->value.str, curr->value.size);
+    i += curr->value.size;
+    memCopy(&res.str[i], str.str, str.size);
+    i += str.size;
+  }
+  memCopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+
+  return res;
+}
+
 inline fn String8 str8(u8 *chars, isize len) {
   String8 res = {chars, len};
   return res;

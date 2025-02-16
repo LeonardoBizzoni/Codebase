@@ -23,7 +23,10 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
   usize max_gain_idx = 0;
   f64 target_entropy = ai_computeEntropy(&maps[target_idx], row_count);
 #if DEBUG
-  printf("\t\tTarget entropy: %.16lf\n", target_entropy);
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream log = {0};
+  strstream_append_str(scratch.arena, &log,
+		       strFormat(scratch.arena, "Target entropy: %.16lf\n", target_entropy));
 #endif
 
   for (usize feature = 0; feature < n_features; ++feature) {
@@ -33,13 +36,15 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
 
     f64 entropy = 0;
 #if DEBUG
-    printf("\t");
+    strstream_append_str(scratch.arena, &log, Strlit("\t"));
 #endif
     for (HashMap<String8, Occurrence>::Slot slot : maps[feature].slots) {
       HashMap<String8, Occurrence>::KVNode *curr = slot.first;
       for (; curr; curr = curr->next) {
 #if DEBUG
-        printf("%ld/%ld * entropy(", curr->value.count, row_count);
+	strstream_append_str(scratch.arena, &log,
+			     strFormat(scratch.arena, "%ld/%ld * entropy(", curr->value.count,
+				       row_count));
 #endif
 
         for (HashMap<String8, Occurrence>::Slot fslot :
@@ -50,7 +55,9 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
               continue;
             }
 #if DEBUG
-            printf("%ld/%ld ", currf->value.count, curr->value.count);
+	    strstream_append_str(scratch.arena, &log,
+				 strFormat(scratch.arena, "%ld/%ld ", currf->value.count,
+					   curr->value.count));
 #endif
             entropy +=
                 (f64)curr->value.count / (f64)row_count *
@@ -59,20 +66,21 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
         }
 
 #if DEBUG
-        printf("\b)");
+	strstream_append_str(scratch.arena, &log, Strlit("\b)"));
 #endif
       }
 #if DEBUG
       if (curr) {
-        printf(" + ");
+	strstream_append_str(scratch.arena, &log, Strlit(" + "));
       }
 #endif
     }
 
     f64 gain = target_entropy - entropy;
 #if DEBUG
-    printf("\n\t\tentropy: %.16lf\n", entropy);
-    printf("\t\tgain: %.16lf\n\n", gain);
+    strstream_append_str(scratch.arena, &log,
+			 strFormat(scratch.arena, "\n\t\tentropy: %.16lf\n\t\tgain: %.16lf\n\n",
+				   entropy, gain));
 #endif
 
     if (max_gain < gain) {
@@ -82,7 +90,10 @@ fn usize ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
   }
 
 #if DEBUG
-  printf("\tMax gain: %.16lf\n", max_gain);
+  strstream_append_str(scratch.arena, &log,
+		       strFormat(scratch.arena, "\tMax gain: %.16lf\n", max_gain));
+  Info(str8FromStream(scratch.arena, log));
+  ScratchEnd(scratch);
 #endif
   return max_gain < threshold ? -1 : max_gain_idx;
 }
@@ -93,7 +104,10 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
                                    usize n_features, usize target_idx,
                                    f64 threshold) {
 #if DEBUG
-  printf("File: %.*s\n", Strexpand(config.file.path));
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream log = {0};
+  strstream_append_str(scratch.arena, &log,
+		       strFormat(scratch.arena, "File: %.*s\n", Strexpand(config.file.path)));
 #endif
   usize data_row_start_at = config.offset;
   usize row_count = 0;
@@ -130,7 +144,9 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
       for (HashMap<String8, Occurrence>::KVNode *curr = slot.first; curr;
            curr = curr->next) {
-        printf("`%.*s`: %ld\t", Strexpand(curr->key), curr->value.count);
+	strstream_append_str(scratch.arena, &log,
+			     strFormat(scratch.arena, "`%.*s`: %ld\t", Strexpand(curr->key),
+				       curr->value.count));
 
         for (HashMap<String8, Occurrence>::Slot fslot :
              curr->value.targets.slots) {
@@ -140,21 +156,24 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
 
           for (HashMap<String8, Occurrence>::KVNode *currf = fslot.first;
                currf; currf = currf->next) {
-            printf("`%.*s`: %ld, ", Strexpand(currf->key), currf->value.count);
+	    strstream_append_str(scratch.arena, &log,
+				 strFormat(scratch.arena, "`%.*s`: %ld, ", Strexpand(currf->key),
+					   currf->value.count));
           }
         }
 
-        printf("\n");
+	strstream_append_str(scratch.arena, &log, Strlit("\n"));
       }
     }
-    printf("\n");
+    strstream_append_str(scratch.arena, &log, Strlit("\n"));
   }
 #endif
 
   usize feature2split_by =
       ai_maxInformationGain(maps, n_features, target_idx, row_count, threshold);
 #if DEBUG
-  printf("\tFeature to split by: %ld\n", feature2split_by);
+  strstream_append_str(scratch.arena, &log,
+		       strFormat(scratch.arena, "\tFeature to split by: %ld\n", feature2split_by));
 #endif
   if (feature2split_by == -1) {
     DecisionTreeNode *res = New(arena, DecisionTreeNode);
@@ -170,8 +189,9 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
       }
     }
 #if DEBUG
-    printf("\tThe dataset will NOT be split further.\n\n");
-    printf("\t============================================================\n\n");
+    strstream_append_str(scratch.arena, &log,
+			 Strlit("\tThe dataset will NOT be split further.\n\n"
+				"\t========================================================\n\n"));
 #endif
 
     res->should_split_by = -1;
@@ -188,9 +208,11 @@ fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
   }
 
 #if DEBUG
-  printf("\tThe dataset will be split into %ld branches\n\n", branches);
-  printf(
-      "\t==============================================================\n\n");
+  strstream_append_str(scratch.arena, &log,
+		       Strlit("\tThe dataset will be split into %ld branches\n\n"
+			      "\t========================================================\n\n"));
+  Info(str8FromStream(scratch.arena, log));
+  ScratchEnd(scratch);
 #endif
 
   /* Iterator over the entire CSV file and write into the corresponding tmp */

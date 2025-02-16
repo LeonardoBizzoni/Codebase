@@ -22,10 +22,10 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
     } break;
     default: printf(ANSI_COLOR_RESET); goto print_str;
   }
-  printf("%s:%s@L%d] ", file, caller, line);
+  printf("%s:%s@L%d] " ANSI_COLOR_RESET, file, caller, line);
 
  print_str:
-  printf("%.*s\n" ANSI_COLOR_RESET, Strexpand(str));
+  printf("%.*s\n", Strexpand(str));
 }
 
 #define Log(STR) os_print(OS_LogLevel_Log, __func__, __FILE__, __LINE__, (STR))
