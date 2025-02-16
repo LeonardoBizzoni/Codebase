@@ -241,6 +241,78 @@ fn i32 os_lib_close(OS_Handle lib);
 fn String8 os_currentDir(Arena *arena);
 
 // =============================================================================
+// Networking
+typedef i32 OS_Net_Transport;
+enum {
+  OS_Net_Transport_Invalid,
+  OS_Net_Transport_TCP,
+  OS_Net_Transport_UDP,
+};
+
+typedef i32 OS_Net_Network;
+enum {
+  OS_Net_Network_Invalid,
+  OS_Net_Network_IPv4,
+  OS_Net_Network_IPv6,
+};
+
+typedef struct {
+  u8 bytes[4];
+} IPv4;
+
+typedef struct {
+  u16 words[8];
+} IPv6;
+
+typedef struct {
+  OS_Net_Network version;
+  union {
+    IPv4 v4;
+    IPv6 v6;
+  };
+} IP;
+
+typedef struct NetInterface {
+  String8 name;
+  String8 strip;
+  OS_Net_Network version;
+
+  union {
+    struct {
+      IPv4 addr;
+      IPv4 netmask;
+    } ipv4;
+    struct {
+      IPv6 addr;
+      IPv6 netmask;
+    } ipv6;
+  };
+
+  struct NetInterface *next;
+  struct NetInterface *prev;
+} NetInterface;
+
+typedef struct {
+  NetInterface *first;
+  NetInterface *last;
+} NetInterfaceList;
+
+typedef struct {
+  OS_Handle h;
+  struct {
+    IP *addr;
+    u16 port;
+  } client, server;
+} Socket;
+
+fn NetInterfaceList os_net_getInterfaces(Arena *arena);
+fn NetInterface os_net_interfaceFromStr8(String8 strip);
+
+fn Socket os_net_socket_open(IP client, IP server, u16 server_port,
+			     OS_Net_Transport protocol);
+fn bool os_net_socket_close(Socket sock);
+
+// =============================================================================
 // File reading and writing/appending
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags);
 fn bool fs_close(OS_Handle fd);

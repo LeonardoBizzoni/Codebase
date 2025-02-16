@@ -10,9 +10,7 @@ void *memCopy(void *dest, void *src, usize size) {
 
   u8 *dest_byte = (u8 *)dest, *src_byte = (u8 *)src;
   for (usize i = 0; i < size; ++i) {
-    if (!(dest_byte[i] = src_byte[i])) {
-      return 0;
-    }
+    dest_byte[i] = src_byte[i];
   }
 
   return dest;

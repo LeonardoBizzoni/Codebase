@@ -7,6 +7,9 @@
 #include <sys/wait.h>
 #include <sys/sysinfo.h>
 
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+
 global LNX_State lnx_state = {0};
 
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
@@ -690,6 +693,79 @@ fn String8 os_currentDir(Arena *arena) {
   memCopy(copy, wd, size);
   free(wd);
   String8 res = str8(copy, size);
+  return res;
+}
+
+// =============================================================================
+// Networking
+fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
+  NetInterfaceList res = {0};
+  struct ifaddrs *ifaddr;
+  if (getifaddrs(&ifaddr) == -1) {
+    return res;
+  }
+
+  for (struct ifaddrs *ifa = ifaddr; ifa && ifa->ifa_addr; ifa = ifa->ifa_next) {
+    if (!(ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6))
+      { continue; }
+
+    NetInterface *inter = New(arena, NetInterface);
+
+    String8 interface = strFromCstr(ifa->ifa_name);
+    inter->name.str = New(arena, u8, interface.size);
+    inter->name.size = interface.size;
+    memCopy(inter->name.str, interface.str, interface.size);
+
+    if (ifa->ifa_addr->sa_family == AF_INET) {
+      inter->version = OS_Net_Network_IPv4;
+
+      struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+      struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
+      inter->ipv4.addr = *(IPv4*)&addr->sin_addr;
+      inter->ipv4.netmask = *(IPv4*)&netmask->sin_addr;
+
+      char cstrip[INET_ADDRSTRLEN];
+      inet_ntop(AF_INET, &addr->sin_addr, cstrip, INET_ADDRSTRLEN);
+      String8 strip = strFromCstr(cstrip);
+      inter->strip.str = New(arena, u8, strip.size);
+      inter->strip.size = strip.size;
+      memCopy(inter->strip.str, strip.str, strip.size);
+    } else if (ifa->ifa_addr->sa_family == AF_INET6) {
+      inter->version = OS_Net_Network_IPv6;
+
+      struct sockaddr_in6 *addr = (struct sockaddr_in6 *)ifa->ifa_addr;
+      struct sockaddr_in6 *netmask = (struct sockaddr_in6 *)ifa->ifa_netmask;
+      inter->ipv6.addr = *(IPv6*)&addr->sin6_addr;
+      inter->ipv6.netmask = *(IPv6*)&netmask->sin6_addr;
+
+      char cstrip[INET6_ADDRSTRLEN];
+      inet_ntop(AF_INET6, &addr->sin6_addr, cstrip, INET6_ADDRSTRLEN);
+      String8 strip = strFromCstr(cstrip);
+      inter->strip.str = New(arena, u8, strip.size);
+      inter->strip.size = strip.size;
+      memCopy(inter->strip.str, strip.str, strip.size);
+    }
+
+    DLLPushBack(res.first, res.last, inter);
+  }
+
+  freeifaddrs(ifaddr);
+  return res;
+}
+
+fn NetInterface os_net_interfaceFromStr8(String8 strip) {
+  NetInterface res = {0};
+
+  Scratch scratch = ScratchBegin(0, 0);
+  NetInterfaceList inters = os_net_getInterfaces(scratch.arena);
+  for (NetInterface *curr = inters.first; curr; curr = curr->next) {
+    if (strEq(curr->strip, strip)) {
+      memCopy(&res, curr, sizeof(NetInterface));
+      break;
+    }
+  }
+  ScratchEnd(scratch);
+
   return res;
 }
 
