@@ -56,7 +56,7 @@ os_w32_system_time_from_time64(time64 in) {
   res.wMonth = (in >> 32) & bitmask4;
   res.wDay = (in >> 27) & bitmask5;
   res.wHour = (in >> 22) & bitmask5;
-  res.wMinuine = (in >> 16) & bitmask6;
+  res.wMinute = (in >> 16) & bitmask6;
   res.wSecond = (in >> 10) & bitmask6;
   res.wMilliseconds = in & bitmask10;
   return res;
@@ -77,8 +77,8 @@ fn DateTime os_local_dateTimeNow() {
 
 fn time64 os_local_fromUTCTime64(time64 in) {
   SYSTEMTIME utc = {0};
-  SYSTEMTIME local = os_w32_system_time_from_time64(in);
-  SystemTimeToTzSpecificLocalTime(0, &local, &utc);
+  SYSTEMTIME local_time = os_w32_system_time_from_time64(in);
+  SystemTimeToTzSpecificLocalTime(0, &local_time, &utc);
   return os_w32_time64_from_system_time(&utc);
 }
 
@@ -145,10 +145,10 @@ os_utc_localizedTime64(i8 utc_offset) {
   }
 
   time64 res = now;
-  res = (res & (~(bitmask27 << 36))) | (year << 36);
-  res = (res & (~(bitmask4 << 32))) | (month << 32);
-  res = (res & (~(bitmask5 << 27))) | (day << 27);
-  res = (res & (~(bitmask5 << 22))) | (hour << 22);
+  res = (res & (~((u64)bitmask27 << 36))) | ((u64)year << 36);
+  res = (res & (~((u64)bitmask4 << 32)))  | ((u64)month << 32);
+  res = (res & (~((u64)bitmask5 << 27)))  | ((u64)day << 27);
+  res = (res & (~((u64)bitmask5 << 22)))  | ((u64)hour << 22);
   return res;
 }
 
@@ -184,13 +184,21 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
 
 fn time64
 os_utc_fromLocalTime64(time64 in) {
-
+  SYSTEMTIME utctime = {0};
+  SYSTEMTIME localtime = os_w32_system_time_from_time64(in);
+  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
+  return os_w32_time64_from_system_time(&utctime);
 }
 
 fn DateTime
 os_utc_fromLocalDateTime(DateTime *in) {
-
+  SYSTEMTIME utctime = {0};
+  SYSTEMTIME localtime = os_w32_system_time_from_date_time(in);
+  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
+  return os_w32_date_time_from_system_time(&utctime);
 }
+
+fn void os_sleep_milliseconds(u32 ms) {}
 
 ////////////////////////////////
 //- km: memory
@@ -406,6 +414,39 @@ os_rwlock_free(OS_Handle handle)
   os_w32_primitive_release(primitive);
 }
 
+fn OS_Handle os_cond_alloc() {
+  OS_Handle res = {0};
+  return res;
+}
+
+fn void os_cond_signal(OS_Handle handle) {}
+fn void os_cond_broadcast(OS_Handle handle) {}
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
+		     u32 wait_at_most_microsec) { return false; }
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			    u32 wait_at_most_microsec) { return false; }
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			     u32 wait_at_most_microsec) { return false; }
+fn bool os_cond_free(OS_Handle handle) { return false; }
+
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
+				u32 max_count, String8 name) {
+  OS_Handle res = {0};
+  return res;
+}
+
+fn bool os_semaphore_signal(OS_Handle sem) { return false; }
+fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec) { return false; }
+fn bool os_semaphore_trywait(OS_Handle sem) { return false; }
+fn void os_semaphore_free(OS_Handle sem) {}
+
+fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
+  SharedMem res = {0};
+  return res;
+}
+
+fn bool os_sharedmem_close(SharedMem *shm) { return false; }
+
 ////////////////////////////////
 //- km: Dynamic libraries
 
@@ -435,6 +476,39 @@ fn i32 os_lib_close(OS_Handle lib){
   BOOL result = FreeLibrary(module);
   return result;
 }
+
+// =============================================================================
+// Misc
+fn String8 os_currentDir(Arena *arena) {
+  String8 res = {0};
+  return res;
+}
+
+// =============================================================================
+// Networking
+fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
+  NetInterfaceList res = {0};
+  return res;
+}
+
+fn NetInterface os_net_interfaceFromStr8(String8 strip) {
+  NetInterface res = {0};
+  return res;
+}
+
+fn IP os_net_ipFromStr8(String8 strip) {
+  IP res = {0};
+  return res;
+}
+
+fn Socket os_net_socket_open(OS_Net_Transport protocol,
+			     IP client, u16 client_port,
+			     IP server, u16 server_port) {
+  Socket res = {0};
+  return res;
+}
+
+fn bool os_net_socket_close(Socket sock) { return false; }
 
 ////////////////////////////////
 //- km: File operations

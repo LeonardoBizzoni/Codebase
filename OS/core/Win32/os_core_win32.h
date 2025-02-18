@@ -24,7 +24,7 @@ struct OS_W32_Primitive
       ThreadFunc *func;
       void *arg;
     } thread;
-    
+
     CRITICAL_SECTION mutex;
     SRWLOCK rw_mutex;
   };
