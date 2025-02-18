@@ -252,8 +252,8 @@ enum {
 typedef i32 OS_Net_Network;
 enum {
   OS_Net_Network_Invalid,
-  OS_Net_Network_IPv4,
-  OS_Net_Network_IPv6,
+  OS_Net_Network_IPv4 = 4,
+  OS_Net_Network_IPv6 = 6,
 };
 
 typedef struct {
@@ -275,8 +275,8 @@ typedef struct {
 typedef struct NetInterface {
   String8 name;
   String8 strip;
-  OS_Net_Network version;
 
+  OS_Net_Network version;
   union {
     struct {
       IPv4 addr;
@@ -308,8 +308,11 @@ typedef struct {
 fn NetInterfaceList os_net_getInterfaces(Arena *arena);
 fn NetInterface os_net_interfaceFromStr8(String8 strip);
 
-fn Socket os_net_socket_open(IP client, IP server, u16 server_port,
-			     OS_Net_Transport protocol);
+fn IP os_net_ipFromStr8(String8 strip);
+
+fn Socket os_net_socket_open(OS_Net_Transport protocol,
+			     IP client, u16 client_port,
+			     IP server, u16 server_port);
 fn bool os_net_socket_close(Socket sock);
 
 // =============================================================================
