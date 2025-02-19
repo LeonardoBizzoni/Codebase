@@ -615,6 +615,9 @@ fn i32 os_lib_close(OS_Handle lib){
 // Misc
 fn String8 os_currentDir(Arena *arena) {
   String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  res.size = GetCurrentDirectoryA(MAX_PATH, res.str);
+  arenaPop(arena, MAX_PATH - res.size);
   return res;
 }
 
@@ -678,6 +681,14 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
 
   ScratchEnd(scratch);
   return result;
+}
+
+fn bool fs_close(OS_Handle fd) { return false; }
+
+// TODO(lb): i don't know if there are some location on the Windows
+//           FS that contain files with size=0.
+fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
+  return fs_read(arena, file);
 }
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
@@ -753,10 +764,66 @@ fn FS_Properties fs_getProp(OS_Handle file) {
   return properties;
 }
 
-fn File fs_fileOpen(Arena *arena, OS_Handle file) {
-  File result = {0};
+fn String8 fs_pathFromHandle(Arena *arena, OS_Handle file) {
+  String8 res = {0};
+  return res;
+}
 
+fn String8 fs_readlink(Arena *arena, String8 path) {
+  String8 res = {0};
+  return res;
+}
+
+// =============================================================================
+// Memory mapping files
+fn File fs_fopen(Arena *arena, OS_Handle file) {
+  File result = {0};
   return result;
+}
+
+fn File fs_fopenTmp(Arena *arena) {
+  File result = {0};
+  return result;
+}
+
+inline fn bool fs_fclose(File *file) {
+  return false;
+}
+
+inline fn bool fs_fresize(File *file, usize size) {
+  return false;
+}
+
+inline fn void fs_fwrite(File *file, String8 str) {}
+
+inline fn bool fs_fileHasChanged(File *file) {
+  return false;
+}
+
+inline fn bool fs_fdelete(File *file) {
+  return false;
+}
+
+inline fn bool fs_frename(File *file, String8 to) {
+  return false;
+}
+
+// =============================================================================
+// Misc operation on the filesystem
+inline fn bool fs_delete(String8 filepath) {
+  return false;
+}
+
+inline fn bool fs_rename(String8 filepath, String8 to) {
+  return false;
+}
+
+inline fn bool fs_mkdir(String8 path) {
+  return false;
+}
+
+inline fn bool fs_rmdir(String8 path) {
+  return false;
 }
 
 ////////////////////////////////

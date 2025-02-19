@@ -635,7 +635,8 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
 
   Scratch scratch = ScratchBegin(0, 0);
-  res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name), access_flags,
+  res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name),
+				  access_flags,
 				  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   ScratchEnd(scratch);
 
