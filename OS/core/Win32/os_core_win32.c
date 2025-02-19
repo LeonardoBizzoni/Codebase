@@ -215,7 +215,8 @@ os_reserve(usize base_addr, usize size)
 fn void*
 os_reserveHuge(usize base_addr, usize size)
 {
-  void *result = VirtualAlloc((void*)base_addr, size, MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+  void *result = VirtualAlloc((void*)base_addr, size,
+			      MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
   return result;
 }
 
@@ -484,14 +485,57 @@ fn bool os_cond_free(OS_Handle handle) {
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 				u32 max_count, String8 name) {
-  OS_Handle res = {0};
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_Semaphore);
+
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream ss = {0};
+  switch (kind) {
+    case OS_SemaphoreKind_Thread: {
+      if (name.size == 0) { goto skip_semname; }
+      strstream_append_str(scratch.arena, &ss, Strlit("Local\\\\"));
+    } break;
+    case OS_SemaphoreKind_Process: {
+      strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
+    } break;
+  }
+  strstream_append_str(scratch.arena, &ss, name);
+  prim->semaphore = CreateSemaphoreA(0, init_count, max_count,
+				     cstrFromStr8(scratch.arena,
+						  str8FromStream(scratch.arena,
+								 ss)));
+ skip_semname:
+  ScratchEnd(scratch);
+  OS_Handle res = {(u64)prim};
   return res;
 }
 
-fn bool os_semaphore_signal(OS_Handle sem) { return false; }
-fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec) { return false; }
-fn bool os_semaphore_trywait(OS_Handle sem) { return false; }
-fn void os_semaphore_free(OS_Handle sem) {}
+fn bool os_semaphore_signal(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return ReleaseSemaphore(prim->semaphore, 1, 0);
+}
+
+fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return WaitForSingleObject(prim->semaphore,
+			     (wait_at_most_microsec
+			      ? wait_at_most_microsec / 1e3
+			      : INFINITE)) == WAIT_OBJECT_0;
+}
+
+fn bool os_semaphore_trywait(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return WaitForSingleObject(prim->semaphore, 0) == WAIT_OBJECT_0;
+}
+
+fn void os_semaphore_free(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return; }
+  CloseHandle(prim->semaphore);
+  os_w32_primitive_release(prim);
+}
 
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   SharedMem res = {0};

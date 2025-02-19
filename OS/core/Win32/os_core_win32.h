@@ -11,6 +11,7 @@ enum
   OS_W32_Primitive_RWLock,
   OS_W32_Primitive_Mutex,
   OS_W32_Primitive_CondVar,
+  OS_W32_Primitive_Semaphore,
 };
 
 typedef struct OS_W32_Primitive OS_W32_Primitive;
@@ -31,6 +32,7 @@ struct OS_W32_Primitive
     CRITICAL_SECTION mutex;
     SRWLOCK rw_mutex;
     CONDITION_VARIABLE condvar;
+    HANDLE semaphore;
   };
 };
 
