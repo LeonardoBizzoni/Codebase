@@ -198,7 +198,9 @@ os_utc_fromLocalDateTime(DateTime *in) {
   return os_w32_date_time_from_system_time(&utctime);
 }
 
-fn void os_sleep_milliseconds(u32 ms) {}
+fn void os_sleep_milliseconds(u32 ms) {
+  Sleep(ms);
+}
 
 ////////////////////////////////
 //- km: memory
@@ -415,19 +417,70 @@ os_rwlock_free(OS_Handle handle)
 }
 
 fn OS_Handle os_cond_alloc() {
-  OS_Handle res = {0};
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_CondVar);
+  InitializeConditionVariable(&prim->condvar);
+  OS_Handle res = {(u64)prim};
   return res;
 }
 
-fn void os_cond_signal(OS_Handle handle) {}
-fn void os_cond_broadcast(OS_Handle handle) {}
+fn void os_cond_signal(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return; }
+  WakeConditionVariable(&prim->condvar);
+}
+
+fn void os_cond_broadcast(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return; }
+  WakeAllConditionVariable(&prim->condvar);
+}
+
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
-		     u32 wait_at_most_microsec) { return false; }
+		     u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *mutexprim = (OS_W32_Primitive*)mutex_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!mutexprim || mutexprim->kind != OS_W32_Primitive_Mutex) { return false; }
+  return SleepConditionVariableCS(&condprim->condvar, &mutexprim->mutex,
+				  (wait_at_most_microsec
+				   ? wait_at_most_microsec / 1e3
+				   : INFINITE)) != 0;
+}
+
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			    u32 wait_at_most_microsec) { return false; }
+			    u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
+    { return false; }
+  return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
+				   (wait_at_most_microsec
+				    ? wait_at_most_microsec / 1e3
+				    : INFINITE),
+				   CONDITION_VARIABLE_LOCKMODE_SHARED) != 0;
+}
+
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			     u32 wait_at_most_microsec) { return false; }
-fn bool os_cond_free(OS_Handle handle) { return false; }
+			     u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
+    { return false; }
+  return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
+				   (wait_at_most_microsec
+				    ? wait_at_most_microsec / 1e3
+				    : INFINITE),
+				   CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE) != 0;
+}
+
+fn bool os_cond_free(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return false; }
+  os_w32_primitive_release(prim);
+  return true;
+}
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 				u32 max_count, String8 name) {

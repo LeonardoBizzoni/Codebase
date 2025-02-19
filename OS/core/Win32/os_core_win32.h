@@ -1,6 +1,8 @@
 #ifndef OS_CORE_WIN32_H
 #define OS_CORE_WIN32_H
 
+#define CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE 0
+
 typedef u64 OS_W32_PrimitiveType;
 enum
 {
@@ -8,6 +10,7 @@ enum
   OS_W32_Primitive_Thread,
   OS_W32_Primitive_RWLock,
   OS_W32_Primitive_Mutex,
+  OS_W32_Primitive_CondVar,
 };
 
 typedef struct OS_W32_Primitive OS_W32_Primitive;
@@ -27,6 +30,7 @@ struct OS_W32_Primitive
 
     CRITICAL_SECTION mutex;
     SRWLOCK rw_mutex;
+    CONDITION_VARIABLE condvar;
   };
 };
 
