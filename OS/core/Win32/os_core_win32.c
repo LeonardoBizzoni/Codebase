@@ -764,13 +764,33 @@ fn FS_Properties fs_getProp(OS_Handle file) {
   return properties;
 }
 
-fn String8 fs_pathFromHandle(Arena *arena, OS_Handle file) {
+fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
   String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  res.size = GetFinalPathNameByHandleA((HANDLE)handle.h[0], res.str,
+				       MAX_PATH, FILE_NAME_NORMALIZED);
+  arenaPop(arena, MAX_PATH - res.size);
+  if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
+    res.str += 4; // skips the `\\?\`
+  }
   return res;
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
   String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  Scratch scratch = ScratchBegin(&arena, 1);
+  HANDLE pathfd = CreateFileA(cstrFromStr8(scratch.arena, path),
+			      GENERIC_READ, FILE_SHARE_READ, 0,
+			      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+  res.size = GetFinalPathNameByHandleA(pathfd, res.str,
+				       MAX_PATH, FILE_NAME_NORMALIZED);
+  CloseHandle(pathfd);
+  ScratchEnd(scratch);
+  arenaPop(arena, MAX_PATH - res.size);
+  if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
+    res.str += 4; // skips the `\\?\`
+  }
   return res;
 }
 
