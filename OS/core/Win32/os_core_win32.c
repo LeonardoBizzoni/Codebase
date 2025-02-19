@@ -276,7 +276,8 @@ fn OS_Handle
 os_thread_start(ThreadFunc *func, void *arg)
 {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Thread);
-  HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0, &primitive->thread.tid);
+  HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0,
+			       &primitive->thread.tid);
   primitive->thread.func = func;
   primitive->thread.arg = arg;
   primitive->thread.handle = handle;
@@ -539,10 +540,46 @@ fn void os_semaphore_free(OS_Handle handle) {
 
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   SharedMem res = {0};
+  DWORD access_flags = 0;
+  if(flags & OS_acfRead)    { access_flags |= GENERIC_READ;}
+  if(flags & OS_acfWrite)   { access_flags |= GENERIC_WRITE; }
+  if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
+  if(flags & OS_acfAppend)  { access_flags |= FILE_APPEND_DATA; }
+
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream ss = {0};
+  strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
+  strstream_append_str(scratch.arena, &ss, name);
+  res.path = str8FromStream(scratch.arena, ss);
+  res.mmap_handle.h[0] = (u64)
+    CreateFileMapping(INVALID_HANDLE_VALUE, 0, access_flags,
+		      (u32)((size >> 32) & bitmask32),
+		      (u32)(size & bitmask32),
+		      !name.size ? (char *)0 : cstrFromStr8(scratch.arena,
+							    res.path));
+  ScratchEnd(scratch);
+  if (!res.mmap_handle.h[0]) { return res; }
+
+  access_flags = 0;
+  if(flags & OS_acfRead)    { access_flags |= FILE_MAP_READ;}
+  if(flags & OS_acfWrite)   { access_flags |= FILE_MAP_WRITE; }
+  if(flags & OS_acfExecute) { access_flags |= FILE_MAP_EXECUTE; }
+  if(flags & OS_acfAppend)  { access_flags |= FILE_MAP_ALL_ACCESS; }
+  res.content = MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
+			      0, 0, size);
+  if (!res.content) {
+    CloseHandle((HANDLE)res.mmap_handle.h[0]);
+    SharedMem _ = {0};
+    return _;
+  }
+
   return res;
 }
 
-fn bool os_sharedmem_close(SharedMem *shm) { return false; }
+fn bool os_sharedmem_close(SharedMem *shm) {
+  return UnmapViewOfFile(shm->content) &&
+	 CloseHandle((HANDLE)shm->mmap_handle.h[0]);
+}
 
 ////////////////////////////////
 //- km: Dynamic libraries
@@ -620,14 +657,21 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   DWORD creation_disposition = OPEN_EXISTING;
 
   if(flags & OS_acfRead) { access_flags |= GENERIC_READ;}
-  if(flags & OS_acfWrite) { access_flags |= GENERIC_WRITE; creation_disposition = CREATE_ALWAYS; }
+  if(flags & OS_acfWrite) {
+    access_flags |= GENERIC_WRITE;
+    creation_disposition = CREATE_ALWAYS;
+  }
   if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  if(flags & OS_acfAppend) { creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_acfAppend) {
+    creation_disposition = OPEN_ALWAYS;
+    access_flags |= FILE_APPEND_DATA;
+  }
   if(flags & OS_acfShareRead) { share_mode |= FILE_SHARE_READ; }
   if(flags & OS_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
 
   HANDLE file = CreateFileW((WCHAR*)path.str, access_flags, share_mode,
-                            &security_attributes, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
+                            &security_attributes, creation_disposition,
+			    FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE) {
     result.h[0] = (u64)file;
   }
