@@ -56,7 +56,7 @@ os_w32_system_time_from_time64(time64 in) {
   res.wMonth = (in >> 32) & bitmask4;
   res.wDay = (in >> 27) & bitmask5;
   res.wHour = (in >> 22) & bitmask5;
-  res.wMinuine = (in >> 16) & bitmask6;
+  res.wMinute = (in >> 16) & bitmask6;
   res.wSecond = (in >> 10) & bitmask6;
   res.wMilliseconds = in & bitmask10;
   return res;
@@ -77,8 +77,8 @@ fn DateTime os_local_dateTimeNow() {
 
 fn time64 os_local_fromUTCTime64(time64 in) {
   SYSTEMTIME utc = {0};
-  SYSTEMTIME local = os_w32_system_time_from_time64(in);
-  SystemTimeToTzSpecificLocalTime(0, &local, &utc);
+  SYSTEMTIME local_time = os_w32_system_time_from_time64(in);
+  SystemTimeToTzSpecificLocalTime(0, &local_time, &utc);
   return os_w32_time64_from_system_time(&utc);
 }
 
@@ -145,10 +145,10 @@ os_utc_localizedTime64(i8 utc_offset) {
   }
 
   time64 res = now;
-  res = (res & (~(bitmask27 << 36))) | (year << 36);
-  res = (res & (~(bitmask4 << 32))) | (month << 32);
-  res = (res & (~(bitmask5 << 27))) | (day << 27);
-  res = (res & (~(bitmask5 << 22))) | (hour << 22);
+  res = (res & (~((u64)bitmask27 << 36))) | ((u64)year << 36);
+  res = (res & (~((u64)bitmask4 << 32)))  | ((u64)month << 32);
+  res = (res & (~((u64)bitmask5 << 27)))  | ((u64)day << 27);
+  res = (res & (~((u64)bitmask5 << 22)))  | ((u64)hour << 22);
   return res;
 }
 
@@ -184,12 +184,22 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
 
 fn time64
 os_utc_fromLocalTime64(time64 in) {
-
+  SYSTEMTIME utctime = {0};
+  SYSTEMTIME localtime = os_w32_system_time_from_time64(in);
+  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
+  return os_w32_time64_from_system_time(&utctime);
 }
 
 fn DateTime
 os_utc_fromLocalDateTime(DateTime *in) {
+  SYSTEMTIME utctime = {0};
+  SYSTEMTIME localtime = os_w32_system_time_from_date_time(in);
+  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
+  return os_w32_date_time_from_system_time(&utctime);
+}
 
+fn void os_sleep_milliseconds(u32 ms) {
+  Sleep(ms);
 }
 
 ////////////////////////////////
@@ -205,7 +215,8 @@ os_reserve(usize base_addr, usize size)
 fn void*
 os_reserveHuge(usize base_addr, usize size)
 {
-  void *result = VirtualAlloc((void*)base_addr, size, MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+  void *result = VirtualAlloc((void*)base_addr, size,
+			      MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
   return result;
 }
 
@@ -265,7 +276,8 @@ fn OS_Handle
 os_thread_start(ThreadFunc *func, void *arg)
 {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Thread);
-  HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0, &primitive->thread.tid);
+  HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0,
+			       &primitive->thread.tid);
   primitive->thread.func = func;
   primitive->thread.arg = arg;
   primitive->thread.handle = handle;
@@ -406,6 +418,169 @@ os_rwlock_free(OS_Handle handle)
   os_w32_primitive_release(primitive);
 }
 
+fn OS_Handle os_cond_alloc() {
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_CondVar);
+  InitializeConditionVariable(&prim->condvar);
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn void os_cond_signal(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return; }
+  WakeConditionVariable(&prim->condvar);
+}
+
+fn void os_cond_broadcast(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return; }
+  WakeAllConditionVariable(&prim->condvar);
+}
+
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
+		     u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *mutexprim = (OS_W32_Primitive*)mutex_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!mutexprim || mutexprim->kind != OS_W32_Primitive_Mutex) { return false; }
+  return SleepConditionVariableCS(&condprim->condvar, &mutexprim->mutex,
+				  (wait_at_most_microsec
+				   ? wait_at_most_microsec / 1e3
+				   : INFINITE)) != 0;
+}
+
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			    u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
+    { return false; }
+  return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
+				   (wait_at_most_microsec
+				    ? wait_at_most_microsec / 1e3
+				    : INFINITE),
+				   CONDITION_VARIABLE_LOCKMODE_SHARED) != 0;
+}
+
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
+			     u32 wait_at_most_microsec) {
+  OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
+  OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
+  if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
+  if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
+    { return false; }
+  return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
+				   (wait_at_most_microsec
+				    ? wait_at_most_microsec / 1e3
+				    : INFINITE),
+				   CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE) != 0;
+}
+
+fn bool os_cond_free(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_CondVar) { return false; }
+  os_w32_primitive_release(prim);
+  return true;
+}
+
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
+				u32 max_count, String8 name) {
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_Semaphore);
+
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream ss = {0};
+  switch (kind) {
+    case OS_SemaphoreKind_Thread: {
+      if (name.size == 0) { goto skip_semname; }
+      strstream_append_str(scratch.arena, &ss, Strlit("Local\\\\"));
+    } break;
+    case OS_SemaphoreKind_Process: {
+      strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
+    } break;
+  }
+  strstream_append_str(scratch.arena, &ss, name);
+  prim->semaphore = CreateSemaphoreA(0, init_count, max_count,
+				     cstrFromStr8(scratch.arena,
+						  str8FromStream(scratch.arena,
+								 ss)));
+ skip_semname:
+  ScratchEnd(scratch);
+  OS_Handle res = {(u64)prim};
+  return res;
+}
+
+fn bool os_semaphore_signal(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return ReleaseSemaphore(prim->semaphore, 1, 0);
+}
+
+fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return WaitForSingleObject(prim->semaphore,
+			     (wait_at_most_microsec
+			      ? wait_at_most_microsec / 1e3
+			      : INFINITE)) == WAIT_OBJECT_0;
+}
+
+fn bool os_semaphore_trywait(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
+  return WaitForSingleObject(prim->semaphore, 0) == WAIT_OBJECT_0;
+}
+
+fn void os_semaphore_free(OS_Handle handle) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return; }
+  CloseHandle(prim->semaphore);
+  os_w32_primitive_release(prim);
+}
+
+fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
+  SharedMem res = {0};
+  DWORD access_flags = 0;
+  if(flags & OS_acfRead)    { access_flags |= GENERIC_READ;}
+  if(flags & OS_acfWrite)   { access_flags |= GENERIC_WRITE; }
+  if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
+  if(flags & OS_acfAppend)  { access_flags |= FILE_APPEND_DATA; }
+
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream ss = {0};
+  strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
+  strstream_append_str(scratch.arena, &ss, name);
+  res.path = str8FromStream(scratch.arena, ss);
+  res.mmap_handle.h[0] = (u64)
+    CreateFileMapping(INVALID_HANDLE_VALUE, 0, access_flags,
+		      (u32)((size >> 32) & bitmask32),
+		      (u32)(size & bitmask32),
+		      !name.size ? (char *)0 : cstrFromStr8(scratch.arena,
+							    res.path));
+  ScratchEnd(scratch);
+  if (!res.mmap_handle.h[0]) { return res; }
+
+  access_flags = 0;
+  if(flags & OS_acfRead)    { access_flags |= FILE_MAP_READ;}
+  if(flags & OS_acfWrite)   { access_flags |= FILE_MAP_WRITE; }
+  if(flags & OS_acfExecute) { access_flags |= FILE_MAP_EXECUTE; }
+  if(flags & OS_acfAppend)  { access_flags |= FILE_MAP_ALL_ACCESS; }
+  res.content = MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
+			      0, 0, size);
+  if (!res.content) {
+    CloseHandle((HANDLE)res.mmap_handle.h[0]);
+    SharedMem _ = {0};
+    return _;
+  }
+
+  return res;
+}
+
+fn bool os_sharedmem_close(SharedMem *shm) {
+  return UnmapViewOfFile(shm->content) &&
+	 CloseHandle((HANDLE)shm->mmap_handle.h[0]);
+}
+
 ////////////////////////////////
 //- km: Dynamic libraries
 
@@ -436,6 +611,42 @@ fn i32 os_lib_close(OS_Handle lib){
   return result;
 }
 
+// =============================================================================
+// Misc
+fn String8 os_currentDir(Arena *arena) {
+  String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  res.size = GetCurrentDirectoryA(MAX_PATH, res.str);
+  arenaPop(arena, MAX_PATH - res.size);
+  return res;
+}
+
+// =============================================================================
+// Networking
+fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
+  NetInterfaceList res = {0};
+  return res;
+}
+
+fn NetInterface os_net_interfaceFromStr8(String8 strip) {
+  NetInterface res = {0};
+  return res;
+}
+
+fn IP os_net_ipFromStr8(String8 strip) {
+  IP res = {0};
+  return res;
+}
+
+fn Socket os_net_socket_open(OS_Net_Transport protocol,
+			     IP client, u16 client_port,
+			     IP server, u16 server_port) {
+  Socket res = {0};
+  return res;
+}
+
+fn bool os_net_socket_close(Socket sock) { return false; }
+
 ////////////////////////////////
 //- km: File operations
 
@@ -449,20 +660,35 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   DWORD creation_disposition = OPEN_EXISTING;
 
   if(flags & OS_acfRead) { access_flags |= GENERIC_READ;}
-  if(flags & OS_acfWrite) { access_flags |= GENERIC_WRITE; creation_disposition = CREATE_ALWAYS; }
+  if(flags & OS_acfWrite) {
+    access_flags |= GENERIC_WRITE;
+    creation_disposition = CREATE_ALWAYS;
+  }
   if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  if(flags & OS_acfAppend) { creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_acfAppend) {
+    creation_disposition = OPEN_ALWAYS;
+    access_flags |= FILE_APPEND_DATA;
+  }
   if(flags & OS_acfShareRead) { share_mode |= FILE_SHARE_READ; }
   if(flags & OS_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
 
   HANDLE file = CreateFileW((WCHAR*)path.str, access_flags, share_mode,
-                            &security_attributes, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
+                            &security_attributes, creation_disposition,
+			    FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE) {
     result.h[0] = (u64)file;
   }
 
   ScratchEnd(scratch);
   return result;
+}
+
+fn bool fs_close(OS_Handle fd) { return false; }
+
+// TODO(lb): i don't know if there are some location on the Windows
+//           FS that contain files with size=0.
+fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
+  return fs_read(arena, file);
 }
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
@@ -538,10 +764,86 @@ fn FS_Properties fs_getProp(OS_Handle file) {
   return properties;
 }
 
-fn File fs_fileOpen(Arena *arena, OS_Handle file) {
-  File result = {0};
+fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
+  String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  res.size = GetFinalPathNameByHandleA((HANDLE)handle.h[0], res.str,
+				       MAX_PATH, FILE_NAME_NORMALIZED);
+  arenaPop(arena, MAX_PATH - res.size);
+  if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
+    res.str += 4; // skips the `\\?\`
+  }
+  return res;
+}
 
+fn String8 fs_readlink(Arena *arena, String8 path) {
+  String8 res = {0};
+  res.str = New(arena, u8, MAX_PATH);
+  Scratch scratch = ScratchBegin(&arena, 1);
+  HANDLE pathfd = CreateFileA(cstrFromStr8(scratch.arena, path),
+			      GENERIC_READ, FILE_SHARE_READ, 0,
+			      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+  res.size = GetFinalPathNameByHandleA(pathfd, res.str,
+				       MAX_PATH, FILE_NAME_NORMALIZED);
+  CloseHandle(pathfd);
+  ScratchEnd(scratch);
+  arenaPop(arena, MAX_PATH - res.size);
+  if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
+    res.str += 4; // skips the `\\?\`
+  }
+  return res;
+}
+
+// =============================================================================
+// Memory mapping files
+fn File fs_fopen(Arena *arena, OS_Handle file) {
+  File result = {0};
   return result;
+}
+
+fn File fs_fopenTmp(Arena *arena) {
+  File result = {0};
+  return result;
+}
+
+inline fn bool fs_fclose(File *file) {
+  return false;
+}
+
+inline fn bool fs_fresize(File *file, usize size) {
+  return false;
+}
+
+inline fn void fs_fwrite(File *file, String8 str) {}
+
+inline fn bool fs_fileHasChanged(File *file) {
+  return false;
+}
+
+inline fn bool fs_fdelete(File *file) {
+  return false;
+}
+
+inline fn bool fs_frename(File *file, String8 to) {
+  return false;
+}
+
+// =============================================================================
+// Misc operation on the filesystem
+inline fn bool fs_delete(String8 filepath) {
+  return false;
+}
+
+inline fn bool fs_rename(String8 filepath, String8 to) {
+  return false;
+}
+
+inline fn bool fs_mkdir(String8 path) {
+  return false;
+}
+
+inline fn bool fs_rmdir(String8 path) {
+  return false;
 }
 
 ////////////////////////////////

@@ -1,1 +1,0 @@
-../Linux/opengl.h
