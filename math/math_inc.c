@@ -1,3 +1,5 @@
 #if CPP
-#include "simplex.cpp"
+#  include "vector.cpp"
+#  include "matrix.cpp"
+#  include "simplex.cpp"
 #endif

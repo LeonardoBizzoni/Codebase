@@ -4,10 +4,10 @@
 #include "math.h"
 
 #if CPP
-#include "vector.hpp"
-#include "matrix.hpp"
-#include "complex.hpp"
-#include "simplex.hpp"
+#  include "vector.hpp"
+#  include "matrix.hpp"
+#  include "complex.hpp"
+#  include "simplex.hpp"
 #endif
 
 #endif
