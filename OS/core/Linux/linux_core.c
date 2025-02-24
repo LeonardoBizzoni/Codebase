@@ -209,7 +209,7 @@ fn OS_Handle os_timer_start() {
     prim = 0;
   }
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
@@ -289,7 +289,7 @@ fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
     prim = 0;
   }
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 
@@ -312,7 +312,7 @@ fn OS_ProcHandle os_proc_spawn() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Process);
   prim->proc = fork();
 
-  OS_ProcHandle res = {prim->proc == 0, {(u64)prim}};
+  OS_ProcHandle res = {prim->proc == 0, {{(u64)prim}}};
   return res;
 }
 
@@ -357,7 +357,7 @@ fn OS_Handle os_mutex_alloc() {
     (void)pthread_mutex_init(&prim->mutex, &attr);
   }
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 
@@ -386,7 +386,7 @@ fn OS_Handle os_rwlock_alloc() {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Rwlock);
   pthread_rwlock_init(&prim->rwlock, 0);
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 
@@ -433,7 +433,7 @@ fn OS_Handle os_cond_alloc() {
     prim = 0;
   }
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 
@@ -570,7 +570,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
     } break;
   }
 
-  OS_Handle res = {(u64)prim};
+  OS_Handle res = {{(u64)prim}};
   return res;
 }
 

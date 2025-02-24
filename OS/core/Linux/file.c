@@ -26,7 +26,7 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
     fd = 0;
   }
 
-  OS_Handle res = {(u64)fd};
+  OS_Handle res = {{(u64)fd}};
   return res;
 }
 
@@ -160,8 +160,9 @@ inline fn bool fs_fresize(File *file, usize size) {
 }
 
 inline fn void fs_fwrite(File *file, String8 content) {
-  if (file->prop.size < content.size) { fs_fresize(file, content.size); }
-  memZero(file->content + content.size, ClampBot(0, (isize)file->prop.size - (isize)content.size));
+  if (file->prop.size < (usize)content.size) { fs_fresize(file, content.size); }
+  memZero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
+						    (isize)content.size));
   (void)memCopy(file->content, content.str, content.size);
 }
 
@@ -227,7 +228,6 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 parentdir = StrlitInit("..");
 
   String8 str = {0};
-  StringStream ss = {0};
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 

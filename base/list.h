@@ -9,7 +9,7 @@
 #define StackPop(Head) (Head ? (Head = Head->next) : 0)
 
 #define LLPushFrontCustom(Head, Last, Nodeptr, Next)                           \
-  (!(Head) ? (Head) = (Last) = (Nodeptr)                                       \
+  (!(Head) ? (Head) = (Nodeptr), (Last) = (Nodeptr)                            \
            : ((Nodeptr)->Next = (Head), (Head) = (Nodeptr)))
 
 #define QueuePush(Head, Last, Nodeptr)                                         \

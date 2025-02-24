@@ -329,10 +329,11 @@ fn u64 u64FromStr(String8 s) {
   return res;
 }
 
-// TODO: maybe implement `strtod`?
 fn f64 f64FromStr(String8 s) {
-  u8 *end = s.str + s.size;
-  return strtod((char *)s.str, (char **)&end);
+  Scratch scratch = ScratchBegin(0, 0);
+  f64 res = strtod(cstrFromStr8(scratch.arena, s), 0);
+  ScratchEnd(scratch);
+  return res;
 }
 
 /* Djb2: http://www.cse.yorku.ca/~oz/hash.html */
@@ -536,7 +537,7 @@ fn String8 capitalizeFromStr(Arena *arena, String8 s) {
 fn StringStream strSplit(Arena *arena, String8 s, char ch) {
   StringStream res = {0};
 
-  usize prev = 0;
+  isize prev = 0;
   for (isize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
@@ -630,7 +631,7 @@ fn String8 strTrim(String8 s) {
 
   isize end = s.size;
   for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
-                      s.str[end] == '\n') || s.str[end] == '\r'; --end);
+                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
 
   String8 res = {
     .str = s.str + start,

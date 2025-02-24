@@ -148,6 +148,28 @@ typedef struct{
 typedef void VoidFunc(void);
 typedef void ThreadFunc(void*);
 
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_RESET   "\x1b[0m"
+
+#define Log(STR) os_print(OS_LogLevel_Log, __func__, __FILE__, __LINE__, (STR))
+#if DEBUG
+#  define Info(STR) os_print(OS_LogLevel_Info, __func__, __FILE__, __LINE__, (STR))
+#  define Warn(STR) os_print(OS_LogLevel_Warn, __func__, __FILE__, __LINE__, (STR))
+#  define Err(STR) os_print(OS_LogLevel_Error, __func__, __FILE__, __LINE__, (STR))
+#else
+#  define Info(STR)
+#  define Warn(STR)
+#  define Err(STR)
+#endif
+
+fn void os_print(OS_LogLevel level, const char *caller, const char *file,
+		 i32 line, String8 str);
+
 // =============================================================================
 // Main entry point
 fn void start(CmdLine *cmdln);

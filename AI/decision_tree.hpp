@@ -3,55 +3,72 @@
 
 #include <math.h>
 
-struct DecisionTreeNode {
-  /* The predicted target feature label. */
+struct DTree {
   String8 label;
-  u64 should_split_by;
+  u64 feature2split_by;
 
-  DecisionTreeNode *first;
-  DecisionTreeNode *last;
+  // Siblings
+  DTree *next;
+  DTree *prev;
 
-  DecisionTreeNode *next;
-  DecisionTreeNode *prev;
-
-  void print() {
-    if (first) {
-      printf("`%.*s` childrens: [ ", Strexpand(label));
-      for (DecisionTreeNode *child = first; child; child = child->next) {
-	printf("`%.*s`, ", Strexpand(child->label));
-      }
-
-      printf("\b\b]\n");
-      for (DecisionTreeNode *child = first; child; child = child->next) {
-	child->print();
-      }
-    }
-  }
+  // Childrens
+  DTree *first;
+  DTree *last;
 };
 
 struct Occurrence {
-  String8 name;
-  usize count;
-
+  u64 count;
   HashMap<String8, Occurrence> targets;
 
   Occurrence(Arena *arena) : count(0), targets(arena, strHash) {}
 };
 
-inline fn f32 ai_entropy(f32 val);
-       fn f32 ai_computeEntropy(HashMap<String8, Occurrence> *map, u32 row_count);
-       fn u32 ai_maxInformationGain(HashMap<String8, Occurrence> *maps,
-				    u32 n_features, u32 target_idx,
-				    u32 row_count, f32 threshold);
+typedef u8 FeatureKind;
+enum {
+    FeatureKind_Category,
+    FeatureKind_Continous,
+};
 
-fn DecisionTreeNode *ai_makeDTNode(Arena *arena, Arena *map_arena, CSV config,
-                                   StringStream header,
-                                   HashMap<String8, Occurrence> *maps,
-                                   u32 n_features, u32 target_idx,
-                                   f32 threshold);
-fn DecisionTreeNode *ai_buildDecisionTree(Arena *arena, Arena *map_arena,
-                                          CSV config, StringStream header,
-                                          u32 n_features,
-                                          u32 target_feature, f32 threshold);
+struct Feature {
+  FeatureKind kind;
+  union {
+    String8 name;
+    f64 value;
+  };
+};
+
+struct OccMapListNode {
+  HashMap<String8, Occurrence> value;
+  OccMapListNode *next = 0;
+  OccMapListNode *prev = 0;
+};
+
+struct OccMapList {
+  OccMapListNode *first;
+  OccMapListNode *last;
+
+  HashMap<String8, Occurrence>* operator[](usize i) {
+    OccMapListNode *curr = first;
+    for (; curr && i > 0; curr = curr->next, --i);
+    if (i > 0 || !curr) { return 0; }
+    return &curr->value;
+  }
+};
+
+fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize offset,
+					   u32 n_features, u32 chunk_size,
+					   StringStream (*next_line)(Arena*, File, isize));
+
+fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_features,
+			   u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
+			   StringStream (*next_line)(Arena*, File, isize));
+
+fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header, u32 n_features,
+			u32 target_feature_idx, f32 entropy_threshold = 1e-4,
+			u32 chunk_size = 4096,
+			StringStream (*next_line)(Arena *arena, File dataset,
+						  isize offset) = csv_nextRow);
+
+fn i32 ai_dtree_classify(DTree tree, StringStream input);
 
 #endif

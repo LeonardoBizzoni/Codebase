@@ -3,6 +3,7 @@
 
 template <typename T, typename U>
 struct HashMap {
+  usize capacity;
   usize size;
   usize (*hasher)(T);
 
@@ -19,8 +20,8 @@ struct HashMap {
 
   DynArray<Slot> slots;
 
-  HashMap(Arena *arena, usize (*hasher)(T), usize size = 16) :
-    size(size), hasher(hasher), slots(arena, size) {}
+  HashMap(Arena *arena, usize (*hasher)(T), usize capacity = 16) :
+    capacity(capacity), hasher(hasher), slots(arena, capacity) {}
 
   bool insert(Arena *arena, const T &key, const U &value) {
     usize idx = hasher(key) % slots.size;
@@ -36,9 +37,12 @@ struct HashMap {
     if(existing_node == 0) {
       existing_node = New(arena, KVNode);
       if(existing_node == 0) { return false; }
+      size += 1;
       existing_node->key = key;
       existing_node->value = value;
       QueuePush(slots[idx].first, slots[idx].last, existing_node);
+
+      if ((f32)size/(f32)capacity >= 0.75f) { rehash(); }
     }
     return true;
   }
@@ -63,10 +67,13 @@ struct HashMap {
       }
     }
     if(existing_node == 0) {
+      size += 1;
       existing_node = New(arena, KVNode);
       existing_node->key = key;
       existing_node->value = default_val;
       QueuePush(slots[idx].first, slots[idx].last, existing_node);
+
+      if ((f32)size/(f32)capacity >= 0.75f) { rehash(); }
     }
 
     return &existing_node->value;
@@ -82,6 +89,9 @@ struct HashMap {
 	prev->next = curr->next;
       }
     }
+  }
+
+  void rehash() {
   }
 
   inline U& operator[](const T &key) {

@@ -62,8 +62,10 @@ struct DynArray {
 };
 
 template <typename T>
-fn bool dynarrayExpand(Arena *arena, DynArray<T> *arr,
-		       usize expansion_size);
+fn bool dynarray_expand(Arena *arena, DynArray<T> *arr,
+			usize size_increment) {
+  return false;
+}
 
 
 #endif
