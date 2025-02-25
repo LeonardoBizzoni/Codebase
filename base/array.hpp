@@ -3,104 +3,61 @@
 
 template <typename T, usize N>
 struct Buffer {
-  T values[N];
-  usize size;
-
-  Buffer() : values{0}, size(N) {}
-
-  template<typename... Ts>
-  Buffer(Ts... args) : values{args...}, size(N) {}
-
-  T& operator[](usize i) {
-    Assert(i < size);
-    return values[i];
-  }
-
   struct Iterator {
     T *current;
 
-    explicit Iterator(T *ptr) : current(ptr) {}
+    Iterator(T *ptr);
 
-    T& operator*() { return *current; }
-    T* operator->() { return current; }
-
-    Iterator& operator++() {
-      current += 1;
-      return *this;
-    }
-
-    Iterator& operator--() {
-      current -= 1;
-      return *this;
-    }
-
-    Iterator& operator+=(usize step) {
-      current += step;
-      return *this;
-    }
-
-    Iterator& operator-=(usize step) {
-      current -= step;
-      return *this;
-    }
-
-    bool operator==(const Iterator& other) { return current == other.current; }
-    bool operator!=(const Iterator& other) { return current != other.current; }
+    T& operator*();
+    T* operator->();
+    Iterator& operator++();
+    Iterator& operator--();
+    Iterator& operator+=(usize step);
+    Iterator& operator-=(usize step);
+    bool operator==(const Iterator& other);
+    bool operator!=(const Iterator& other);
   };
 
-  Iterator begin() { return Iterator(&values[0]); }
-  Iterator end() { return Iterator(&values[N]); }
+  T values[N];
+  usize size;
+
+  Buffer();
+
+  template<typename... Ts>
+  Buffer(Ts... args);
+
+  T& operator[](usize i);
+
+  Iterator begin();
+  Iterator end();
 };
 
 template <typename T>
 struct Array {
-  T *values;
-  usize size;
-
-  Array(Arena *arena, usize size) :
-    values(New(arena, T, size)), size(size) {
-    Assert(size > 0);
-  }
-
-  T& operator[](usize i) {
-    Assert(i < size);
-    return values[i];
-  }
-
   struct Iterator {
     T *current;
 
-    explicit Iterator(T *ptr) : current(ptr) {}
+    Iterator(T *ptr);
 
-    T& operator*() { return *current; }
-    T* operator->() { return current; }
-
-    Iterator& operator++() {
-      current += 1;
-      return *this;
-    }
-
-    Iterator& operator--() {
-      current -= 1;
-      return *this;
-    }
-
-    Iterator& operator+=(usize step) {
-      current += step;
-      return *this;
-    }
-
-    Iterator& operator-=(usize step) {
-      current -= step;
-      return *this;
-    }
-
-    bool operator==(const Iterator& other) { return current == other.current; }
-    bool operator!=(const Iterator& other) { return current != other.current; }
+    T& operator*();
+    T* operator->();
+    Iterator& operator++();
+    Iterator& operator--();
+    Iterator& operator+=(usize step);
+    Iterator& operator-=(usize step);
+    bool operator==(const Iterator& other);
+    bool operator!=(const Iterator& other);
   };
 
-  Iterator begin() { return Iterator(&values[0]); }
-  Iterator end() { return Iterator(&values[size]); }
+  T *values;
+  usize size;
+
+  Array(Arena *arena, usize size);
+
+  T& operator[](usize i);
+
+  Iterator begin();
+  Iterator end();
 };
 
 template <typename T>
@@ -112,51 +69,24 @@ struct ArrayListNode {
 
 template <typename T>
 struct ArrayList {
-  ArrayListNode<T> *first = 0;
-  ArrayListNode<T> *last = 0;
-
   struct Iterator {
     ArrayListNode<T> *current;
     usize idx;
 
-    explicit Iterator(ArrayListNode<T> *ptr, usize idx) :
-      current(ptr), idx(idx) {}
+    Iterator(ArrayListNode<T> *ptr, usize idx);
 
-    Iterator& operator++() {
-      ++idx;
-      if (idx >= current->block.size) {
-        current = current->next;
-        idx = 0;
-      }
-
-      return *this;
-    }
-
-    Iterator& operator--() {
-      if (idx == 0) {
-        current = current->prev;
-        idx = current->block.size - 1;
-      } else {
-        --idx;
-      }
-
-      return *this;
-    }
-
-    T& operator*() { return current->block[idx]; }
-
-    bool operator==(const Iterator& other) {
-      return current == other.current && idx == other.idx;
-    }
-
-    bool operator!=(const Iterator& other) {
-      return !(*this == other);
-    }
+    T& operator*();
+    Iterator& operator++();
+    Iterator& operator--();
+    bool operator==(const Iterator& other);
+    bool operator!=(const Iterator& other);
   };
 
-  Iterator begin() { return Iterator(first, 0); }
-  Iterator end() { return Iterator(last, last->block.size); }
+  ArrayListNode<T> *first = 0;
+  ArrayListNode<T> *last = 0;
 
+  Iterator begin();
+  Iterator end();
 };
 
 #endif

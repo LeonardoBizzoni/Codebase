@@ -3,7 +3,8 @@ global threadvar TlsContext tls_ctx;
 fn Arena *tlsGetScratch(Arena **conflicts, usize count) {
   if(tls_ctx.arenas[0] == 0) {
     for(usize i = 0; i < Arrsize(tls_ctx.arenas); ++i) {
-      tls_ctx.arenas[i] = ArenaBuild(.reserve_size = TLS_CTX_SIZE);
+      tls_ctx.arenas[i] = ArenaBuild(.reserve_size = TLS_CTX_SIZE,
+                                     .flags = Arena_Growable);
     }
   }
 

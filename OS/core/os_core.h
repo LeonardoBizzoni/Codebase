@@ -216,6 +216,8 @@ fn OS_ProcHandle os_proc_spawn();
 fn void os_proc_kill(OS_ProcHandle proc);
 fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc);
 
+fn void os_exit(u8 status_code);
+
 fn OS_Handle os_mutex_alloc();
 fn void os_mutex_lock(OS_Handle handle);
 fn bool os_mutex_trylock(OS_Handle handle);

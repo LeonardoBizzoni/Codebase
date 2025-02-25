@@ -1,7 +1,7 @@
 fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize offset,
-					   u32 n_features, u32 chunk_size,
-					   StringStream (*next_line)(Arena*, File, isize))
-{
+                                           u32 n_features, u32 chunk_size,
+                                           StringStream (*next_line)(Arena*, File,
+                                                                     isize)) {
   Array<Array<Feature>> res(arena, chunk_size);
   for (u32 i = 0; i < chunk_size; ++i) {
     StringStream row = next_line(arena, dataset, offset);
@@ -16,13 +16,13 @@ fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize off
     for (StringNode *curr = row.first; curr; curr = curr->next, ++j) {
       // Info(curr->value);
       if (strIsNumerical(curr->value)) {
-	// Info(Strlit("numerical feature"));
-	res[i][j].kind = FeatureKind_Continous;
-	res[i][j].value = f64FromStr(curr->value);
+        // Info(Strlit("numerical feature"));
+        res[i][j].kind = FeatureKind_Continous;
+        res[i][j].value = f64FromStr(curr->value);
       } else {
-	// Info(Strlit("categorical feature"));
-	res[i][j].kind = FeatureKind_Category;
-	res[i][j].name = curr->value;
+        // Info(Strlit("categorical feature"));
+        res[i][j].kind = FeatureKind_Category;
+        res[i][j].name = curr->value;
       }
     }
   }
@@ -30,11 +30,11 @@ fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize off
 }
 
 fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_features,
-			   u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
-			   StringStream (*next_line)(Arena*, File, isize)) {
+                           u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
+                           StringStream (*next_line)(Arena*, File, isize)) {
   Scratch scratch = ScratchBegin(&arena, 1);
   Array<Array<Feature>> features = ai_chunk2features(scratch.arena, dataset, offset,
-						     n_features, chunk_size, next_line);
+                                                     n_features, chunk_size, next_line);
 
   OccMapList maps = {0};
   for (usize i = 0, map_i = 0; i < n_features; ++i) {
@@ -50,10 +50,10 @@ fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_featu
 
     for (usize j = 0; j < features.size; ++j) {
       Occurrence *node = node_map->fromKey(scratch.arena, features[j][i].name,
-					   Occurrence(scratch.arena));
+                                           Occurrence(scratch.arena));
       node->count += 1;
       node->targets.fromKey(scratch.arena, features[j][target_feature_idx].name,
-			    Occurrence(scratch.arena))->count += 1;
+                            Occurrence(scratch.arena))->count += 1;
     }
 
     map_i += 1;
@@ -65,9 +65,10 @@ fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_featu
   return res;
 }
 
-fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header, u32 n_features,
-			u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
-			StringStream (*next_line)(Arena*, File, isize)) {
+fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header,
+                        u32 n_features, u32 target_feature_idx, f32 entropy_threshold,
+                        u32 chunk_size,
+                        StringStream (*next_line)(Arena*, File, isize)) {
   if (!header) {
     header = New(arena, StringStream);
     *header = next_line(arena, dataset, 0);
@@ -75,5 +76,5 @@ fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header, u32 n_
 
   isize offset = header->total_size + header->node_count;
   return ai_dtree_makeNode(arena, dataset, offset, n_features, target_feature_idx,
-			   entropy_threshold, chunk_size, next_line);
+                           entropy_threshold, chunk_size, next_line);
 }

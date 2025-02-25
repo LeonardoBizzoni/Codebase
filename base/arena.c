@@ -62,14 +62,27 @@ inline fn void arenaFree(Arena *arena) {
 }
 
 fn void *arenaPush(Arena *arena, usize size, usize align) {
-  if (!align) {align = DefaultAlignment;}
+  if (!align) { align = DefaultAlignment; }
   usize res = forwardAlign((usize)arena->base + arena->head, align);
   usize offset = res - ((usize)arena->base + arena->head);
   usize new_head = arena->head + size + offset + sizeof(Arena);
 
   if (new_head > arena->reserve_size) {
-    // TODO(lb): handle resizable arena
-    return 0;
+    if (arena->next) {
+      return arenaPush(arena->next, size, align);
+    } else if (arena->flags & Arena_Growable) {
+      Warn(Strlit("Resizing arena."));
+      Arena *next = ArenaBuild(.base_addr = (usize)arena->base + arena->reserve_size,
+                               .commit_size = arena->commit_size,
+			       .reserve_size = arena->reserve_size,
+			       .flags = arena->flags);
+      Assert(next);
+      arena->next = next;
+      next->prev = arena;
+      return arenaPush(next, size, align);
+    } else {
+      return 0;
+    }
   }
 
   if (new_head > arena->commits * arena->commit_size) {

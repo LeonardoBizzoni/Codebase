@@ -1,71 +1,33 @@
 #ifndef BASE_DYNARRAY
 #define BASE_DYNARRAY
 
-#include "array.hpp"
-
 template <typename T>
 struct DynArray {
-  usize size;
-
-  ArrayListNode<T> *first = 0;
-  ArrayListNode<T> *last = 0;
-
-  DynArray(Arena *arena, usize initial_capacity = 8)
-  : size(initial_capacity) {
-    Assert(initial_capacity > 0);
-    first = last = New(arena, ArrayListNode<T>);
-    first->block = Array<T>(arena, initial_capacity);
-  }
-
-  T& operator[](usize i) {
-    Assert(i < size);
-
-    for (ArrayListNode<T> *it = first; it; it = it->next) {
-      if (i < it->block.size) {
-	return it->block[i];
-      } else {
-	i -= it->block.size;
-      }
-    }
-
-    Assert(false);
-    return first->block[0];
-  }
-
   struct Iterator {
     ArrayListNode<T>* current;
     usize idx;
 
-    Iterator(ArrayListNode<T> *ptr, usize idx) : current(ptr), idx(idx) {}
+    Iterator(ArrayListNode<T> *ptr, usize idx);
 
-    T& operator*() { return current->block[idx]; }
-
-    Iterator& operator++() {
-      ++idx;
-      if (idx >= current->block.size) {
-        current = current->next;
-        idx = 0;
-      }
-
-      return *this;
-    }
-
-    bool operator==(const Iterator& other) {
-      return current == other.current && idx == other.idx;
-    }
-
-    bool operator!=(const Iterator& other) { return !(*this == other); }
+    T& operator*();
+    Iterator& operator++();
+    bool operator==(const Iterator& other);
+    bool operator!=(const Iterator& other);
   };
 
-  Iterator begin() { return Iterator(first, 0); }
-  Iterator end() { return Iterator(0, 0); }
+  usize size;
+  ArrayListNode<T> *first = 0;
+  ArrayListNode<T> *last = 0;
+
+  DynArray(Arena *arena, usize initial_capacity = 8);
+
+  T& operator[](usize i);
+
+  Iterator begin();
+  Iterator end();
 };
 
 template <typename T>
-fn bool dynarray_expand(Arena *arena, DynArray<T> *arr,
-			usize size_increment) {
-  return false;
-}
-
+fn bool dynarray_expand(Arena *arena, DynArray<T> *arr, usize size_increment);
 
 #endif

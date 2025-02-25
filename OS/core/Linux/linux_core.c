@@ -323,10 +323,6 @@ fn void os_proc_kill(OS_ProcHandle proc) {
   lnx_primitiveFree(prim);
 }
 
-fn void os_exit(u8 status_code) {
-  exit(status_code);
-}
-
 fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc) {
   Assert(!proc.is_child);
   LNX_Primitive *prim = (LNX_Primitive *)proc.handle.h[0];
@@ -344,6 +340,10 @@ fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc) {
     res.state = OS_ProcState_Killed;
   }
   return res;
+}
+
+fn void os_exit(u8 status_code) {
+  exit(status_code);
 }
 
 fn OS_Handle os_mutex_alloc() {
