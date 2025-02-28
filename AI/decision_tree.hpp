@@ -3,6 +3,9 @@
 
 #include <math.h>
 
+#define DEFAULT_CHUNK_SIZE 4096
+#define DEFAULT_ENTROPY 1e-4
+
 struct DTree {
   String8 label;
   u64 feature2split_by;
@@ -16,12 +19,13 @@ struct DTree {
   DTree *last;
 };
 
-struct Occurrence {
-  u64 count;
-  HashMap<String8, Occurrence> targets;
+struct Category {
+  u64 freq;
+  HashMap<String8, Category> target;
 
-  Occurrence(Arena *arena) : count(0), targets(arena, strHash) {}
+  Category(Arena *arena) : freq(0), target(arena, strHash) {}
 };
+using CategoryMap = HashMap<String8, Category>;
 
 typedef u8 FeatureKind;
 enum {
@@ -37,37 +41,20 @@ struct Feature {
   };
 };
 
-struct OccMapListNode {
-  HashMap<String8, Occurrence> value;
-  OccMapListNode *next = 0;
-  OccMapListNode *prev = 0;
-};
-
-struct OccMapList {
-  OccMapListNode *first;
-  OccMapListNode *last;
-
-  HashMap<String8, Occurrence>* operator[](usize i) {
-    OccMapListNode *curr = first;
-    for (; curr && i > 0; curr = curr->next, --i);
-    if (i > 0 || !curr) { return 0; }
-    return &curr->value;
-  }
-};
-
 fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize offset,
 					   u32 n_features, u32 chunk_size,
-					   StringStream (*next_line)(Arena*, File, isize));
+					   StringStream (*next_line)(Arena*, File,
+								     isize));
 
 fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_features,
 			   u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
 			   StringStream (*next_line)(Arena*, File, isize));
 
 fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header, u32 n_features,
-			u32 target_feature_idx, f32 entropy_threshold = 1e-4,
-			u32 chunk_size = 4096,
+			u32 target_feature_idx, f32 entropy_threshold = DEFAULT_ENTROPY,
+			u32 chunk_size = DEFAULT_CHUNK_SIZE,
 			StringStream (*next_line)(Arena *arena, File dataset,
-						  isize offset) = csv_nextRow);
+						  isize *offset) = csv_nextRow);
 
 fn i32 ai_dtree_classify(DTree tree, StringStream input);
 

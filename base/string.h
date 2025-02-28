@@ -47,6 +47,15 @@ typedef struct StringStream {
   StringNode *last;
   isize node_count;
   isize total_size;
+
+#if CPP
+  String8 operator[](usize i) {
+    StringNode *curr = first;
+    for (; curr && i > 0; curr = curr->next, --i);
+    Assert(curr);
+    return curr->value;
+  }
+#endif
 } StringStream;
 
 fn String8 str8FromStream(Arena *arena, StringStream stream);
@@ -113,6 +122,8 @@ fn u8 charToUpper(u8 ch);
 fn u8 charToLower(u8 ch);
 fn u8 getCorrectPathSeparator();
 
+fn String8 strLeftTrim(String8 s);
+fn String8 strRightTrim(String8 s);
 fn String8 strTrim(String8 s);
 
 #if CPP

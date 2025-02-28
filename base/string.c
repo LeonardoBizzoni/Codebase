@@ -624,18 +624,42 @@ fn u8 getCorrectPathSeparator() {
 #endif
 }
 
+fn String8 strLeftTrim(String8 s) {
+  isize start = 0;
+  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
+                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
+
+  String8 res = {
+    .str = s.str + start,
+    .size = s.size - start + 1,
+  };
+  return res;
+}
+
+fn String8 strRightTrim(String8 s) {
+  isize end = s.size - 1;
+  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
+                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
+
+  String8 res = {
+    .str = s.str,
+    .size = end + 1,
+  };
+  return res;
+}
+
 fn String8 strTrim(String8 s) {
   isize start = 0;
   for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
                             s.str[start] == '\n' || s.str[start] == '\r'); ++start);
 
-  isize end = s.size;
+  isize end = s.size - 1;
   for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
                       s.str[end] == '\n' || s.str[end] == '\r'); --end);
 
   String8 res = {
     .str = s.str + start,
-    .size = end - start,
+    .size = end - start + 1,
   };
   return res;
 }
