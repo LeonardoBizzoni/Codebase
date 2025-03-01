@@ -13,7 +13,7 @@ fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize off
     StringStream row = next_line(arena, dataset, &offset);
     if (!row.node_count) {
       for (Array<Feature> &it : res) {
-	it.size = i;
+        it.size = i;
       }
       break;
     }
@@ -39,8 +39,8 @@ fn f32 ai_gini_category(CategoryMap &map, Array<Feature> &feature) {
       f32 gini_branch = 1;
       for (CategoryMap::Slot fslot : curr->value.target.slots) {
         for (CategoryMap::KVNode *currf = fslot.first; currf; currf = currf->next) {
-	  gini_branch -= powf((f32)currf->value.freq / (f32)curr->value.freq, 2);
-	}
+          gini_branch -= powf((f32)currf->value.freq / (f32)curr->value.freq, 2);
+        }
       }
       res += ((f32)curr->value.freq / (f32)feature.size) * gini_branch;
     }
@@ -53,26 +53,26 @@ fn BranchCondition ai_gini_continous(Array<Feature> &feature, Array<Feature> &ta
   local std::function<void(isize, isize)> quicksort =
     [&feature](isize low, isize high) {
       std::function<isize(isize, isize)> partition =
-	[&feature](isize low, isize high) -> isize {
-	  isize pivot_idx = Random(low, high);
-	  Feature pivot = feature[pivot_idx];
+        [&feature](isize low, isize high) -> isize {
+          isize pivot_idx = Random(low, high);
+          Feature pivot = feature[pivot_idx];
 
-	  isize i = low - 1;
-	  for (isize j = low; j < high; ++j) {
-	    if (feature[j].value < pivot.value) {
-	      i += 1;
-	      Feature tmp = feature[i];
-	      feature[i] = feature[j];
-	      feature[j] = tmp;
-	    }
-	  }
+          isize i = low - 1;
+          for (isize j = low; j < high; ++j) {
+            if (feature[j].value < pivot.value) {
+              i += 1;
+              Feature tmp = feature[i];
+              feature[i] = feature[j];
+              feature[j] = tmp;
+            }
+          }
 
-	  i += 1;
-	  Feature tmp = feature[i];
-	  feature[i] = feature[pivot_idx];
-	  feature[pivot_idx] = tmp;
-	  return i;
-	};
+          i += 1;
+          Feature tmp = feature[i];
+          feature[i] = feature[pivot_idx];
+          feature[pivot_idx] = tmp;
+          return i;
+        };
 
       if (low >= high) { return; }
       isize pi = partition(low, high);
@@ -98,10 +98,10 @@ fn BranchCondition ai_gini_continous(Array<Feature> &feature, Array<Feature> &ta
     HashMap<String8, usize> more_map(scratch.arena, strHash);
     for (usize j = 0; j < feature.size; ++j) {
       if (feature[j].value < average[i]) {
-	less_count += 1;
-	*less_map.fromKey(scratch.arena, target[j].name, 0) += 1;
+        less_count += 1;
+        *less_map.fromKey(scratch.arena, target[j].name, 0) += 1;
       } else {
-	*more_map.fromKey(scratch.arena, target[j].name, 0) += 1;
+        *more_map.fromKey(scratch.arena, target[j].name, 0) += 1;
       }
     }
 
@@ -109,17 +109,17 @@ fn BranchCondition ai_gini_continous(Array<Feature> &feature, Array<Feature> &ta
     f32 less_branch = 1.f, more_branch = 1.f;
     for (HashMap<String8, usize>::Slot slot : less_map.slots) {
       for (HashMap<String8, usize>::KVNode *curr = slot.first; curr; curr = curr->next) {
-	less_branch -= powf((f32)curr->value / (f32)less_count, 2);
+        less_branch -= powf((f32)curr->value / (f32)less_count, 2);
       }
     }
     for (HashMap<String8, usize>::Slot slot : more_map.slots) {
       for (HashMap<String8, usize>::KVNode *curr = slot.first; curr; curr = curr->next) {
-	more_branch -= powf((f32)curr->value / (f32)(feature.size - less_count), 2);
+        more_branch -= powf((f32)curr->value / (f32)(feature.size - less_count), 2);
       }
     }
 
     f32 gini = ((f32)less_count / (f32)feature.size) * less_branch +
-	       ((f32)(feature.size - less_count) / (f32)feature.size) * more_branch;
+               ((f32)(feature.size - less_count) / (f32)feature.size) * more_branch;
     if (gini < res.gini) {
       res.gini = gini;
       res.continous_threshold = average[i];
@@ -131,7 +131,7 @@ fn BranchCondition ai_gini_continous(Array<Feature> &feature, Array<Feature> &ta
 }
 
 fn BranchCondition ai_gini(u32 target_feature_idx, f32 threshold,
-			   Array<Array<Feature>> &features, CategoryMap *maps) {
+                           Array<Array<Feature>> &features, CategoryMap *maps) {
   BranchCondition res = {0};
   res.gini = 1.f;
   for (usize i = 0; i < features.size; ++i) {
@@ -140,10 +140,10 @@ fn BranchCondition ai_gini(u32 target_feature_idx, f32 threshold,
     BranchCondition cond = {0};
     switch (features[i][0].kind) {
       case FeatureKind_Category: {
-	cond.gini = ai_gini_category(maps[i], features[i]);
+        cond.gini = ai_gini_category(maps[i], features[i]);
       } break;
       case FeatureKind_Continous: {
-	cond = ai_gini_continous(features[i], features[target_feature_idx]);
+        cond = ai_gini_continous(features[i], features[target_feature_idx]);
       } break;
     }
 
@@ -158,7 +158,7 @@ fn BranchCondition ai_gini(u32 target_feature_idx, f32 threshold,
 }
 
 fn void log_category_map(StringStream *header, CategoryMap *maps,
-			 Array<Array<Feature>> *features, usize target_feature_idx) {
+                         Array<Array<Feature>> *features, usize target_feature_idx) {
   for (usize i = 0; i < features->size; ++i) {
     if (i == target_feature_idx) { continue; }
     printf("Feature `%.*s`:\n", Strexpand((*header)[i]));
@@ -169,18 +169,18 @@ fn void log_category_map(StringStream *header, CategoryMap *maps,
 
     for (CategoryMap::Slot slot : maps[i].slots) {
       for (CategoryMap::KVNode *curr = slot.first; curr; curr = curr->next) {
-	printf("\t`%.*s`: %d/%d\n", Strexpand(curr->key), curr->value.freq,
-	       (*features)[0].size);
+        printf("\t`%.*s`: %d/%d\n", Strexpand(curr->key), curr->value.freq,
+               (*features)[0].size);
 
-	for (CategoryMap::Slot fslot : curr->value.target.slots) {
+        for (CategoryMap::Slot fslot : curr->value.target.slots) {
           for (CategoryMap::KVNode *currf = fslot.first; currf; currf = currf->next) {
-	    printf("\t\t`%.*s`: %d/%d\n", Strexpand(currf->key),
-		   currf->value.freq, curr->value.freq);
+            printf("\t\t`%.*s`: %d/%d\n", Strexpand(currf->key),
+                   currf->value.freq, curr->value.freq);
           }
-	}
-	if (curr->value.target.slots.first) {
-	  printf("\n");
-	}
+        }
+        if (curr->value.target.slots.first) {
+          printf("\n");
+        }
       }
     }
 
@@ -192,8 +192,8 @@ fn void log_category_map(StringStream *header, CategoryMap *maps,
 }
 
 fn DTree ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
-			   isize offset, u32 n_features, u32 target_feature_idx,
-			   f32 entropy_threshold, u32 chunk_size,
+                           isize offset, u32 n_features, u32 target_feature_idx,
+                           f32 entropy_threshold, u32 chunk_size,
                            StringStream (*next_line)(Arena*, File, isize*)) {
   Scratch scratch = ScratchBegin(&arena, 1);
   Array<Array<Feature>> features = ai_chunk2features(scratch.arena, dataset, offset,
@@ -223,9 +223,9 @@ fn DTree ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
 #endif
 
   BranchCondition best_split = ai_gini(target_feature_idx, entropy_threshold,
-				       features, maps);
+                                       features, maps);
   printf("Split by: `%.*s` (gini: %.3lf)\n",
-	 Strexpand((*header)[best_split.split_idx]), best_split.gini);
+         Strexpand((*header)[best_split.split_idx]), best_split.gini);
   ScratchEnd(scratch);
 
   DTree res = {0};
@@ -243,5 +243,5 @@ fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header,
   }
 
   return ai_dtree_makeNode(arena, header, dataset, offset, n_features,
-			   target_feature_idx, entropy_threshold, chunk_size, next_line);
+                           target_feature_idx, entropy_threshold, chunk_size, next_line);
 }

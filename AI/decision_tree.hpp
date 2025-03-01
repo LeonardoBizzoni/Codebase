@@ -49,19 +49,19 @@ struct BranchCondition {
 };
 
 fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize offset,
-					   u32 n_features, u32 chunk_size,
-					   StringStream (*next_line)(Arena*, File,
-								     isize));
+                                           u32 n_features, u32 chunk_size,
+                                           StringStream (*next_line)(Arena*, File,
+                                                                     isize));
 
 fn DTree ai_dtree_makeNode(Arena *arena, File dataset, isize offset, u32 n_features,
-			   u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
-			   StringStream (*next_line)(Arena*, File, isize));
+                           u32 target_feature_idx, f32 entropy_threshold, u32 chunk_size,
+                           StringStream (*next_line)(Arena*, File, isize));
 
 fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header, u32 n_features,
-			u32 target_feature_idx, f32 entropy_threshold = DEFAULT_ENTROPY,
-			u32 chunk_size = DEFAULT_CHUNK_SIZE,
-			StringStream (*next_line)(Arena *arena, File dataset,
-						  isize *offset) = csv_nextRow);
+                        u32 target_feature_idx, f32 entropy_threshold = DEFAULT_ENTROPY,
+                        u32 chunk_size = DEFAULT_CHUNK_SIZE,
+                        StringStream (*next_line)(Arena *arena, File dataset,
+                                                  isize *offset) = csv_nextRow);
 
 fn i32 ai_dtree_classify(DTree tree, StringStream input);
 
