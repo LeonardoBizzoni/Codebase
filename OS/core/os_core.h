@@ -168,7 +168,7 @@ typedef void ThreadFunc(void*);
 #endif
 
 fn void os_print(OS_LogLevel level, const char *caller, const char *file,
-		 i32 line, String8 str);
+                 i32 line, String8 str);
 
 // =============================================================================
 // Main entry point
@@ -237,15 +237,15 @@ fn OS_Handle os_cond_alloc();
 fn void os_cond_signal(OS_Handle handle);
 fn void os_cond_broadcast(OS_Handle handle);
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
-		     u32 wait_at_most_microsec);
+                     u32 wait_at_most_microsec);
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			    u32 wait_at_most_microsec);
+                            u32 wait_at_most_microsec);
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			     u32 wait_at_most_microsec);
+                             u32 wait_at_most_microsec);
 fn bool os_cond_free(OS_Handle handle);
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
-				u32 max_count, String8 name);
+                                u32 max_count, String8 name);
 fn bool os_semaphore_signal(OS_Handle sem);
 fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
 fn bool os_semaphore_trywait(OS_Handle sem);
@@ -335,8 +335,8 @@ fn NetInterface os_net_interfaceFromStr8(String8 strip);
 fn IP os_net_ipFromStr8(String8 strip);
 
 fn Socket os_net_socket_open(OS_Net_Transport protocol,
-			     IP client, u16 client_port,
-			     IP server, u16 server_port);
+                             IP client, u16 client_port,
+                             IP server, u16 server_port);
 fn bool os_net_socket_close(Socket sock);
 
 // =============================================================================
@@ -354,7 +354,7 @@ fn String8 fs_readlink(Arena *arena, String8 path);
 // =============================================================================
 // Memory mapping files
        fn File fs_fopen(Arena* arena, OS_Handle file);
-       fn File fs_fopenTmp(Arena *arena);
+       fn File fs_fopenTmp(Arena *arena, OS_AccessFlags flags);
 inline fn bool fs_fclose(File *file);
 inline fn bool fs_fresize(File *file, usize size);
 inline fn void fs_fwrite(File *file, String8 str);

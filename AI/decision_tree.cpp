@@ -191,10 +191,10 @@ fn void log_category_map(StringStream *header, CategoryMap *maps,
   }
 }
 
-fn DTree ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
-                           isize offset, u32 n_features, u32 target_feature_idx,
-                           f32 entropy_threshold, u32 chunk_size,
-                           StringStream (*next_line)(Arena*, File, isize*)) {
+fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
+                            isize offset, u32 n_features, u32 target_feature_idx,
+                            f32 entropy_threshold, u32 chunk_size,
+                            StringStream (*next_line)(Arena*, File, isize*)) {
   Scratch scratch = ScratchBegin(&arena, 1);
   Array<Array<Feature>> features = ai_chunk2features(scratch.arena, dataset, offset,
                                                      n_features, chunk_size, next_line);
@@ -218,24 +218,71 @@ fn DTree ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
     }
   }
 
-#if 1 && DEBUG
+#if 0 && DEBUG
   log_category_map(header, maps, &features, target_feature_idx);
 #endif
 
-  BranchCondition best_split = ai_gini(target_feature_idx, entropy_threshold,
-                                       features, maps);
-  printf("Split by: `%.*s` (gini: %.3lf)\n",
-         Strexpand((*header)[best_split.split_idx]), best_split.gini);
-  ScratchEnd(scratch);
+  DTree *res = New(arena, DTree);
+  res->cond = ai_gini(target_feature_idx, entropy_threshold,
+                      features, maps);
+  if (res->cond.split_idx == -1) {
+    usize count = 0;
+    String8 most_frequent = Strlit("");
 
-  DTree res = {0};
+    for (CategoryMap::Slot slot : maps[target_feature_idx].slots) {
+      for (CategoryMap::KVNode *curr = slot.first; curr; curr = curr->next) {
+        if (curr->value.freq > count) {
+          count = curr->value.freq;
+          most_frequent = curr->key;
+        }
+      }
+    }
+
+    res->label.str = New(arena, u8, most_frequent.size);
+    res->label.size = most_frequent.size;
+    memCopy(res->label.str, most_frequent.str, most_frequent.size);
+  } else {
+    Info(strFormat(scratch.arena, "Split by: `%.*s` (gini: %.3lf)",
+                   Strexpand((*header)[res->cond.split_idx]), res->cond.gini));
+    Info(strFormat(scratch.arena, "Will split into %ld branches",
+                   maps[res->cond.split_idx].size));
+
+    HashMap<String8, File> filemap(scratch.arena, strHash);
+    for (usize i = 0; i < features[0].size; ++i) {
+      File *file = filemap.fromKey(scratch.arena,
+                                   features[target_feature_idx][i].name,
+                                   fs_fopenTmp(scratch.arena, OS_acfAppend));
+      Info(file->path);
+      for (isize f = 0; f < (isize)features.size; ++f) {
+        if (f == res->cond.split_idx) { continue; }
+        switch (features[f][i].kind) {
+          case FeatureKind_Category: {
+            fs_write(file->file_handle, features[f][i].name);
+          } break;
+          case FeatureKind_Continous: {
+            fs_write(file->file_handle,
+                     stringifyF64(scratch.arena, features[f][i].value));
+          } break;
+        }
+
+        if ((f + 1 == res->cond.split_idx && f + 2 < (isize)features.size) ||
+            (f + 1 < (isize)features.size)) {
+          fs_write(file->file_handle, Strlit(","));
+        } else {
+          fs_write(file->file_handle, Strlit("\n"));
+        }
+      }
+    }
+  }
+
+  ScratchEnd(scratch);
   return res;
 }
 
-fn DTree ai_dtree_build(Arena *arena, File dataset, StringStream *header,
-                        u32 n_features, u32 target_feature_idx, f32 entropy_threshold,
-                        u32 chunk_size,
-                        StringStream (*next_line)(Arena*, File, isize*)) {
+fn DTree* ai_dtree_build(Arena *arena, File dataset, StringStream *header,
+                         u32 n_features, u32 target_feature_idx, f32 entropy_threshold,
+                         u32 chunk_size,
+                         StringStream (*next_line)(Arena*, File, isize*)) {
   isize offset = 0;
   if (!header) {
     header = New(arena, StringStream);
