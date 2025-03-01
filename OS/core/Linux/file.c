@@ -123,19 +123,9 @@ fn File fs_fopen(Arena *arena, OS_Handle fd) {
   return file;
 }
 
-fn File fs_fopenTmp(Arena *arena, OS_AccessFlags flags) {
-  i32 access_flags = 0;
-  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
-    access_flags |= O_RDWR;
-  } else if(flags & OS_acfRead) {
-    access_flags |= O_RDONLY;
-  } else if(flags & OS_acfWrite) {
-    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
-  }
-  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
-
+fn File fs_fopenTmp(Arena *arena) {
   char path[] = "/tmp/base-XXXXXX";
-  i32 fd = mkostemp(path, access_flags);
+  i32 fd = mkstemp(path);
 
   String8 pathstr = {
     .str = New(arena, u8, Arrsize(path)),

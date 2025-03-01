@@ -37,9 +37,9 @@ typedef struct String8 {
 } String8;
 
 typedef struct StringNode {
+  String8 value;
   struct StringNode *next;
   struct StringNode *prev;
-  String8 value;
 } StringNode;
 
 typedef struct StringStream {

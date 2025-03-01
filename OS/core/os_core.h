@@ -354,7 +354,7 @@ fn String8 fs_readlink(Arena *arena, String8 path);
 // =============================================================================
 // Memory mapping files
        fn File fs_fopen(Arena* arena, OS_Handle file);
-       fn File fs_fopenTmp(Arena *arena, OS_AccessFlags flags);
+       fn File fs_fopenTmp(Arena *arena);
 inline fn bool fs_fclose(File *file);
 inline fn bool fs_fresize(File *file, usize size);
 inline fn void fs_fwrite(File *file, String8 str);

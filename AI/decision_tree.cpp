@@ -198,6 +198,7 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
   Scratch scratch = ScratchBegin(&arena, 1);
   Array<Array<Feature>> features = ai_chunk2features(scratch.arena, dataset, offset,
                                                      n_features, chunk_size, next_line);
+
   Assert(features.size == n_features);
 #if DEBUG
   for (Array<Feature> &it : features) {
@@ -251,7 +252,7 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
     for (usize i = 0; i < features[0].size; ++i) {
       File *file = filemap.fromKey(scratch.arena,
                                    features[target_feature_idx][i].name,
-                                   fs_fopenTmp(scratch.arena, OS_acfAppend));
+                                   fs_fopenTmp(scratch.arena));
       Info(file->path);
       for (isize f = 0; f < (isize)features.size; ++f) {
         if (f == res->cond.split_idx) { continue; }
@@ -273,6 +274,25 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
         }
       }
     }
+
+#if DEBUG
+    // Copy the header but drop the feature at `res->cond.split_idx`
+    StringStream subheader = {0};
+    isize i = 0, j = 0;
+    StringNode *copies = New(arena, StringNode, header->node_count - 1);
+    for (StringNode *curr = header->first; curr; curr = curr->next, ++i) {
+      if (i == res->cond.split_idx) { continue; }
+      copies[j].value.str = New(arena, u8, curr->value.size);
+      copies[j].value.size = curr->value.size;
+      memCopy(copies[j].value.str, curr->value.str, curr->value.size);
+      DLLPushBack(subheader.first, subheader.last, (&copies[j]));
+      j += 1;
+    }
+
+    header = &subheader;
+#endif
+
+    // Recursive call to create childrens
   }
 
   ScratchEnd(scratch);
