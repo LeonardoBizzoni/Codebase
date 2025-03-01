@@ -161,6 +161,7 @@
 #define ClampBot(a, b) Max((a), (b))
 #define Swap(a, b, _tmp) ((_tmp) = (a), (a) = (b), (b) = (_tmp))
 #define Abs(a) ((a) >= 0 ? (a) : (-(a)))
+#define Random(low, high) ((rand() % (high + 1 - low)) + low)
 
 #define DeferLoop(...) for(u8 __i_ = 1; __i_; --__i_, __VA_ARGS__)
 

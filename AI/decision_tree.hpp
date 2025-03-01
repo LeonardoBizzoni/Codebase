@@ -41,6 +41,13 @@ struct Feature {
   };
 };
 
+struct BranchCondition {
+  f32 gini;
+  isize split_idx;
+
+  f32 continous_threshold;
+};
+
 fn Array<Array<Feature>> ai_chunk2features(Arena *arena, File dataset, isize offset,
 					   u32 n_features, u32 chunk_size,
 					   StringStream (*next_line)(Arena*, File,
