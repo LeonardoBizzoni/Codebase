@@ -73,24 +73,63 @@ Matrix<T, R1, C1> mat_shrink(Matrix<T, R, C> *mat) {
     Matrix<T, R1, C1> res = {0};
     for (usize i = 0; i < R1; ++i) {
       for (usize j = 0; j < C1; ++j) {
-	res[i, j] = (*mat)[i, j];
+        res[i, j] = (*mat)[i, j];
       }
     }
     return res;
   }
 }
 
+Matrix<f32, 3, 3> mat_rot_x(f32 angle) {
+  Matrix<f32, 3, 3> res = {0};
+  res[0, 0] = 1.f;
+  res[1, 1] = cos(angle);
+  res[1, 2] = sin(angle);
+  res[2, 1] = -sin(angle);
+  res[2, 2] = cos(angle);
+  return res;
+}
+
+Matrix<f32, 3, 3> mat_rot_y(f32 angle) {
+  Matrix<f32, 3, 3> res = {0};
+  res[0, 0] = cos(angle);
+  res[0, 2] = -sin(angle);
+  res[1, 1] = 1.f;
+  res[2, 0] = sin(angle);
+  res[2, 2] = cos(angle);
+  return res;
+}
+
+Matrix<f32, 3, 3> mat_rot_z(f32 angle) {
+  Matrix<f32, 3, 3> res = {0};
+  res[0, 0] = cos(angle);
+  res[0, 1] = sin(angle);
+  res[1, 0] = -sin(angle);
+  res[1, 1] = cos(angle);
+  res[2, 2] = 1.f;
+  return res;
+}
+
+Matrix<f32, 3, 3> mat_rot_euler_zyz(f32 phi, f32 theta, f32 psi) {
+  return mat_rot_z(phi) * mat_rot_y(theta) * mat_rot_z(psi);
+}
+
+Matrix<f32, 3, 3> mat_rot_euler_rpy(f32 phi, f32 theta, f32 psi) {
+  return mat_rot_z(phi) * mat_rot_y(theta) * mat_rot_x(psi);
+}
+
 template <typename T, usize R>
-i32 mat_det(Matrix<T, R, R> *mat) {
+f32 mat_det(Matrix<T, R, R> *mat) {
   if constexpr (R == 1) {
     return (*mat)[0, 0];
   } else if constexpr (R == 2) {
     return ((*mat)[0, 0] * (*mat)[1, 1]) -
-	   ((*mat)[0, 1] * (*mat)[1, 0]);
+           ((*mat)[0, 1] * (*mat)[1, 0]);
   } else {
-    i32 res = 0;
+    f32 res = 0;
     for (usize i = 0; i < R; ++i) {
-      res += pow(-1, i) * (*mat)[0, i] * mat_det(mat_minor(mat, 0, i));
+      auto minor = mat_minor(mat, 0, i);
+      res += pow(-1, i) * (*mat)[0, i] * mat_det(&minor);
     }
     return res;
   }
@@ -114,9 +153,9 @@ u32 mat_rank(Matrix<T, R, C> *mat) {
     for (usize p = i + 1; p < C; ++p) { tmp[j, p] /= tmp[j, i]; }
     for (usize k = 0; k < R; ++k) {
       if (k != j && Abs((tmp[k, i])) > eps) {
-	for (usize p = i + 1; p < C; ++p) {
-	  tmp[k, p] -= tmp[j, p] * tmp[k, i];
-	}
+        for (usize p = i + 1; p < C; ++p) {
+          tmp[k, p] -= tmp[j, p] * tmp[k, i];
+        }
       }
     }
   }
@@ -139,8 +178,8 @@ Matrix<T, R, R> mat_inverse(Matrix<T, R, R> *mat) {
     Matrix<T, R, R> cofactors = {0};
     for (usize r = 0; r < R; ++r) {
       for (usize c = 0; c < R; ++c) {
-	Matrix<T, R-1, R-1> minor = mat_minor(mat, r, c);
-	cofactors[c, r] = (pow(-1, r + c) * mat_det(&minor)) / det;
+        Matrix<T, R-1, R-1> minor = mat_minor(mat, r, c);
+        cofactors[c, r] = (pow(-1, r + c) * mat_det(&minor)) / det;
       }
     }
     return cofactors;
@@ -243,11 +282,11 @@ Matrix<T, R, C> mat_col_swap(Matrix<T, R, C> *mat, usize r1, usize r2) {
   for (usize i = 0, old_j = 0; i < R; ++i) {
     for (usize j = 0, k = 0; j < C; ++j, ++k) {
       if (j == r1) {
-	old_j = j;
-	j = r2;
+        old_j = j;
+        j = r2;
       } else if (j == r2) {
-	old_j = j;
-	j = r1;
+        old_j = j;
+        j = r1;
       }
       res[i, j] = (*mat)[i, k];
       j = old_j++;
@@ -334,7 +373,7 @@ Matrix<T, M, P> operator*(const Matrix<T, M, N> &lhs, const Matrix<T, N, P> &rhs
   for (usize i = 0; i < M; ++i) {
     for (usize j = 0; j < P; ++j) {
       for (usize r = 0; r < N; ++r) {
-	res[i, j] += lhs[i, r] * rhs[r, j];
+        res[i, j] += lhs[i, r] * rhs[r, j];
       }
     }
   }

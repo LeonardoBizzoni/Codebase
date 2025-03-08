@@ -8,6 +8,11 @@ struct Matrix {
     Assert(r < R && c < C);
     return (T&)values[r][c];
   }
+
+  Vector<T, R> operator[](usize c) const {
+    Assert(c < C);
+    return mat_col((Matrix<T, R, C>*)this, c);
+  }
 };
 
 
@@ -29,10 +34,18 @@ Matrix<T, R-1, C-1> mat_minor(Matrix<T, R, C> *mat, usize r, usize c);
 template <typename T, usize R, usize C, usize R1, usize C1>
 Matrix<T, R1, C1> mat_shrink(Matrix<T, R, C> *mat);
 
+
+Matrix<f32, 3, 3> mat_rot_x(f32 angle);
+Matrix<f32, 3, 3> mat_rot_y(f32 angle);
+Matrix<f32, 3, 3> mat_rot_z(f32 angle);
+
+Matrix<f32, 3, 3> mat_rot_euler_zyz(f32 phi, f32 theta, f32 psi);
+Matrix<f32, 3, 3> mat_rot_euler_rpy(f32 phi, f32 theta, f32 psi);
+
 template <typename T, usize R, usize C>
 u32 mat_rank(Matrix<T, R, C> *mat);
 template <typename T, usize R>
-i32 mat_det(Matrix<T, R, R> *mat);
+f32 mat_det(Matrix<T, R, R> *mat);
 template <typename T, usize R>
 Matrix<T, R, R> mat_inverse(Matrix<T, R, R> *mat);
 

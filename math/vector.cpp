@@ -19,6 +19,16 @@ bool vec_isZero(Vector<T, D> *vec) {
 }
 
 template <typename T, usize D>
+bool vec_isOrthogonal(Vector<T, D> *lhs, Vector<T, D> *rhs) {
+  return Approx(vec_dot(lhs, rhs), 0);
+}
+
+template <typename T, usize D>
+bool vec_isOrthonormal(Vector<T, D> *lhs, Vector<T, D> *rhs) {
+  return vec_isOrthogonal(lhs, rhs) && Approx(vec_magnitude(lhs), 1);
+}
+
+template <typename T, usize D>
 T vec_dot(Vector<T, D> *lhs, Vector<T, D> *rhs) {
   T res = 0;
   for (usize i = 0; i < D; ++i) {
