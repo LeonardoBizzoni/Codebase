@@ -1,6 +1,8 @@
+#include <aclapi.h>
+#pragma comment(lib, "Advapi32.lib")
+
 fn OS_SystemInfo*
-os_getSystemInfo(void)
-{
+os_getSystemInfo(void) {
   return &w32_state.info;
 }
 
@@ -565,8 +567,8 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   if(flags & OS_acfWrite)   { access_flags |= FILE_MAP_WRITE; }
   if(flags & OS_acfExecute) { access_flags |= FILE_MAP_EXECUTE; }
   if(flags & OS_acfAppend)  { access_flags |= FILE_MAP_ALL_ACCESS; }
-  res.content = MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
-			      0, 0, size);
+  res.content = (u8*)MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
+				   0, 0, size);
   if (!res.content) {
     CloseHandle((HANDLE)res.mmap_handle.h[0]);
     SharedMem _ = {0};
@@ -616,7 +618,7 @@ fn i32 os_lib_close(OS_Handle lib){
 fn String8 os_currentDir(Arena *arena) {
   String8 res = {0};
   res.str = New(arena, u8, MAX_PATH);
-  res.size = GetCurrentDirectoryA(MAX_PATH, res.str);
+  res.size = GetCurrentDirectoryA(MAX_PATH, (LPSTR)res.str);
   arenaPop(arena, MAX_PATH - res.size);
   return res;
 }
@@ -665,6 +667,7 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
     creation_disposition = CREATE_ALWAYS;
   }
   if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
+  // TODO(lb): appending doesn't work
   if(flags & OS_acfAppend) {
     creation_disposition = OPEN_ALWAYS;
     access_flags |= FILE_APPEND_DATA;
@@ -758,8 +761,53 @@ fn bool fs_write(OS_Handle file, String8 content) {
 }
 
 fn FS_Properties fs_getProp(OS_Handle file) {
-  // TODO(km): need to fill owner,group, and permission flags
   FS_Properties properties = {0};
+
+  SECURITY_DESCRIPTOR *security = 0;
+  SID *owner = 0;
+  SID *group = 0;
+
+  AssertMsg(GetSecurityInfo((HANDLE)file.h[0], SE_FILE_OBJECT,
+			    OWNER_SECURITY_INFORMATION |
+			    GROUP_SECURITY_INFORMATION,
+			    (SID**)&properties.ownerID,
+			    (SID**)&properties.groupID, 0, 0,
+			    &security) == ERROR_SUCCESS,
+	    Strlit("GetSecurityInfo"));
+
+  BY_HANDLE_FILE_INFORMATION file_info;
+  Assert(GetFileInformationByHandle((HANDLE)file.h[0], &file_info));
+
+  properties.size = (u64)(((u64)file_info.nFileSizeHigh << 32) |
+			  file_info.nFileSizeLow);
+
+  switch (file_info.dwFileAttributes) {
+    case FILE_ATTRIBUTE_DIRECTORY: {
+      properties.type = OS_FileType_Dir;
+    } break;
+    case FILE_ATTRIBUTE_DEVICE: {
+      properties.type = OS_FileType_BlkDevice;
+    } break;
+    case FILE_ATTRIBUTE_REPARSE_POINT: {
+      properties.type = OS_FileType_Link;
+    } break;
+    case FILE_ATTRIBUTE_NORMAL: {
+      properties.type = OS_FileType_Regular;
+    } break;
+    default: {
+      properties.type = OS_FileType_Regular;
+    }
+  }
+
+  SYSTEMTIME lastAccessTime, lastWriteTime;
+  Assert(FileTimeToSystemTime(&file_info.ftLastAccessTime, &lastAccessTime));
+  Assert(FileTimeToSystemTime(&file_info.ftLastWriteTime, &lastWriteTime));
+
+  properties.last_access_time =
+    os_w32_time64_from_system_time(&lastAccessTime);
+  properties.last_modification_time = properties.last_status_change_time =
+      os_w32_time64_from_system_time(&lastWriteTime);
+
 
   return properties;
 }
@@ -767,11 +815,12 @@ fn FS_Properties fs_getProp(OS_Handle file) {
 fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
   String8 res = {0};
   res.str = New(arena, u8, MAX_PATH);
-  res.size = GetFinalPathNameByHandleA((HANDLE)handle.h[0], res.str,
+  res.size = GetFinalPathNameByHandleA((HANDLE)handle.h[0], (LPSTR)res.str,
 				       MAX_PATH, FILE_NAME_NORMALIZED);
   arenaPop(arena, MAX_PATH - res.size);
   if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
     res.str += 4; // skips the `\\?\`
+    res.size -= 4;
   }
   return res;
 }
@@ -783,13 +832,14 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
   HANDLE pathfd = CreateFileA(cstrFromStr8(scratch.arena, path),
 			      GENERIC_READ, FILE_SHARE_READ, 0,
 			      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
-  res.size = GetFinalPathNameByHandleA(pathfd, res.str,
+  res.size = GetFinalPathNameByHandleA(pathfd, (LPSTR)res.str,
 				       MAX_PATH, FILE_NAME_NORMALIZED);
   CloseHandle(pathfd);
   ScratchEnd(scratch);
   arenaPop(arena, MAX_PATH - res.size);
   if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
     res.str += 4; // skips the `\\?\`
+    res.size -= 4;
   }
   return res;
 }
@@ -798,6 +848,45 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // Memory mapping files
 fn File fs_fopen(Arena *arena, OS_Handle file) {
   File result = {0};
+  result.file_handle = file;
+
+  BY_HANDLE_FILE_INFORMATION file_info;
+  Assert(GetFileInformationByHandle((HANDLE)file.h[0], &file_info));
+
+  SECURITY_DESCRIPTOR *security = 0;
+  Assert(GetSecurityInfo((HANDLE)file.h[0], SE_FILE_OBJECT,
+			 DACL_SECURITY_INFORMATION,
+			 0, 0, 0, 0, &security) == ERROR_SUCCESS);
+
+  char path[MAX_PATH];
+  result.path.size = GetFinalPathNameByHandleA((HANDLE)file.h[0], path,
+					       MAX_PATH, FILE_NAME_NORMALIZED);
+  result.path.str = New(arena, u8, result.path.size);
+  memCopy(result.path.str, path, result.path.size);
+  if (result.path.str[0] == '\\') {
+    result.path.str += 4;
+    result.path.size -= 4;
+  }
+
+  SECURITY_ATTRIBUTES security_attrib;
+  security_attrib.nLength = sizeof(SECURITY_ATTRIBUTES);
+  security_attrib.lpSecurityDescriptor = security;
+  security_attrib.bInheritHandle = FALSE;
+
+  // TODO(lb): change PAGE_READONLY to whatever mode `file` was opened with
+  result.mmap_handle.h[0] = (u64)
+    CreateFileMapping((HANDLE)file.h[0], 0,
+		      PAGE_READONLY, file_info.nFileSizeHigh,
+		      file_info.nFileSizeLow, 0);
+  AssertMsg(result.mmap_handle.h[0], Strlit("CreateFileMapping"));
+
+  // TODO(lb): change FILE_MAP_READ to whatever mode `file` was opened with
+  result.content = (u8*)MapViewOfFile((HANDLE)result.mmap_handle.h[0],
+				      FILE_MAP_READ, 0, 0, 0);
+  AssertMsg(result.content, Strlit("MapViewOfFile"));
+
+  result.prop = fs_getProp(file);
+
   return result;
 }
 

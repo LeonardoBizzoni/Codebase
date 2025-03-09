@@ -95,16 +95,16 @@ fn void lnx_parseMeminfo() {
     StringStream ss = strSplit(lnx_state.arena, curr_line->value, ':');
     for (StringNode *curr = ss.first; curr; curr = curr->next) {
       if (strEq(curr->value, Strlit("MemTotal"))) {
-	curr = curr->next;
-	lnx_state.info.total_memory = KiB(1) *
-				u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
-						    ' ').first->value);
+        curr = curr->next;
+        lnx_state.info.total_memory = KiB(1) *
+                                u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                                    ' ').first->value);
       } else if (strEq(curr->value, Strlit("Hugepagesize"))) {
-	curr = curr->next;
-	lnx_state.info.hugepage_size = KiB(1) *
-				 u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
-						     ' ').first->value);
-	return;
+        curr = curr->next;
+        lnx_state.info.hugepage_size = KiB(1) *
+                                 u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                                     ' ').first->value);
+        return;
       }
     }
   }
@@ -216,7 +216,7 @@ fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end
   struct timespec tstart = ((LNX_Primitive *)start.h[0])->timer;
   struct timespec tend = ((LNX_Primitive *)end.h[0])->timer;
   u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * 1e9 +
-		   (tend.tv_nsec - tstart.tv_nsec);
+                   (tend.tv_nsec - tstart.tv_nsec);
 
   lnx_primitiveFree((LNX_Primitive *)start.h[0]);
   lnx_primitiveFree((LNX_Primitive *)end.h[0]);
@@ -267,7 +267,7 @@ fn void os_release(void *base, usize size) {
 }
 
 fn void os_commit(void *base, usize size) {
-  (void)mprotect(base, size, PROT_READ | PROT_WRITE);
+  Assert(mprotect(base, size, PROT_READ | PROT_WRITE) == 0);
 }
 
 fn void os_decommit(void *base, usize size) {
@@ -448,7 +448,7 @@ fn void os_cond_broadcast(OS_Handle handle) {
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
-		     u32 wait_at_most_microsec) {
+                     u32 wait_at_most_microsec) {
   LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
   LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0];
 
@@ -470,7 +470,7 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 }
 
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			    u32 wait_at_most_microsec) {
+                            u32 wait_at_most_microsec) {
   LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
   LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
 
@@ -486,7 +486,7 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
     pthread_mutex_lock(&cond_prim->condvar.mutex);
     if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
-			       &abstime) != 0) {
+                               &abstime) != 0) {
       (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
       return false;
     }
@@ -502,7 +502,7 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 }
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			     u32 wait_at_most_microsec) {
+                             u32 wait_at_most_microsec) {
   LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
   LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
 
@@ -518,7 +518,7 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
     pthread_mutex_lock(&cond_prim->condvar.mutex);
     if (pthread_cond_timedwait(&cond_prim->condvar.cond, &cond_prim->condvar.mutex,
-			       &abstime) != 0) {
+                               &abstime) != 0) {
       (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
       return false;
     }
@@ -541,7 +541,7 @@ fn bool os_cond_free(OS_Handle handle) {
 }
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
-				u32 max_count, String8 name) {
+                                u32 max_count, String8 name) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Semaphore);
   prim->semaphore.kind = kind;
   prim->semaphore.max_count = max_count;
@@ -550,21 +550,21 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
       prim->semaphore.sem = (sem_t *)os_reserve(0, sizeof(sem_t));
       os_commit(prim->semaphore.sem, sizeof(sem_t));
       if (sem_init(prim->semaphore.sem, 0, init_count)) {
-	os_release(prim->semaphore.sem, sizeof(sem_t));
-	prim->semaphore.sem = 0;
+        os_release(prim->semaphore.sem, sizeof(sem_t));
+        prim->semaphore.sem = 0;
       }
     } break;
     case OS_SemaphoreKind_Process: {
       AssertMsg(name.size > 0,
-		Strlit("Semaphores sharable between processes must be named."));
+                Strlit("Semaphores sharable between processes must be named."));
 
       Scratch scratch = ScratchBegin(0, 0);
       char *path = cstrFromStr8(scratch.arena, name);
       (void)sem_unlink(path);
       prim->semaphore.sem = sem_open(path, O_CREAT,
-				     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
+                                     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
       if (prim->semaphore.sem == SEM_FAILED) {
-	prim->semaphore.sem = 0;
+        prim->semaphore.sem = 0;
       }
       ScratchEnd(scratch);
     } break;
@@ -636,14 +636,14 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 
   Scratch scratch = ScratchBegin(0, 0);
   res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name),
-				  access_flags,
-				  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+                                  access_flags,
+                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   ScratchEnd(scratch);
 
   (void)ftruncate(res.file_handle.h[0], size);
   res.prop = fs_getProp(res.file_handle);
   res.content = (u8*)mmap(0, ClampBot(res.prop.size, 1), PROT_READ | PROT_WRITE,
-			   MAP_SHARED, res.file_handle.h[0], 0);
+                           MAP_SHARED, res.file_handle.h[0], 0);
 
   return res;
 }
@@ -651,7 +651,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 fn bool os_sharedmem_close(SharedMem *shm) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = munmap(shm->content, shm->prop.size) == 0 &&
-	     shm_unlink(cstrFromStr8(scratch.arena, shm->path)) == 0;
+             shm_unlink(cstrFromStr8(scratch.arena, shm->path)) == 0;
   ScratchEnd(scratch);
   return res;
 }
@@ -766,6 +766,23 @@ fn NetInterface os_net_interfaceFromStr8(String8 strip) {
     }
   }
   ScratchEnd(scratch);
+
+  return res;
+}
+
+fn IP os_net_ipFromStr8(String8 strip) {
+  IP res = {0};
+  if (inet_pton(AF_INET, (char*)strip.str, &res.v4) == 1) {
+    res.version = OS_Net_Network_IPv4;
+  } else if (inet_pton(AF_INET6, (char*)strip.str, &res.v6) == 1) {
+    res.version = OS_Net_Network_IPv6;
+  }
+
+  return res;
+}
+
+fn IP os_net_dns_resolve(String8 name) {
+  IP res = {0};
 
   return res;
 }

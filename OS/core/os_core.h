@@ -101,9 +101,9 @@ typedef struct {
   usize size;
   OS_FileType type;
 
-  u64 last_access_time;
-  u64 last_modification_time;
-  u64 last_status_change_time;
+  time64 last_access_time;
+  time64 last_modification_time;
+  time64 last_status_change_time;
 
   union {
     OS_Permissions permissions[3];
@@ -333,11 +333,7 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena);
 fn NetInterface os_net_interfaceFromStr8(String8 strip);
 
 fn IP os_net_ipFromStr8(String8 strip);
-
-fn Socket os_net_socket_open(OS_Net_Transport protocol,
-                             IP client, u16 client_port,
-                             IP server, u16 server_port);
-fn bool os_net_socket_close(Socket sock);
+fn IP os_net_dns_resolve(String8 name);
 
 // =============================================================================
 // File reading and writing/appending
