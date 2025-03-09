@@ -45,9 +45,9 @@ fn FS_Properties lnx_propertiesFromStat(struct stat *stat) {
   result.ownerID = stat->st_uid;
   result.groupID = stat->st_gid;
   result.size = (usize)stat->st_size;
-  result.last_access_time = (u64)stat->st_atime;
-  result.last_modification_time = (u64)stat->st_mtime;
-  result.last_status_change_time = (u64)stat->st_ctime;
+  result.last_access_time = time64FromUnix(stat->st_atime);
+  result.last_modification_time = time64FromUnix(stat->st_mtime);
+  result.last_status_change_time = time64FromUnix(stat->st_ctime);
 
   switch (stat->st_mode & S_IFMT) {
   case S_IFBLK:  result.type = OS_FileType_BlkDevice;  break;
