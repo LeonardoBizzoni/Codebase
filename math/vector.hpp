@@ -1,6 +1,10 @@
 #ifndef BASE_VECTOR
 #define BASE_VECTOR
 
+#include <functional>
+
+// =============================================================================
+// Vector definitions
 template <typename T, usize D>
 struct Vector {
   union { T values[D]; struct { T x, y, z, w; }; };
@@ -46,62 +50,73 @@ struct Vector<T, 4> {
   }
 };
 
+// =============================================================================
+// Vec3 functions
 template <typename T>
-Vector<T, 3> vec3_cross(Vector<T, 3> *lhs, Vector<T, 3> *rhs);
+fn Vector<T, 3> vec3_cross(Vector<T, 3> *lhs, Vector<T, 3> *rhs);
+
+// =============================================================================
+// Generic vector functions
+template <typename T, usize D>
+fn Vector<T, D> vec_from_list(T(&args)[D]);
+template <typename T, usize D>
+fn Vector<T, D> vec_from_fn(std::function<T(usize)> init_fn);
 
 template <typename T, usize D>
-bool vec_isZero(Vector<T, D> *vec);
+fn bool vec_isZero(Vector<T, D> *vec);
 
 template <typename T, usize D>
-bool vec_isOrthogonal(Vector<T, D> *lhs, Vector<T, D> *rhs);
+fn bool vec_isOrthogonal(Vector<T, D> *lhs, Vector<T, D> *rhs);
 
 template <typename T, usize D>
-bool vec_isOrthonormal(Vector<T, D> *lhs, Vector<T, D> *rhs);
+fn bool vec_isOrthonormal(Vector<T, D> *lhs, Vector<T, D> *rhs);
 
 template <typename T, usize D>
-T vec_dot(const Vector<T, D> *lhs, const Vector<T, D> *rhs);
+fn T vec_dot(const Vector<T, D> *lhs, const Vector<T, D> *rhs);
 
 template <typename T, usize D>
-Vector<T, D> vec_normalize(Vector<T, D> *vec);
+fn Vector<T, D> vec_normalize(Vector<T, D> *vec);
 
 template <typename T, usize D>
-Vector<T, D> vec_proj(Vector<T, D> *lhs, Vector<T, D> *rhs);
+fn Vector<T, D> vec_proj(Vector<T, D> *lhs, Vector<T, D> *rhs);
 
 template <typename T, usize D>
-Vector<T, D> vec_elementWiseProduct(Vector<T, D> *lhs, Vector<T, D> *rhs);
+fn Vector<T, D> vec_elemwise_mul(Vector<T, D> *lhs, Vector<T, D> *rhs);
 template <typename T, usize D>
-Vector<T, D> vec_elementWiseDiv(Vector<T, D> *lhs, Vector<T, D> *rhs);
+fn Vector<T, D> vec_elemwise_div(Vector<T, D> *lhs, Vector<T, D> *rhs);
 
 template <typename T, usize D>
-f32 vec_magnitude(Vector<T, D> *vec);
+fn f32 vec_magnitude(Vector<T, D> *vec);
 template <typename T, usize D>
-f64 vec_magnitude64(Vector<T, D> *vec);
+fn f64 vec_magnitude64(Vector<T, D> *vec);
+
+// =============================================================================
+// Generic vector operators
+template <typename T, usize D>
+fn Vector<T, D> operator+(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
+template <typename T, usize D>
+fn void operator+=(Vector<T, D> &lhs, const Vector<T, D> &rhs);
 
 template <typename T, usize D>
-Vector<T, D> operator+(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
+fn Vector<T, D> operator-(const Vector<T, D> &vec);
 template <typename T, usize D>
-void operator+=(Vector<T, D> &lhs, const Vector<T, D> &rhs);
+fn Vector<T, D> operator-(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
+template <typename T, usize D>
+fn void operator-=(Vector<T, D> &lhs, const Vector<T, D> &rhs);
 
 template <typename T, usize D>
-Vector<T, D> operator-(const Vector<T, D> &vec);
+fn Vector<T, D> operator*(const Vector<T, D> &lhs, T rhs);
 template <typename T, usize D>
-Vector<T, D> operator-(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
-template <typename T, usize D>
-void operator-=(Vector<T, D> &lhs, const Vector<T, D> &rhs);
+fn void operator*=(Vector<T, D> &lhs, T rhs);
 
 template <typename T, usize D>
-Vector<T, D> operator*(const Vector<T, D> &lhs, T rhs);
+fn Vector<T, D> operator/(const Vector<T, D> &lhs, T rhs);
 template <typename T, usize D>
-void operator*=(Vector<T, D> &lhs, T rhs);
+fn void operator/=(Vector<T, D> &lhs, T rhs);
 
 template <typename T, usize D>
-Vector<T, D> operator/(const Vector<T, D> &lhs, T rhs);
+fn bool operator==(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
 template <typename T, usize D>
-void operator/=(Vector<T, D> &lhs, T rhs);
-
-template <typename T, usize D>
-bool operator==(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
-template <typename T, usize D>
-bool operator!=(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
+fn bool operator!=(const Vector<T, D> &lhs, const Vector<T, D> &rhs);
 
 #endif

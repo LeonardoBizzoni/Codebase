@@ -9,7 +9,7 @@
 
 #define EPSILON 1E-6
 
-#define Approx(VALUE, TARGET) \
+#define ApproxEq(VALUE, TARGET) \
   ((VALUE > (TARGET) - EPSILON) && VALUE < ((TARGET) + EPSILON))
 
 // Replace these function with something like:

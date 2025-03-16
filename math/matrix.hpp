@@ -1,6 +1,8 @@
 #ifndef BASE_MATRIX
 #define BASE_MATRIX
 
+// =============================================================================
+// Matrix definitions
 template <typename T, usize R, usize C>
 struct Matrix {
   T values[R][C];
@@ -15,16 +17,20 @@ struct Matrix {
   }
 };
 
+// =============================================================================
+// Functions on matrix
+template <typename T, usize R, usize C>
+fn Matrix<T, R, C> mat_from_list(T(&args)[R][C]);
+template <typename T, usize R, usize C>
+fn Matrix<T, R, C> mat_from_fn(std::function<T(usize, usize)> init_fn);
+
+template <typename T, usize R>
+fn Matrix<T, R, R> mat_identity();
 
 template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_identity();
-template <typename T, usize R, usize C, typename... Ts>
-fn Matrix<T, R, C> mat_init(Ts... args);
-
+fn Matrix<T, R, C> mat_elemwise_mul(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs);
 template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_elementWiseProd(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs);
-template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_elementWiseDiv(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs);
+fn Matrix<T, R, C> mat_elemwise_div(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs);
 
 template <typename T, usize R, usize C>
 Matrix<T, C, R> mat_transpose(Matrix<T, R, C> *mat);
@@ -34,7 +40,6 @@ Matrix<T, R-1, C-1> mat_minor(Matrix<T, R, C> *mat, usize r, usize c);
 template <typename T, usize R, usize C, usize R1, usize C1>
 Matrix<T, R1, C1> mat_shrink(Matrix<T, R, C> *mat);
 
-
 Matrix<f32, 3, 3> mat_rot_x(f32 angle);
 Matrix<f32, 3, 3> mat_rot_y(f32 angle);
 Matrix<f32, 3, 3> mat_rot_z(f32 angle);
@@ -42,10 +47,10 @@ Matrix<f32, 3, 3> mat_rot_z(f32 angle);
 Matrix<f32, 3, 3> mat_rot_euler_zyz(f32 phi, f32 theta, f32 psi);
 Matrix<f32, 3, 3> mat_rot_euler_rpy(f32 phi, f32 theta, f32 psi);
 
-template <typename T, usize R, usize C>
-u32 mat_rank(Matrix<T, R, C> *mat);
 template <typename T, usize R>
 f32 mat_det(Matrix<T, R, R> *mat);
+template <typename T, usize R, usize C>
+u32 mat_rank(Matrix<T, R, C> *mat);
 template <typename T, usize R>
 Matrix<T, R, R> mat_inverse(Matrix<T, R, R> *mat);
 
@@ -76,7 +81,8 @@ Matrix<T, R, C> mat_col_add(Matrix<T, R, C> *mat, usize target, usize c);
 template <typename T, usize R, usize C>
 Matrix<T, R, C> mat_col_mult(Matrix<T, R, C> *mat, usize target, T v);
 
-
+// =============================================================================
+// Matrix operators
 template <typename T, usize R, usize C>
 Matrix<T, R, C> operator+(const Matrix<T, R, C> &lhs, const Matrix<T, R, C> &rhs);
 template <typename T, usize R, usize C>

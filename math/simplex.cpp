@@ -1,6 +1,6 @@
 fn f64 minMaxNewtonMethod(f64 (*func)(f64), f64 x0, f64 epsilon) {
   f64 xk;
-  for (usize i = 0;; ++i, x0 = xk) {
+  for (;; x0 = xk) {
     xk = x0 - (derive(func, x0) / secondDerivative(func, x0));
     if (Abs(xk - x0) <= epsilon) {
       return xk;
@@ -10,10 +10,10 @@ fn f64 minMaxNewtonMethod(f64 (*func)(f64), f64 x0, f64 epsilon) {
 
 template <usize Constraints, usize Variables>
 fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
-				  Matrix<f32, Constraints, Variables> constraints,
-				  Vector<f32, Constraints> known_terms) {
+                                  Matrix<f32, Constraints, Variables> constraints,
+                                  Vector<f32, Constraints> known_terms) {
   Buffer<usize, Constraints> basis;
-  Matrix<f32, Constraints+1, Constraints+1 + Variables+1> A = {0};
+  Matrix<f32, Constraints+1, Constraints+1 + Variables+1> A = {};
   constexpr usize B = Constraints + 1 + Variables;
 
   // Copy `objective` into `A`
@@ -38,7 +38,7 @@ fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
   for (usize i = 1; i < Constraints+1; ++i) {
     for (usize j = Variables+1; j < Constraints+1 + Variables; ++j) {
       if (j - Variables == i) {
-	A[i, j] = 1;
+        A[i, j] = 1;
       }
     }
   }
@@ -55,7 +55,7 @@ fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
     usize pivot_column = 0, pivot_row = 0;
     for (usize j = 1; j < Constraints + 1 + Variables; ++j) {
       if (A[0, j] < A[0, pivot_column] && A[0, j] < 0) {
-	pivot_column = j;
+        pivot_column = j;
       }
     }
 
@@ -63,9 +63,9 @@ fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
 
     for (usize i = 1; i < Constraints+1; ++i) {
       if (!pivot_row ||
-	  (A[i, pivot_column] > 0 &&
-	   A[i, B]/A[i, pivot_column] < A[pivot_row, B]/A[pivot_row, pivot_column])) {
-	pivot_row = i;
+          (A[i, pivot_column] > 0 &&
+           A[i, B]/A[i, pivot_column] < A[pivot_row, B]/A[pivot_row, pivot_column])) {
+        pivot_row = i;
       }
     }
 
@@ -82,12 +82,12 @@ fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
 
       f32 update_val = -A[i, pivot_column];
       for (usize j = 0; j < Constraints+1 + Variables+1; ++j) {
-	A[i, j] += A[pivot_row, j] * update_val;
+        A[i, j] += A[pivot_row, j] * update_val;
       }
     }
   }
 
-  Vector<f32, Variables> res = {0};
+  Vector<f32, Variables> res = {};
   for (usize i = 0; i < Constraints; ++i) {
     if (basis[i] <= Variables) {
       res[basis[i] - 1] = A[i+1, B];

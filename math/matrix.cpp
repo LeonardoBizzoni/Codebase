@@ -1,14 +1,30 @@
-template <typename T, usize R, usize C, typename... Ts>
-fn Matrix<T, R, C> mat_init(Ts... args) {
-  Matrix<T, R, C> res = {
-    .values = { (T)(args)... },
-  };
+// =============================================================================
+// Functions on matrix
+template <typename T, usize R, usize C>
+fn Matrix<T, R, C> mat_from_list(const T(&args)[R][C]) {
+  Matrix<T, R, C> res = {};
+  for (usize i = 0; i < R; ++i) {
+    for (usize j = 0; j < C; ++j) {
+      res[i, j] = args[i][j];
+    }
+  }
   return res;
 }
 
 template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_identity() {
-  Matrix<T, R, C> res = {0};
+fn Matrix<T, R, C> mat_from_fn(std::function<T(usize, usize)> init_fn) {
+  Matrix<T, R, C> res = {};
+  for (usize i = 0; i < R; ++i) {
+    for (usize j = 0; j < C; ++j) {
+      res[i, j] = init_fn(i, j);
+    }
+  }
+  return res;
+}
+
+template <typename T, usize R>
+fn Matrix<T, R, R> mat_identity() {
+  Matrix<T, R, R> res = {0};
   for (usize r = 0; r < R; ++r) {
     res[r, r] = 1;
   }
@@ -16,7 +32,7 @@ fn Matrix<T, R, C> mat_identity() {
 }
 
 template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_elementWiseProd(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs) {
+fn Matrix<T, R, C> mat_elemwise_mul(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs) {
   Matrix<T, R, C> res = *lhs;
   for (usize r = 0; r < R; ++r) {
     for (usize c = 0; c < C; ++c) {
@@ -27,7 +43,7 @@ fn Matrix<T, R, C> mat_elementWiseProd(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rh
 }
 
 template <typename T, usize R, usize C>
-fn Matrix<T, R, C> mat_elementWiseDiv(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs) {
+fn Matrix<T, R, C> mat_elemwise_div(Matrix<T, R, C> *lhs, Matrix<T, R, C> *rhs) {
   Matrix<T, R, C> res = *lhs;
   for (usize r = 0; r < R; ++r) {
     for (usize c = 0; c < C; ++c) {
@@ -51,7 +67,7 @@ Matrix<T, C, R> mat_transpose(Matrix<T, R, C> *mat) {
 template <typename T, usize R, usize C>
 Matrix<T, R-1, C-1> mat_minor(Matrix<T, R, C> *mat, usize r, usize c) {
   Assert(r < R && c < C);
-  Matrix<T, R-1, C-1> res = {0};
+  Matrix<T, R-1, C-1> res = {};
   for (usize i = 0, a = 0; a < R; ++a) {
     if (a == r) { continue; }
     for (usize j = 0, b = 0; b < C; ++b) {
@@ -66,45 +82,41 @@ Matrix<T, R-1, C-1> mat_minor(Matrix<T, R, C> *mat, usize r, usize c) {
 
 template <typename T, usize R, usize C, usize R1, usize C1>
 Matrix<T, R1, C1> mat_shrink(Matrix<T, R, C> *mat) {
-  if constexpr (R1 == R && C1 == C) {
-    return *mat;
-  } else {
-    Assert(R1 <= R && C1 <= C);
-    Matrix<T, R1, C1> res = {0};
-    for (usize i = 0; i < R1; ++i) {
-      for (usize j = 0; j < C1; ++j) {
-        res[i, j] = (*mat)[i, j];
-      }
+  Assert(R1 <= R && C1 <= C);
+  Matrix<T, R1, C1> res = {0};
+  for (usize i = 0; i < R1; ++i) {
+    for (usize j = 0; j < C1; ++j) {
+      res[i, j] = (*mat)[i, j];
     }
-    return res;
   }
+  return res;
 }
 
 Matrix<f32, 3, 3> mat_rot_x(f32 angle) {
-  Matrix<f32, 3, 3> res = {0};
+  Matrix<f32, 3, 3> res = {};
   res[0, 0] = 1.f;
   res[1, 1] = cos(angle);
-  res[1, 2] = sin(angle);
-  res[2, 1] = -sin(angle);
+  res[1, 2] = -sin(angle);
+  res[2, 1] = sin(angle);
   res[2, 2] = cos(angle);
   return res;
 }
 
 Matrix<f32, 3, 3> mat_rot_y(f32 angle) {
-  Matrix<f32, 3, 3> res = {0};
+  Matrix<f32, 3, 3> res = {};
   res[0, 0] = cos(angle);
-  res[0, 2] = -sin(angle);
+  res[0, 2] = sin(angle);
   res[1, 1] = 1.f;
-  res[2, 0] = sin(angle);
+  res[2, 0] = -sin(angle);
   res[2, 2] = cos(angle);
   return res;
 }
 
 Matrix<f32, 3, 3> mat_rot_z(f32 angle) {
-  Matrix<f32, 3, 3> res = {0};
+  Matrix<f32, 3, 3> res = {};
   res[0, 0] = cos(angle);
-  res[0, 1] = sin(angle);
-  res[1, 0] = -sin(angle);
+  res[0, 1] = -sin(angle);
+  res[1, 0] = sin(angle);
   res[1, 1] = cos(angle);
   res[2, 2] = 1.f;
   return res;
@@ -208,7 +220,7 @@ Vector<T, C> mat_row(Matrix<T, R, C> *mat, usize i) {
 template <typename T, usize R, usize C>
 Vector<T, R> mat_col(Matrix<T, R, C> *mat, usize i) {
   Assert(i < R);
-  Vector<T, R> res = {0};
+  Vector<T, R> res = {};
   for (usize j = 0; j < R; ++j) {
     res[j] = (*mat)[j, i];
   }
@@ -319,6 +331,8 @@ Matrix<T, R, C> mat_col_mult(Matrix<T, R, C> *mat, usize target, T v) {
   return res;
 }
 
+// =============================================================================
+// Matrix operators
 template <typename T, usize R, usize C>
 Matrix<T, R, C> operator+(const Matrix<T, R, C> &lhs, const Matrix<T, R, C> &rhs) {
   Matrix<T, R, C> res = lhs;
@@ -369,7 +383,7 @@ Matrix<T, R, C> operator*=(const Matrix<T, R, C> &lhs, T scalar) {
 
 template <typename T, usize M, usize N, usize P>
 Matrix<T, M, P> operator*(const Matrix<T, M, N> &lhs, const Matrix<T, N, P> &rhs) {
-  Matrix<T, M, P> res = {0};
+  Matrix<T, M, P> res = {};
   for (usize i = 0; i < M; ++i) {
     for (usize j = 0; j < P; ++j) {
       for (usize r = 0; r < N; ++r) {
