@@ -1,6 +1,8 @@
 #ifndef BASE_HASHMAP
 #define BASE_HASHMAP
 
+#include <functional>
+
 #define HIGH_LOAD_FACTOR 0.75f
 
 template <typename T, typename U>
@@ -19,18 +21,18 @@ struct HashMap {
 
   usize capacity;
   usize size;
-  usize (*hasher)(T);
-  DynArray<Slot> slots;
+  ArrayList<Slot> slots;
 
-  HashMap(Arena *arena, usize (*hasher)(T), usize capacity = 16);
+  static HashMap<T, U> init(Arena *arena, usize size);
 
-  bool insert(Arena *arena, const T &key, const U &value);
-  U* search(const T &key);
-  U* fromKey(Arena *arena, const T &key, const U &default_val = {});
-  void remove(const T &key);
-  void rehash(Arena *arena);
-
-  inline U& operator[](const T &key);
+  inline U& operator[](std::function<usize(T)> hash_fn, const T &key);
 };
+
+template <typename T, typename U, typename FN>
+fn U* hashmap_search(HashMap<T, U> *map, FN hash_fn, const T &key);
+
+template <typename T, typename U, typename FN>
+fn bool hashmap_insert(Arena *arena, HashMap<T, U> *map, FN hash_fn,
+                       const T &key, const U &value);
 
 #endif

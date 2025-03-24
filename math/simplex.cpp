@@ -12,7 +12,7 @@ template <usize Constraints, usize Variables>
 fn Vector<f32, Variables> simplex(Vector<f32, Variables> objective_terms,
                                   Matrix<f32, Constraints, Variables> constraints,
                                   Vector<f32, Constraints> known_terms) {
-  Buffer<usize, Constraints> basis;
+  usize basis[Constraints];
   Matrix<f32, Constraints+1, Constraints+1 + Variables+1> A = {};
   constexpr usize B = Constraints + 1 + Variables;
 

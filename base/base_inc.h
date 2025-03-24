@@ -11,11 +11,12 @@
 
 #if CPP
 #  include "array.hpp"
-#  include "dynarray.hpp"
 #  include "hashmap.hpp"
 #endif
 
 // TODO(lb): find a place for this
-#include "../image.h"
+#if !OS_NONE
+#  include "../image.h"
+#endif
 
 #endif

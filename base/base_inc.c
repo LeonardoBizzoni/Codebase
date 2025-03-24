@@ -6,6 +6,5 @@
 
 #if CPP
 #  include "array.cpp"
-#  include "dynarray.cpp"
 #  include "hashmap.cpp"
 #endif

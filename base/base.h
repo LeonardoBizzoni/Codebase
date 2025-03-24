@@ -12,7 +12,7 @@
 #  elif defined(_M_AMD64)
 #    define ARCH_X64 1
 #  elif defined(_M_ARM)
-#    define ARCH_ARM 1
+#    define ARCH_ARM32 1
 #  elif defined(_M_ARM64)
 #    define ARCH_ARM64 1
 #  else
@@ -31,7 +31,7 @@
 #elif defined(__APPLE__)
 #  define OS_MAC 1
 #else
-#  error "Unsupported OS"
+#  define OS_NONE 1
 #endif
 
 #if defined(__cplusplus)
@@ -48,6 +48,8 @@
 #  define ARCH_ARM64 1
 #elif defined(__arm__)
 #  define ARCH_ARM32 1
+#elif defined(__AVR__)
+#  define ARCH_AVR 1
 #else
 #  error "Unsopported platform"
 #endif
@@ -74,6 +76,9 @@
 #if !defined(OS_WINDOWS)
 #  define OS_WINDOWS 0
 #endif
+#if !defined(OS_NONE)
+#  define OS_NONE 0
+#endif
 
 #if !defined(ARCH_X86)
 #  define ARCH_X86 0
@@ -81,11 +86,14 @@
 #if !defined(ARCH_X64)
 #  define ARCH_X64 0
 #endif
-#if !defined(ARCH_ARM)
-#  define ARCH_ARM 0
+#if !defined(ARCH_ARM32)
+#  define ARCH_ARM32 0
 #endif
 #if !defined(ARCH_ARM64)
 #  define ARCH_ARM64 0
+#endif
+#if !defined(ARCH_AVR)
+#  define ARCH_AVR 0
 #endif
 
 #if defined(DEBUG)
