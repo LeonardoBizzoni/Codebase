@@ -120,7 +120,7 @@ fn bool charIsAlphanumeric(u8 ch);
 
 fn u8 charToUpper(u8 ch);
 fn u8 charToLower(u8 ch);
-fn u8 getCorrectPathSeparator();
+fn u8 getCorrectPathSeparator(void);
 
 fn String8 strLeftTrim(String8 s);
 fn String8 strRightTrim(String8 s);

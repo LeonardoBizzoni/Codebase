@@ -616,7 +616,7 @@ fn bool charIsAlphanumeric(u8 ch) {
 
 fn u8 charToUpper(u8 ch) { return charIsLower(ch) ? ch - 32 : ch; }
 fn u8 charToLower(u8 ch) { return charIsUpper(ch) ? ch + 32 : ch; }
-fn u8 getCorrectPathSeparator() {
+fn u8 getCorrectPathSeparator(void) {
 #if OS_WINDOWS
   return '\\';
 #else

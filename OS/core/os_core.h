@@ -176,17 +176,17 @@ fn void start(CmdLine *cmdln);
 
 // =============================================================================
 // System information retrieval
-fn OS_SystemInfo *os_getSystemInfo();
+fn OS_SystemInfo *os_getSystemInfo(void);
 
 // =============================================================================
 // DateTime
-fn time64 os_local_now();
-fn DateTime os_local_dateTimeNow();
+fn time64 os_local_now(void);
+fn DateTime os_local_dateTimeNow(void);
 fn time64 os_local_fromUTCTime64(time64 t);
 fn DateTime os_local_fromUTCDateTime(DateTime *dt);
 
-fn time64 os_utc_now();
-fn DateTime os_utc_dateTimeNow();
+fn time64 os_utc_now(void);
+fn DateTime os_utc_dateTimeNow(void);
 fn time64 os_utc_localizedTime64(i8 utc_offset);
 fn DateTime os_utc_localizedDateTime(i8 utc_offset);
 fn time64 os_utc_fromLocalTime64(time64 t);
@@ -194,7 +194,7 @@ fn DateTime os_utc_fromLocalDateTime(DateTime *dt);
 
 fn void os_sleep_milliseconds(u32 ms);
 
-fn OS_Handle os_timer_start();
+fn OS_Handle os_timer_start(void);
 fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end);
 
 // =============================================================================
@@ -212,19 +212,19 @@ fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
 fn bool os_thread_join(OS_Handle thd);
 
-fn OS_ProcHandle os_proc_spawn();
+fn OS_ProcHandle os_proc_spawn(void);
 fn void os_proc_kill(OS_ProcHandle proc);
 fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc);
 
 fn void os_exit(u8 status_code);
 
-fn OS_Handle os_mutex_alloc();
+fn OS_Handle os_mutex_alloc(void);
 fn void os_mutex_lock(OS_Handle handle);
 fn bool os_mutex_trylock(OS_Handle handle);
 fn void os_mutex_unlock(OS_Handle handle);
 fn void os_mutex_free(OS_Handle handle);
 
-fn OS_Handle os_rwlock_alloc();
+fn OS_Handle os_rwlock_alloc(void);
 fn void os_rwlock_read_lock(OS_Handle handle);
 fn bool os_rwlock_read_trylock(OS_Handle handle);
 fn void os_rwlock_read_unlock(OS_Handle handle);
@@ -233,7 +233,7 @@ fn bool os_rwlock_write_trylock(OS_Handle handle);
 fn void os_rwlock_write_unlock(OS_Handle handle);
 fn void os_rwlock_free(OS_Handle handle);
 
-fn OS_Handle os_cond_alloc();
+fn OS_Handle os_cond_alloc(void);
 fn void os_cond_signal(OS_Handle handle);
 fn void os_cond_broadcast(OS_Handle handle);
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,

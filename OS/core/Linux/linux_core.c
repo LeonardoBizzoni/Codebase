@@ -77,7 +77,7 @@ fn FS_Properties lnx_propertiesFromStat(struct stat *stat) {
   return result;
 }
 
-fn String8 lnx_gethostname() {
+fn String8 lnx_gethostname(void) {
   char name[HOST_NAME_MAX];
   (void)gethostname(name, HOST_NAME_MAX);
 
@@ -88,7 +88,7 @@ fn String8 lnx_gethostname() {
   return namestr;
 }
 
-fn void lnx_parseMeminfo() {
+fn void lnx_parseMeminfo(void) {
   OS_Handle meminfo = fs_open(Strlit("/proc/meminfo"), OS_acfRead);
   StringStream lines = strSplit(lnx_state.arena, fs_readVirtual(lnx_state.arena, meminfo, 4096), '\n');
   for (StringNode *curr_line = lines.first; curr_line; curr_line = curr_line->next) {
@@ -97,13 +97,13 @@ fn void lnx_parseMeminfo() {
       if (strEq(curr->value, Strlit("MemTotal"))) {
         curr = curr->next;
         lnx_state.info.total_memory = KiB(1) *
-                                u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
-                                                    ' ').first->value);
+                                      u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                                          ' ').first->value);
       } else if (strEq(curr->value, Strlit("Hugepagesize"))) {
         curr = curr->next;
         lnx_state.info.hugepage_size = KiB(1) *
-                                 u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
-                                                     ' ').first->value);
+                                       u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                                           ' ').first->value);
         return;
       }
     }
@@ -112,13 +112,13 @@ fn void lnx_parseMeminfo() {
 
 // =============================================================================
 // System information retrieval
-fn OS_SystemInfo *os_getSystemInfo() {
+fn OS_SystemInfo *os_getSystemInfo(void) {
   return &lnx_state.info;
 }
 
 // =============================================================================
 // DateTime
-fn time64 os_local_now() {
+fn time64 os_local_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
@@ -127,7 +127,7 @@ fn time64 os_local_now() {
   return res;
 }
 
-fn DateTime os_local_dateTimeNow() {
+fn DateTime os_local_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
@@ -149,7 +149,7 @@ fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
   return res;
 }
 
-fn time64 os_utc_now() {
+fn time64 os_utc_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
@@ -158,7 +158,7 @@ fn time64 os_utc_now() {
   return res;
 }
 
-fn DateTime os_utc_dateTimeNow() {
+fn DateTime os_utc_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
@@ -202,9 +202,9 @@ fn void os_sleep_milliseconds(u32 ms) {
   usleep(ms * 1e3);
 }
 
-fn OS_Handle os_timer_start() {
+fn OS_Handle os_timer_start(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Timer);
-  if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &prim->timer) != 0) {
+  if (clock_gettime(CLOCK_MONOTONIC, &prim->timer) != 0) {
     lnx_primitiveFree(prim);
     prim = 0;
   }
@@ -308,7 +308,7 @@ fn bool os_thread_join(OS_Handle thd_handle) {
   return res;
 }
 
-fn OS_ProcHandle os_proc_spawn() {
+fn OS_ProcHandle os_proc_spawn(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Process);
   prim->proc = fork();
 
@@ -346,7 +346,7 @@ fn void os_exit(u8 status_code) {
   exit(status_code);
 }
 
-fn OS_Handle os_mutex_alloc() {
+fn OS_Handle os_mutex_alloc(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Mutex);
   pthread_mutexattr_t attr;
   if (pthread_mutexattr_init(&attr) != 0 ||
@@ -382,7 +382,7 @@ fn void os_mutex_free(OS_Handle handle) {
   lnx_primitiveFree(prim);
 }
 
-fn OS_Handle os_rwlock_alloc() {
+fn OS_Handle os_rwlock_alloc(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Rwlock);
   pthread_rwlock_init(&prim->rwlock, 0);
 
@@ -426,7 +426,7 @@ fn void os_rwlock_free(OS_Handle handle) {
   lnx_primitiveFree(prim);
 }
 
-fn OS_Handle os_cond_alloc() {
+fn OS_Handle os_cond_alloc(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_CondVar);
   if (pthread_cond_init(&prim->condvar.cond, 0)) {
     lnx_primitiveFree(prim);
@@ -621,7 +621,7 @@ fn void os_semaphore_free(OS_Handle handle) {
 }
 
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
-  SharedMem res = {0};
+  SharedMem res = {};
   res.path = name;
 
   i32 access_flags = 0;
@@ -755,7 +755,7 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
 }
 
 fn NetInterface os_net_interfaceFromStr8(String8 strip) {
-  NetInterface res = {0};
+  NetInterface res = {};
 
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_getInterfaces(scratch.arena);

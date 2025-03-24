@@ -64,7 +64,7 @@ fn void lnx_primitiveFree(LNX_Primitive *ptr);
 fn void* lnx_threadEntry(void *args);
 
 fn FS_Properties lnx_propertiesFromStat(struct stat *stat);
-fn String8 lnx_getHostname();
-fn void lnx_parseMeminfo();
+fn String8 lnx_getHostname(void);
+fn void lnx_parseMeminfo(void);
 
 #endif

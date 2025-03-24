@@ -103,7 +103,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // =============================================================================
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
-  File file = {0};
+  File file = {};
   i32 flags = fcntl(fd.h[0], F_GETFL);
   if (flags < 0) { return file; }
   flags &= O_ACCMODE;
@@ -133,7 +133,7 @@ fn File fs_fopenTmp(Arena *arena) {
   };
   memCopy(pathstr.str, path, Arrsize(path));
 
-  File file = {0};
+  File file = {};
   file.file_handle.h[0] = fd;
   file.path = pathstr;
   file.prop = fs_getProp(file.file_handle);
@@ -155,8 +155,8 @@ inline fn bool fs_fresize(File *file, usize size) {
 
   file->prop.size = size;
   (void)munmap(file->content, file->prop.size);
-  return (bool)(file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
-                                          MAP_SHARED, file->file_handle.h[0], 0));
+  return (file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
+                                    MAP_SHARED, file->file_handle.h[0], 0)) != 0;
 }
 
 inline fn void fs_fwrite(File *file, String8 content) {
