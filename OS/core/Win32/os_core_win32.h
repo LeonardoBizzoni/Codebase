@@ -7,6 +7,7 @@ typedef u64 OS_W32_PrimitiveType;
 enum
 {
   OS_W32_Primitive_Nil,
+  OS_W32_Primitive_File,
   OS_W32_Primitive_Thread,
   OS_W32_Primitive_RWLock,
   OS_W32_Primitive_Mutex,
@@ -28,6 +29,11 @@ struct OS_W32_Primitive
       ThreadFunc *func;
       void *arg;
     } thread;
+
+    struct {
+      HANDLE handle;
+      OS_AccessFlags flags;
+    } file;
 
     CRITICAL_SECTION mutex;
     SRWLOCK rw_mutex;

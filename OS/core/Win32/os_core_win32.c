@@ -218,7 +218,7 @@ fn void*
 os_reserveHuge(usize base_addr, usize size)
 {
   void *result = VirtualAlloc((void*)base_addr, size,
-			      MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+                              MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
   return result;
 }
 
@@ -279,7 +279,7 @@ os_thread_start(ThreadFunc *func, void *arg)
 {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Thread);
   HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0,
-			       &primitive->thread.tid);
+                               &primitive->thread.tid);
   primitive->thread.func = func;
   primitive->thread.arg = arg;
   primitive->thread.handle = handle;
@@ -440,43 +440,43 @@ fn void os_cond_broadcast(OS_Handle handle) {
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
-		     u32 wait_at_most_microsec) {
+                     u32 wait_at_most_microsec) {
   OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
   OS_W32_Primitive *mutexprim = (OS_W32_Primitive*)mutex_handle.h[0];
   if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
   if (!mutexprim || mutexprim->kind != OS_W32_Primitive_Mutex) { return false; }
   return SleepConditionVariableCS(&condprim->condvar, &mutexprim->mutex,
-				  (wait_at_most_microsec
-				   ? wait_at_most_microsec / 1e3
-				   : INFINITE)) != 0;
+                                  (wait_at_most_microsec
+                                   ? wait_at_most_microsec / 1e3
+                                   : INFINITE)) != 0;
 }
 
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			    u32 wait_at_most_microsec) {
+                            u32 wait_at_most_microsec) {
   OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
   OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
   if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
   if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
     { return false; }
   return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
-				   (wait_at_most_microsec
-				    ? wait_at_most_microsec / 1e3
-				    : INFINITE),
-				   CONDITION_VARIABLE_LOCKMODE_SHARED) != 0;
+                                   (wait_at_most_microsec
+                                    ? wait_at_most_microsec / 1e3
+                                    : INFINITE),
+                                   CONDITION_VARIABLE_LOCKMODE_SHARED) != 0;
 }
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
-			     u32 wait_at_most_microsec) {
+                             u32 wait_at_most_microsec) {
   OS_W32_Primitive *condprim = (OS_W32_Primitive*)cond_handle.h[0];
   OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
   if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
   if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
     { return false; }
   return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
-				   (wait_at_most_microsec
-				    ? wait_at_most_microsec / 1e3
-				    : INFINITE),
-				   CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE) != 0;
+                                   (wait_at_most_microsec
+                                    ? wait_at_most_microsec / 1e3
+                                    : INFINITE),
+                                   CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE) != 0;
 }
 
 fn bool os_cond_free(OS_Handle handle) {
@@ -487,7 +487,7 @@ fn bool os_cond_free(OS_Handle handle) {
 }
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
-				u32 max_count, String8 name) {
+                                u32 max_count, String8 name) {
   OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_Semaphore);
 
   Scratch scratch = ScratchBegin(0, 0);
@@ -503,9 +503,9 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
   }
   strstream_append_str(scratch.arena, &ss, name);
   prim->semaphore = CreateSemaphoreA(0, init_count, max_count,
-				     cstrFromStr8(scratch.arena,
-						  str8FromStream(scratch.arena,
-								 ss)));
+                                     cstrFromStr8(scratch.arena,
+                                                  str8FromStream(scratch.arena,
+                                                                 ss)));
  skip_semname:
   ScratchEnd(scratch);
   OS_Handle res = {(u64)prim};
@@ -522,9 +522,9 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
   OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
   if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
   return WaitForSingleObject(prim->semaphore,
-			     (wait_at_most_microsec
-			      ? wait_at_most_microsec / 1e3
-			      : INFINITE)) == WAIT_OBJECT_0;
+                             (wait_at_most_microsec
+                              ? wait_at_most_microsec / 1e3
+                              : INFINITE)) == WAIT_OBJECT_0;
 }
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
@@ -555,10 +555,10 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   res.path = str8FromStream(scratch.arena, ss);
   res.mmap_handle.h[0] = (u64)
     CreateFileMapping(INVALID_HANDLE_VALUE, 0, access_flags,
-		      (u32)((size >> 32) & bitmask32),
-		      (u32)(size & bitmask32),
-		      !name.size ? (char *)0 : cstrFromStr8(scratch.arena,
-							    res.path));
+                      (u32)((size >> 32) & bitmask32),
+                      (u32)(size & bitmask32),
+                      !name.size ? (char *)0 : cstrFromStr8(scratch.arena,
+                                                            res.path));
   ScratchEnd(scratch);
   if (!res.mmap_handle.h[0]) { return res; }
 
@@ -568,7 +568,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   if(flags & OS_acfExecute) { access_flags |= FILE_MAP_EXECUTE; }
   if(flags & OS_acfAppend)  { access_flags |= FILE_MAP_ALL_ACCESS; }
   res.content = (u8*)MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
-				   0, 0, size);
+                                   0, 0, size);
   if (!res.content) {
     CloseHandle((HANDLE)res.mmap_handle.h[0]);
     SharedMem _ = {0};
@@ -580,7 +580,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 
 fn bool os_sharedmem_close(SharedMem *shm) {
   return UnmapViewOfFile(shm->content) &&
-	 CloseHandle((HANDLE)shm->mmap_handle.h[0]);
+         CloseHandle((HANDLE)shm->mmap_handle.h[0]);
 }
 
 ////////////////////////////////
@@ -641,8 +641,8 @@ fn IP os_net_ipFromStr8(String8 strip) {
 }
 
 fn Socket os_net_socket_open(OS_Net_Transport protocol,
-			     IP client, u16 client_port,
-			     IP server, u16 server_port) {
+                             IP client, u16 client_port,
+                             IP server, u16 server_port) {
   Socket res = {0};
   return res;
 }
@@ -653,7 +653,9 @@ fn bool os_net_socket_close(Socket sock) { return false; }
 //- km: File operations
 
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
-  OS_Handle result = {0};
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_File);
+  prim->file.flags = flags;
+
   Scratch scratch = ScratchBegin(0, 0);
   String16 path = UTF16From8(scratch.arena, filepath);
   SECURITY_ATTRIBUTES security_attributes = {sizeof(SECURITY_ATTRIBUTES), 0, 0};
@@ -661,28 +663,29 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
 
-  if(flags & OS_acfRead) { access_flags |= GENERIC_READ;}
+  if(flags & OS_acfRead) { access_flags |= GENERIC_READ; }
   if(flags & OS_acfWrite) {
     access_flags |= GENERIC_WRITE;
-    creation_disposition = CREATE_ALWAYS;
+    creation_disposition = OPEN_ALWAYS;
+  }
+  if(flags & OS_acfAppend) {
+    access_flags |= FILE_APPEND_DATA;
+    creation_disposition = OPEN_ALWAYS;
   }
   if(flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  // TODO(lb): appending doesn't work
-  if(flags & OS_acfAppend) {
-    creation_disposition = OPEN_ALWAYS;
-    access_flags |= FILE_APPEND_DATA;
-  }
   if(flags & OS_acfShareRead) { share_mode |= FILE_SHARE_READ; }
   if(flags & OS_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
 
-  HANDLE file = CreateFileW((WCHAR*)path.str, access_flags, share_mode,
-                            &security_attributes, creation_disposition,
-			    FILE_ATTRIBUTE_NORMAL, 0);
-  if(file != INVALID_HANDLE_VALUE) {
-    result.h[0] = (u64)file;
-  }
-
+  prim->file.handle = CreateFileW((WCHAR*)path.str, access_flags,
+                                  share_mode, &security_attributes,
+                                  creation_disposition,
+                                  FILE_ATTRIBUTE_NORMAL, 0);
   ScratchEnd(scratch);
+
+  OS_Handle result = {0};
+  if(prim->file.handle != INVALID_HANDLE_VALUE) {
+    result.h[0] = (u64)prim;
+  }
   return result;
 }
 
@@ -694,15 +697,17 @@ fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
   return fs_read(arena, file);
 }
 
-fn String8 fs_read(Arena *arena, OS_Handle file) {
+fn String8 fs_read(Arena *arena, OS_Handle handle) {
   String8 result = {0};
 
-  if(file.h[0] == 0) { return result; }
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
+  Assert(prim);
+  HANDLE file = prim->file.handle;
+  if(file == 0) { return result; }
 
   LARGE_INTEGER file_size = {0};
-  HANDLE handle = (HANDLE)file.h[0];
+  GetFileSizeEx(file, &file_size);
 
-  GetFileSizeEx(handle, &file_size);
   u64 to_read = file_size.QuadPart;
   u64 total_read = 0;
   u8 *ptr = New(arena, u8, to_read);
@@ -713,7 +718,7 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
     u32 amount32 = amount64 > U32_MAX ? U32_MAX : (u32)amount64;
     OVERLAPPED overlapped = {0};
     DWORD bytes_read = 0;
-    ReadFile(handle, ptr + total_read, amount32, &bytes_read, &overlapped);
+    ReadFile(file, ptr + total_read, amount32, &bytes_read, &overlapped);
     total_read += bytes_read;
     if(bytes_read != amount32)
     {
@@ -730,11 +735,11 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
   return result;
 }
 
-fn bool fs_write(OS_Handle file, String8 content) {
+fn bool fs_write(OS_Handle handle, String8 content) {
   bool result = false;
 
-  if(file.h[0] == 0) { return result; }
-  HANDLE handle = (HANDLE)file.h[0];
+  HANDLE file = ((OS_W32_Primitive*)handle.h[0])->file.handle;
+  if(file == 0) { return result; }
 
   u64 to_write = content.size;
   u64 total_write = 0;
@@ -744,7 +749,7 @@ fn bool fs_write(OS_Handle file, String8 content) {
     u64 amount64 = to_write - total_write;;
     u32 amount32 = amount64 > U32_MAX ? U32_MAX : (u32)amount64;
     DWORD bytes_written = 0;
-    WriteFile(handle, ptr + total_write, amount32, &bytes_written, 0);
+    WriteFile(file, ptr + total_write, amount32, &bytes_written, 0);
     total_write += bytes_written;
     if(bytes_written != amount32)
     {
@@ -767,19 +772,21 @@ fn FS_Properties fs_getProp(OS_Handle file) {
   SID *owner = 0;
   SID *group = 0;
 
-  AssertMsg(GetSecurityInfo((HANDLE)file.h[0], SE_FILE_OBJECT,
-			    OWNER_SECURITY_INFORMATION |
-			    GROUP_SECURITY_INFORMATION,
-			    (SID**)&properties.ownerID,
-			    (SID**)&properties.groupID, 0, 0,
-			    &security) == ERROR_SUCCESS,
-	    Strlit("GetSecurityInfo"));
+  AssertMsg(GetSecurityInfo(((OS_W32_Primitive*)file.h[0])->file.handle,
+                            SE_FILE_OBJECT,
+                            OWNER_SECURITY_INFORMATION |
+                            GROUP_SECURITY_INFORMATION,
+                            (PSID*)&properties.ownerID,
+                            (PSID*)&properties.groupID, 0, 0,
+                            (PSECURITY_DESCRIPTOR *)&security)
+            == ERROR_SUCCESS,
+            Strlit("GetSecurityInfo"));
 
   BY_HANDLE_FILE_INFORMATION file_info;
-  Assert(GetFileInformationByHandle((HANDLE)file.h[0], &file_info));
+  Assert(GetFileInformationByHandle(((OS_W32_Primitive*)file.h[0])->file.handle, &file_info));
 
   properties.size = (u64)(((u64)file_info.nFileSizeHigh << 32) |
-			  file_info.nFileSizeLow);
+                          file_info.nFileSizeLow);
 
   switch (file_info.dwFileAttributes) {
     case FILE_ATTRIBUTE_DIRECTORY: {
@@ -815,8 +822,8 @@ fn FS_Properties fs_getProp(OS_Handle file) {
 fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
   String8 res = {0};
   res.str = New(arena, u8, MAX_PATH);
-  res.size = GetFinalPathNameByHandleA((HANDLE)handle.h[0], (LPSTR)res.str,
-				       MAX_PATH, FILE_NAME_NORMALIZED);
+  res.size = GetFinalPathNameByHandleA(((OS_W32_Primitive*)handle.h[0])->file.handle, (LPSTR)res.str,
+                                       MAX_PATH, FILE_NAME_NORMALIZED);
   arenaPop(arena, MAX_PATH - res.size);
   if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
     res.str += 4; // skips the `\\?\`
@@ -830,10 +837,10 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
   res.str = New(arena, u8, MAX_PATH);
   Scratch scratch = ScratchBegin(&arena, 1);
   HANDLE pathfd = CreateFileA(cstrFromStr8(scratch.arena, path),
-			      GENERIC_READ, FILE_SHARE_READ, 0,
-			      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+                              GENERIC_READ, FILE_SHARE_READ, 0,
+                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
   res.size = GetFinalPathNameByHandleA(pathfd, (LPSTR)res.str,
-				       MAX_PATH, FILE_NAME_NORMALIZED);
+                                       MAX_PATH, FILE_NAME_NORMALIZED);
   CloseHandle(pathfd);
   ScratchEnd(scratch);
   arenaPop(arena, MAX_PATH - res.size);
@@ -848,19 +855,22 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // Memory mapping files
 fn File fs_fopen(Arena *arena, OS_Handle file) {
   File result = {0};
-  result.file_handle = file;
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)file.h[0];
+  Assert(prim);
+  result.file_handle.h[0] = (u64)prim;
 
   BY_HANDLE_FILE_INFORMATION file_info;
-  Assert(GetFileInformationByHandle((HANDLE)file.h[0], &file_info));
+  Assert(GetFileInformationByHandle((HANDLE)prim->file.handle, &file_info));
 
   SECURITY_DESCRIPTOR *security = 0;
-  Assert(GetSecurityInfo((HANDLE)file.h[0], SE_FILE_OBJECT,
-			 DACL_SECURITY_INFORMATION,
-			 0, 0, 0, 0, &security) == ERROR_SUCCESS);
+  Assert(GetSecurityInfo((HANDLE)prim->file.handle, SE_FILE_OBJECT,
+                         DACL_SECURITY_INFORMATION,
+                         0, 0, 0, 0, (PSECURITY_DESCRIPTOR *)&security)
+         == ERROR_SUCCESS);
 
   char path[MAX_PATH];
-  result.path.size = GetFinalPathNameByHandleA((HANDLE)file.h[0], path,
-					       MAX_PATH, FILE_NAME_NORMALIZED);
+  result.path.size = GetFinalPathNameByHandleA((HANDLE)prim->file.handle, path,
+                                               MAX_PATH, FILE_NAME_NORMALIZED);
   result.path.str = New(arena, u8, result.path.size);
   memCopy(result.path.str, path, result.path.size);
   if (result.path.str[0] == '\\') {
@@ -868,25 +878,49 @@ fn File fs_fopen(Arena *arena, OS_Handle file) {
     result.path.size -= 4;
   }
 
-  SECURITY_ATTRIBUTES security_attrib;
-  security_attrib.nLength = sizeof(SECURITY_ATTRIBUTES);
-  security_attrib.lpSecurityDescriptor = security;
-  security_attrib.bInheritHandle = FALSE;
+  DWORD access_flags = 0;
+  switch (prim->file.flags) {
+  case OS_acfRead: {
+    access_flags = PAGE_READONLY;
+  } break;
+  case OS_acfWrite:
+  case OS_acfRead | OS_acfWrite: {
+    access_flags = PAGE_READWRITE;
+  } break;
+  case OS_acfExecute:
+  case OS_acfRead | OS_acfExecute: {
+    access_flags = PAGE_EXECUTE_READ;
+  } break;
+  case OS_acfWrite | OS_acfExecute:
+  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+    access_flags = PAGE_EXECUTE_READWRITE;
+  } break;
+  }
+  result.mmap_handle.h[0] = (u64)CreateFileMappingA((HANDLE)prim->file.handle, 0,
+                                                    access_flags, 0, 0, 0);
 
-  // TODO(lb): change PAGE_READONLY to whatever mode `file` was opened with
-  result.mmap_handle.h[0] = (u64)
-    CreateFileMapping((HANDLE)file.h[0], 0,
-		      PAGE_READONLY, file_info.nFileSizeHigh,
-		      file_info.nFileSizeLow, 0);
-  AssertMsg(result.mmap_handle.h[0], Strlit("CreateFileMapping"));
-
-  // TODO(lb): change FILE_MAP_READ to whatever mode `file` was opened with
+  access_flags = 0;
+  switch (prim->file.flags) {
+  case OS_acfRead: {
+    access_flags = FILE_MAP_READ;
+  } break;
+  case OS_acfWrite:
+  case OS_acfRead | OS_acfWrite: {
+    access_flags = FILE_MAP_WRITE;
+  } break;
+  case OS_acfExecute:
+  case OS_acfRead | OS_acfExecute: {
+    access_flags = FILE_MAP_READ | FILE_MAP_EXECUTE;
+  } break;
+  case OS_acfWrite | OS_acfExecute:
+  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+    access_flags = FILE_MAP_ALL_ACCESS;
+  } break;
+  }
   result.content = (u8*)MapViewOfFile((HANDLE)result.mmap_handle.h[0],
-				      FILE_MAP_READ, 0, 0, 0);
-  AssertMsg(result.content, Strlit("MapViewOfFile"));
+                                      access_flags, 0, 0, 0);
 
   result.prop = fs_getProp(file);
-
   return result;
 }
 
@@ -896,14 +930,67 @@ fn File fs_fopenTmp(Arena *arena) {
 }
 
 inline fn bool fs_fclose(File *file) {
-  return false;
+  return UnmapViewOfFile(file->content) &&
+         CloseHandle((HANDLE)((OS_W32_Primitive*)file->file_handle.h[0])->file.handle) &&
+         CloseHandle((HANDLE)file->mmap_handle.h[0]);
 }
 
 inline fn bool fs_fresize(File *file, usize size) {
-  return false;
-}
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)file->file_handle.h[0];
+  LARGE_INTEGER lsize = { .QuadPart = (LONGLONG)size };
+  if (!SetFilePointerEx(prim->file.handle, lsize, 0, FILE_BEGIN)) {
+    return false;
+  }
 
-inline fn void fs_fwrite(File *file, String8 str) {}
+  file->prop.size = size;
+  if (!SetEndOfFile(prim->file.handle)) {
+    return false;
+  }
+
+  UnmapViewOfFile(file->content);
+  CloseHandle((HANDLE)file->mmap_handle.h[0]);
+
+  DWORD access_flags = 0;
+  switch (prim->file.flags) {
+  case OS_acfRead: {
+    access_flags = PAGE_READONLY;
+  } break;
+  case OS_acfWrite:
+  case OS_acfRead | OS_acfWrite: {
+    access_flags = PAGE_READWRITE;
+  } break;
+  case OS_acfExecute:
+  case OS_acfRead | OS_acfExecute: {
+    access_flags = PAGE_EXECUTE_READ;
+  } break;
+  case OS_acfWrite | OS_acfExecute:
+  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+    access_flags = PAGE_EXECUTE_READWRITE;
+  } break;
+  }
+  file->mmap_handle.h[0] = (u64)CreateFileMappingA((HANDLE)prim->file.handle, 0,
+                                                   access_flags, 0, 0, 0);
+  access_flags = 0;
+  switch (prim->file.flags) {
+  case OS_acfRead: {
+    access_flags = FILE_MAP_READ;
+  } break;
+  case OS_acfWrite:
+  case OS_acfRead | OS_acfWrite: {
+    access_flags = FILE_MAP_WRITE;
+  } break;
+  case OS_acfExecute:
+  case OS_acfRead | OS_acfExecute: {
+    access_flags = FILE_MAP_READ | FILE_MAP_EXECUTE;
+  } break;
+  case OS_acfWrite | OS_acfExecute:
+  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+    access_flags = FILE_MAP_ALL_ACCESS;
+  } break;
+  }
+  return (file->content = (u8*)MapViewOfFile((HANDLE)file->mmap_handle.h[0],
+                                             access_flags, 0, 0, size)) != 0;
+}
 
 inline fn bool fs_fileHasChanged(File *file) {
   return false;
@@ -920,7 +1007,10 @@ inline fn bool fs_frename(File *file, String8 to) {
 // =============================================================================
 // Misc operation on the filesystem
 inline fn bool fs_delete(String8 filepath) {
-  return false;
+  Scratch scratch = ScratchBegin(0, 0);
+  bool res = DeleteFileA(cstrFromStr8(scratch.arena, filepath));
+  ScratchEnd(scratch);
+  return res;
 }
 
 inline fn bool fs_rename(String8 filepath, String8 to) {

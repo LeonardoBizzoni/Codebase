@@ -1,7 +1,7 @@
 // =============================================================================
 // Logging
 fn void os_print(OS_LogLevel level, const char *caller, const char *file,
-		 i32 line, String8 str) {
+                 i32 line, String8 str) {
   switch (level) {
     case OS_LogLevel_Info: {
       printf(ANSI_COLOR_CYAN "[INFO ");
@@ -18,4 +18,14 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
 
  print_str:
   printf("%.*s\n", Strexpand(str));
+}
+
+// =============================================================================
+inline fn void fs_fwrite(File *file, String8 content) {
+  if (file->prop.size < (usize)content.size) {
+    fs_fresize(file, content.size);
+  }
+  memZero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
+                                                    (isize)content.size));
+  (void)memCopy(file->content, content.str, content.size);
 }
