@@ -2,7 +2,6 @@
 
 #if OS_LINUX
 #  include "core/Linux/linux_core.c"
-#  include "core/Linux/file.c"
 #elif OS_BSD
 #  include "core/BSD/bsd_core.c"
 #  include "core/BSD/file.c"
