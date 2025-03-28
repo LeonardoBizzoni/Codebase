@@ -15,13 +15,9 @@ typedef struct LNX11_Window {
   u32 height;
 
   Window xwindow;
+  GLXContext context;
   XVisualInfo *xvisual;
   XSetWindowAttributes xattrib;
-
-  GFX_Api api;
-  union {
-    GLXContext opengl;
-  } context;
 
   struct LNX11_Window *next;
   struct LNX11_Window *prev;

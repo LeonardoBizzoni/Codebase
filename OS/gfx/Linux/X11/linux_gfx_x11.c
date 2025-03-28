@@ -7,8 +7,7 @@ fn void lnx_gfx_init(void) {
   lnx11_state.xatom_close = XInternAtom(lnx11_state.xdisplay, "WM_DELETE_WINDOW", False);
 }
 
-fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width,
-                            u32 height, GFX_Api api) {
+fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   LNX11_Window *window = lnx11_state.freelist_window;
   if (window) {
     memZero(window, sizeof(LNX11_Window));
@@ -21,23 +20,24 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width,
   window->name = name;
   window->width = width;
   window->height = height;
-  window->api = api;
 
-  window->xattrib .event_mask = ExposureMask | FocusChangeMask |
-                                EnterWindowMask | LeaveWindowMask |
-                                ButtonPressMask | PointerMotionMask |
-                                KeyPressMask | KeymapStateMask;
+  window->xattrib.event_mask = ExposureMask | FocusChangeMask |
+                               EnterWindowMask | LeaveWindowMask |
+                               ButtonPressMask | PointerMotionMask |
+                               KeyPressMask | KeymapStateMask;
 
-  switch (api) {
-  case GFX_Api_Opengl: {
-    local GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
-    window->xvisual = glXChooseVisual(lnx11_state.xdisplay, 0, att);
-    Assert(window->xvisual);
-    window->xattrib.colormap = XCreateColormap(lnx11_state.xdisplay,
-                                               XDefaultRootWindow(lnx11_state.xdisplay),
-                                               window->xvisual->visual, AllocNone);
-  } break;
-  }
+  // TODO(lb): these #if will be moved to opaque functions that depend on the
+  //           target graphics API. I don't know how vulkan is initialized nor
+  //           how to initialize software rendering in X11 so for now it
+  //           stays like this.
+#if USING_OPENGL
+  local GLint att[] = { GLX_RGBA, GLX_DEPTH_SIZE, 24, GLX_DOUBLEBUFFER, None };
+  window->xvisual = glXChooseVisual(lnx11_state.xdisplay, 0, att);
+  Assert(window->xvisual);
+  window->xattrib.colormap = XCreateColormap(lnx11_state.xdisplay,
+                                             XDefaultRootWindow(lnx11_state.xdisplay),
+                                             window->xvisual->visual, AllocNone);
+#endif
 
   window->xwindow = XCreateWindow(lnx11_state.xdisplay,
                                   XDefaultRootWindow(lnx11_state.xdisplay),
@@ -50,14 +50,11 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width,
   XStoreName(lnx11_state.xdisplay, window->xwindow, cstrFromStr8(scratch.arena, name));
   ScratchEnd(scratch);
 
-  switch (api) {
-  case GFX_Api_Opengl: {
-    window->context.opengl = glXCreateContext(lnx11_state.xdisplay, window->xvisual,
-                                              0, true);
-    glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context.opengl);
-    glEnable(GL_DEPTH_TEST);
-  } break;
-  }
+#if USING_OPENGL
+  window->context = glXCreateContext(lnx11_state.xdisplay, window->xvisual, 0, true);
+  glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context);
+  glEnable(GL_DEPTH_TEST);
+#endif
 
   XAutoRepeatOn(lnx11_state.xdisplay);
   XFlush(lnx11_state.xdisplay);
@@ -82,12 +79,10 @@ fn void os_window_close(OS_Handle handle) {
   LNX11_Window *window = (LNX11_Window*)handle.h[0];
   XUnmapWindow(lnx11_state.xdisplay, window->xwindow);
 
-  switch (window->api) {
-  case GFX_Api_Opengl: {
-    glXMakeCurrent(lnx11_state.xdisplay, None, 0);
-    glXDestroyContext(lnx11_state.xdisplay, window->context.opengl);
-  } break;
-  }
+#if USING_OPENGL
+  glXMakeCurrent(lnx11_state.xdisplay, None, 0);
+  glXDestroyContext(lnx11_state.xdisplay, window->context);
+#endif
 
   XFreeColormap(lnx11_state.xdisplay, window->xattrib.colormap);
   XFree(window->xvisual);
