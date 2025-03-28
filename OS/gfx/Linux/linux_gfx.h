@@ -1,7 +1,7 @@
 #ifndef OS_GFX_LINUX_H
 #define OS_GFX_LINUX_H
 
-fn void lnx_gfx_init();
+fn void lnx_gfx_init(void);
 
 #ifndef LNX_X11
 #  define LNX_X11 0

@@ -3,12 +3,25 @@
 
 #include <X11/Xlib.h>
 
+#if USING_OPENGL
+#  include<GL/gl.h>
+#  include<GL/glx.h>
+#  include<GL/glu.h>
+#endif
+
 typedef struct LNX11_Window {
   String8 name;
   u32 width;
   u32 height;
 
   Window xwindow;
+  XVisualInfo *xvisual;
+  XSetWindowAttributes xattrib;
+
+  GFX_Api api;
+  union {
+    GLXContext opengl;
+  } context;
 
   struct LNX11_Window *next;
   struct LNX11_Window *prev;
