@@ -1094,9 +1094,7 @@ fs_iter_end(OS_FileIter *iter)
 ////////////////////////////////
 //- km: Entry point
 
-fn void
-w32_entry_point_caller(int argc, WCHAR **wargv)
-{
+fn void w32_setup() {
   SYSTEM_INFO sys_info = {0};
   GetSystemInfo(&sys_info);
 
@@ -1106,13 +1104,16 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
 
   w32_state.arena = ArenaBuild(.reserve_size = GB(1));
   InitializeCriticalSection(&w32_state.mutex);
+}
 
+fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
   Arena *args_arena = ArenaBuild();
   CmdLine *cmdln = New(args_arena, CmdLine);
   cmdln->count = argc - 1;
-  cmdln->exe = UTF8From16(args_arena, str16_cstr((u16*)wargv[0]));
-  for(int i = 1; i < argc; ++i)
-  {
+  if (cmdln->count) {
+    cmdln->exe = UTF8From16(args_arena, str16_cstr((u16*)wargv[0]));
+  }
+  for(int i = 1; i < argc; ++i) {
     cmdln->args[i - 1] = UTF8From16(args_arena, str16_cstr((u16*)wargv[i]));
   }
 
@@ -1120,17 +1121,18 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   DeleteCriticalSection(&w32_state.mutex);
 }
 
-#if BUILD_CONSOLE_INTEFACE
-int
-wmain(int argc, WCHAR **argv)
-{
-  w32_entry_point_caller(argc, argv);
+#if OS_GUI
+int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance,
+                    PWSTR cmdln, int cmd_show) {
+  w32_setup();
+  w32_gfx_init(instance);
+  w32_call_entrypoint(__argc, (WCHAR **)__argv);
   return 0;
 }
 #else
-int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, PWSTR cmdln, int cmd_show)
-{
-  w32_entry_point_caller(__argc, __wargv);
+int wmain(int argc, WCHAR **argv) {
+  w32_setup();
+  w32_call_entrypoint(argc, argv);
   return 0;
 }
 #endif
