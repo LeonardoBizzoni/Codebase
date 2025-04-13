@@ -180,7 +180,7 @@ Matrix<T, R, R> mat_inverse(Matrix<T, R, R> *mat) {
   Assert(det != 0);
 
   if constexpr (R == 2) {
-    Matrix<T, 2, 2> res = {0};
+    Matrix<T, 2, 2> res = {};
     res[0, 0] = (*mat)[1, 1] / det;
     res[0, 1] = -(*mat)[0, 1] / det;
     res[1, 0] = -(*mat)[1, 0] / det;

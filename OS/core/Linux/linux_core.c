@@ -86,28 +86,26 @@ fn String8 lnx_gethostname(void) {
   char name[HOST_NAME_MAX];
   (void)gethostname(name, HOST_NAME_MAX);
 
-  String8 namestr = {
-    .str = (u8 *)name,
-    .size = str8len(name),
-  };
+  String8 namestr = str8((u8 *)name, str8_len(name));
   return namestr;
 }
 
 fn void lnx_parseMeminfo(void) {
   OS_Handle meminfo = fs_open(Strlit("/proc/meminfo"), OS_acfRead);
-  StringStream lines = strSplit(lnx_state.arena, fs_readVirtual(lnx_state.arena, meminfo, 4096), '\n');
+  StringStream lines = str8_split(lnx_state.arena, fs_readVirtual(lnx_state.arena,
+                                                                  meminfo, 4096), '\n');
   for (StringNode *curr_line = lines.first; curr_line; curr_line = curr_line->next) {
-    StringStream ss = strSplit(lnx_state.arena, curr_line->value, ':');
+    StringStream ss = str8_split(lnx_state.arena, curr_line->value, ':');
     for (StringNode *curr = ss.first; curr; curr = curr->next) {
-      if (strEq(curr->value, Strlit("MemTotal"))) {
+      if (str8_eq(curr->value, Strlit("MemTotal"))) {
         curr = curr->next;
         lnx_state.info.total_memory = KiB(1) *
-                                      u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                      u64_from_str8(str8_split(lnx_state.arena, str8_trim(curr->value),
                                                           ' ').first->value);
-      } else if (strEq(curr->value, Strlit("Hugepagesize"))) {
+      } else if (str8_eq(curr->value, Strlit("Hugepagesize"))) {
         curr = curr->next;
         lnx_state.info.hugepage_size = KiB(1) *
-                                       u64FromStr(strSplit(lnx_state.arena, strTrim(curr->value),
+                                       u64_from_str8(str8_split(lnx_state.arena, str8_trim(curr->value),
                                                            ' ').first->value);
         return;
       }
@@ -564,7 +562,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
                 Strlit("Semaphores sharable between processes must be named."));
 
       Scratch scratch = ScratchBegin(0, 0);
-      char *path = cstrFromStr8(scratch.arena, name);
+      char *path = cstr_from_str8(scratch.arena, name);
       (void)sem_unlink(path);
       prim->semaphore.sem = sem_open(path, O_CREAT,
                                      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH, init_count);
@@ -640,7 +638,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
 
   Scratch scratch = ScratchBegin(0, 0);
-  res.file_handle.h[0] = shm_open(cstrFromStr8(scratch.arena, name),
+  res.file_handle.h[0] = shm_open(cstr_from_str8(scratch.arena, name),
                                   access_flags,
                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   ScratchEnd(scratch);
@@ -656,7 +654,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 fn bool os_sharedmem_close(SharedMem *shm) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = munmap(shm->content, shm->prop.size) == 0 &&
-             shm_unlink(cstrFromStr8(scratch.arena, shm->path)) == 0;
+             shm_unlink(cstr_from_str8(scratch.arena, shm->path)) == 0;
   ScratchEnd(scratch);
   return res;
 }
@@ -666,7 +664,7 @@ fn bool os_sharedmem_close(SharedMem *shm) {
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
-  char *path_cstr = cstrFromStr8(scratch.arena, path);
+  char *path_cstr = cstr_from_str8(scratch.arena, path);
 
   void *handle = dlopen(path_cstr, RTLD_LAZY);
   if(handle){
@@ -679,7 +677,7 @@ fn OS_Handle os_lib_open(String8 path) {
 fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = (void*)lib.h[0];
-  char *symbol_cstr = cstrFromStr8(scratch.arena, symbol);
+  char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
   VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, symbol_cstr);
   ScratchEnd(scratch);
   return result;
@@ -694,7 +692,7 @@ fn i32 os_lib_close(OS_Handle lib) {
 // Misc
 fn String8 os_currentDir(Arena *arena) {
   char *wd = getcwd(0, 0);
-  isize size = str8len(wd);
+  isize size = str8_len(wd);
   u8 *copy = New(arena, u8, size);
   memCopy(copy, wd, size);
   free(wd);
@@ -717,7 +715,7 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
 
     NetInterface *inter = New(arena, NetInterface);
 
-    String8 interface = strFromCstr(ifa->ifa_name);
+    String8 interface = str8_from_cstr(ifa->ifa_name);
     inter->name.str = New(arena, u8, interface.size);
     inter->name.size = interface.size;
     memCopy(inter->name.str, interface.str, interface.size);
@@ -732,7 +730,7 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
 
       char cstrip[INET_ADDRSTRLEN];
       inet_ntop(AF_INET, &addr->sin_addr, cstrip, INET_ADDRSTRLEN);
-      String8 strip = strFromCstr(cstrip);
+      String8 strip = str8_from_cstr(cstrip);
       inter->strip.str = New(arena, u8, strip.size);
       inter->strip.size = strip.size;
       memCopy(inter->strip.str, strip.str, strip.size);
@@ -746,7 +744,7 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
 
       char cstrip[INET6_ADDRSTRLEN];
       inet_ntop(AF_INET6, &addr->sin6_addr, cstrip, INET6_ADDRSTRLEN);
-      String8 strip = strFromCstr(cstrip);
+      String8 strip = str8_from_cstr(cstrip);
       inter->strip.str = New(arena, u8, strip.size);
       inter->strip.size = strip.size;
       memCopy(inter->strip.str, strip.str, strip.size);
@@ -765,7 +763,7 @@ fn NetInterface os_net_interfaceFromStr8(String8 strip) {
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_getInterfaces(scratch.arena);
   for (NetInterface *curr = inters.first; curr; curr = curr->next) {
-    if (strEq(curr->strip, strip)) {
+    if (str8_eq(curr->strip, strip)) {
       memCopy(&res, curr, sizeof(NetInterface));
       break;
     }
@@ -822,13 +820,13 @@ fn bool fs_close(OS_Handle fd) {
 
 fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
   int fd = file.h[0];
-  String8 result = {0};
+  String8 result = {};
   if(!fd) { return result; }
 
   u8 *buffer = New(arena, u8, size);
   if(pread(fd, buffer, size, 0) >= 0) {
     result.str = buffer;
-    result.size = str8len((char *)buffer);
+    result.size = str8_len((char *)buffer);
   }
 
   return result;
@@ -836,7 +834,7 @@ fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
   int fd = file.h[0];
-  String8 result = {0};
+  String8 result = {};
   if(!fd) { return result; }
 
   struct stat file_stat;
@@ -874,7 +872,7 @@ fn String8 fs_pathFromHandle(Arena *arena, OS_Handle fd) {
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
-  String8 res = {0};
+  String8 res = {};
   res.str = New(arena, u8, PATH_MAX);
   res.size = readlink((char *)path.str, (char *)res.str, PATH_MAX);
   if (res.size <= 0) {
@@ -913,10 +911,7 @@ fn File fs_fopenTmp(Arena *arena) {
   char path[] = "/tmp/base-XXXXXX";
   i32 fd = mkstemp(path);
 
-  String8 pathstr = {
-    .str = New(arena, u8, Arrsize(path)),
-    .size = Arrsize(path),
-  };
+  String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
   memCopy(pathstr.str, path, Arrsize(path));
 
   File file = {};
@@ -1007,7 +1002,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
-  String8 str = {0};
+  String8 str = {};
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 
@@ -1017,10 +1012,10 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
     do {
       entry = readdir(iter->dir);
       if (!entry) { return false; }
-      str = strFromCstr(entry->d_name);
-    } while (strEq(str, currdir) || strEq(str, parentdir));
+      str = str8_from_cstr(entry->d_name);
+    } while (str8_eq(str, currdir) || str8_eq(str, parentdir));
 
-    str = strFormat(scratch.arena, "%.*s/%.*s", Strexpand(iter->path), Strexpand(str));
+    str = str8_format(scratch.arena, "%.*s/%.*s", Strexpand(iter->path), Strexpand(str));
     struct stat file_stat = {0};
     if (stat((char *)str.str, &file_stat) != 0) {
       ScratchEnd(scratch);
@@ -1054,10 +1049,10 @@ i32 main(i32 argc, char **argv) {
 
   CmdLine cli = {0};
   cli.count = argc - 1;
-  cli.exe = strFromCstr(argv[0]);
+  cli.exe = str8_from_cstr(argv[0]);
   cli.args = New(lnx_state.arena, String8, argc - 1);
   for (isize i = 1; i < argc; ++i) {
-    cli.args[i - 1] = strFromCstr(argv[i]);
+    cli.args[i - 1] = str8_from_cstr(argv[i]);
   }
 
   struct timespec tms;

@@ -17,10 +17,10 @@ typedef struct {
 
 fn Codepoint decodeUTF8(u8 *glyph_start);
 fn Codepoint decodeUTF16(u16 *glyph_start);
-inline fn Codepoint decodeUTF32(u32 *glyph_start);
+fn Codepoint decodeUTF32(u32 *glyph_start);
 fn u8 encodeUTF8(u8 *res, Codepoint cp);
 fn u8 encodeUTF16(u16 *res, Codepoint cp);
-inline fn u8 encodeUTF32(u32 *res, Codepoint cp);
+fn u8 encodeUTF32(u32 *res, Codepoint cp);
 
 // =============================================================================
 // UTF-8 string
@@ -30,6 +30,11 @@ typedef struct String8 {
   isize size;
 
 #if CPP
+  template<usize N>
+  String8(const char (&cstr)[N]) : str{(u8 *)cstr}, size{N-1} {}
+  String8(u8 *chars, isize len) : str(chars), size(len) {}
+  String8() : str(0), size(0) {}
+
   inline char operator[](usize idx) {
     return (char)str[idx];
   }
@@ -58,81 +63,73 @@ typedef struct StringStream {
 #endif
 } StringStream;
 
-fn String8 str8FromStream(Arena *arena, StringStream stream);
 fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other);
 fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStream other);
 fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch);
 fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str);
 
-inline fn String8 str8(u8 *chars, isize len);
-inline fn String8 strFromCstr(char *chars);
-inline fn String8 strFromDateTime(Arena *arena, DateTime dt);
-inline fn String8 strFromUnixTime(Arena *arena, u64 unix_timestamp);
+fn String8 str8(u8 *chars, isize len);
+fn String8 str8_from_stream(Arena *arena, StringStream stream);
+fn String8 str8_from_cstr(char *chars);
+fn String8 str8_from_i64(Arena *arena, i64 n);
+fn String8 str8_from_u64(Arena *arena, u64 n);
+fn String8 str8_from_f64(Arena *arena, f64 n);
+fn String8 str8_from_datetime(Arena *arena, DateTime dt);
+fn String8 str8_from_unixtime(Arena *arena, u64 timestamp);
+fn String8 str8_from_time64(Arena *arena, time64 timestamp);
+fn String8 str8_prefix(String8 s, isize end);
+fn String8 str8_postfix(String8 s, isize start);
+fn String8 str8_substr(String8 s, isize end);
+fn String8 str8_range(String8 s, isize start, isize end);
+fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2);
+fn String8 str8_to_upper(Arena *arena, String8 s);
+fn String8 str8_to_lower(Arena *arena, String8 s);
+fn String8 str8_to_capitalized(Arena *arena, String8 s);
+fn String8 str8_trim(String8 s);
+fn String8 str8_trim_left(String8 s);
+fn String8 str8_trim_right(String8 s);
+fn String8 str8_format(Arena *arena, const char *fmt, ...);
+fn String8 _str8_format(Arena *arena, const char *fmt, va_list args);
+fn StringStream str8_split(Arena *arena, String8 s, char ch);
+fn usize str8_find_first_ch(String8 s, char ch);
+fn usize str8_find_first_str8(String8 s, String8 needle);
+fn usize str8_hash(String8 s);
+fn isize str8_len(char *chars);
+fn bool str8_eq(String8 s1, String8 s2);
+fn bool str8_eq_cstr(String8 s, const char *cstr);
+fn bool str8_ends_with(String8 s, char ch);
+fn bool str8_contains(String8 s, char ch);
+fn bool str8_is_integer(String8 s);
+fn bool str8_is_integer_signed(String8 s);
+fn bool str8_is_floating(String8 s);
+fn bool str8_is_numerical(String8 s);
 
-fn char* cstrFromStr8(Arena *arena, String8 str);
+fn char* cstr_from_str8(Arena *arena, String8 str);
+fn bool cstr_eq(char *s1, char *s2);
 
-fn bool strEq(String8 s1, String8 s2);
-fn bool strEqCstr(String8 s, const char *cstr);
-fn bool cstrEq(char *s1, char *s2);
+fn i64 i64_from_str8(String8 s);
+fn u64 u64_from_str8(String8 s);
+fn f64 f64_from_str8(String8 s);
 
-fn bool strIsSignedInteger(String8 s);
-fn bool strIsInteger(String8 s);
-fn bool strIsFloating(String8 s);
-inline fn bool strIsNumerical(String8 s);
-fn i64 i64FromStr(String8 s);
-fn u64 u64FromStr(String8 s);
-fn f64 f64FromStr(String8 s);
+fn bool char_is_space(u8 ch);
+fn bool char_is_slash(u8 ch);
+fn bool char_is_upper(u8 ch);
+fn bool char_is_lower(u8 ch);
+fn bool char_is_digit(u8 ch);
+fn bool char_is_alpha(u8 ch);
+fn bool char_is_alphanumeric(u8 ch);
+fn u8 char_to_upper(u8 ch);
+fn u8 char_to_lower(u8 ch);
 
-fn usize strHash(String8 s);
-
-fn String8 stringifyI64(Arena *arena, i64 n);
-fn String8 stringifyU64(Arena *arena, u64 n);
-fn String8 stringifyF64(Arena *arena, f64 n);
-
-fn isize str8len(char *chars);
-
-fn String8 strFormat(Arena *arena, const char *fmt, ...);
-fn String8 strFormatVa(Arena *arena, const char *fmt, va_list args);
-
-fn String8 strPrefix(String8 s, isize end);
-fn String8 strPostfix(String8 s, isize start);
-fn String8 substr(String8 s, isize end);
-fn String8 strRange(String8 s, isize start, isize end);
-fn bool strEndsWith(String8 s, char ch);
-fn String8 longestCommonSubstring(Arena *arena, String8 s1, String8 s2);
-
-fn String8 upperFromStr(Arena *arena, String8 s);
-fn String8 lowerFromStr(Arena *arena, String8 s);
-fn String8 capitalizeFromStr(Arena *arena, String8 s);
-
-fn StringStream strSplit(Arena *arena, String8 s, char ch);
-fn usize strFindFirst(String8 s, char ch);
-fn usize strFindFirstSubstr(String8 s, String8 needle);
-fn bool strContains(String8 s, char ch);
-
-fn bool charIsSpace(u8 ch);
-fn bool charIsSlash(u8 ch);
-fn bool charIsUpper(u8 ch);
-fn bool charIsLower(u8 ch);
-fn bool charIsDigit(u8 ch);
-fn bool charIsAlpha(u8 ch);
-fn bool charIsAlphanumeric(u8 ch);
-
-fn u8 charToUpper(u8 ch);
-fn u8 charToLower(u8 ch);
-fn u8 getCorrectPathSeparator(void);
-
-fn String8 strLeftTrim(String8 s);
-fn String8 strRightTrim(String8 s);
-fn String8 strTrim(String8 s);
+fn u8 path_separator(void);
 
 #if CPP
 inline fn bool operator==(String8 s1, String8 s2) {
-  return strEq(s1, s2);
+  return str8_eq(s1, s2);
 }
 
 inline fn bool operator!=(String8 s1, String8 s2) {
-  return !strEq(s1, s2);
+  return !str8_eq(s1, s2);
 }
 #endif
 

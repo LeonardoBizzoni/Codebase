@@ -101,24 +101,13 @@ fn u8 encodeUTF16(u16 *res, Codepoint cp) {
   }
 }
 
-inline fn u8 encodeUTF32(u32 *res, Codepoint cp) {
+fn u8 encodeUTF32(u32 *res, Codepoint cp) {
   res[0] = cp.codepoint;
   return 1;
 }
 
 // =============================================================================
-// UTF-8 string
-fn String8 str8FromStream(Arena *arena, StringStream stream) {
-  u8 *str = New(arena, u8, stream.total_size);
-  u8 *ptr = str;
-  for (StringNode *curr = stream.first; curr; curr = curr->next) {
-    memCopy(ptr, curr->value.str, curr->value.size);
-    ptr += curr->value.size;
-  }
-
-  return str8(str, stream.total_size);
-}
-
+// UTF-8 string streams
 fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other) {
   strlist->node_count += 1;
   strlist->total_size += other.size;
@@ -137,10 +126,8 @@ fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStrea
 }
 
 fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
-  String8 res = {
-    .str = New(arena, u8, strlist.total_size + strlist.node_count - 1),
-    .size = strlist.total_size + strlist.node_count - 1,
-  };
+  String8 res = str8(New(arena, u8, strlist.total_size + strlist.node_count - 1),
+                     strlist.total_size + strlist.node_count - 1);
 
   usize i = 0;
   for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
@@ -154,10 +141,9 @@ fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
 }
 
 fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
-  String8 res = {
-    .str = New(arena, u8, strlist.total_size + str.size * (strlist.node_count - 1)),
-    .size = strlist.total_size + str.size * (strlist.node_count - 1),
-  };
+  String8 res = str8(New(arena, u8, strlist.total_size +
+                                    str.size * (strlist.node_count - 1)),
+                     strlist.total_size + str.size * (strlist.node_count - 1));
 
   usize i = 0;
   for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
@@ -171,182 +157,33 @@ fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
   return res;
 }
 
-inline fn String8 str8(u8 *chars, isize len) {
+// =============================================================================
+// UTF-8 string
+fn String8 str8(u8 *chars, isize len) {
+#if CPP
+  String8 res(chars, len);
+#else
   String8 res = {chars, len};
+#endif
   return res;
 }
 
-inline fn String8 strFromCstr(char *chars) {
-  String8 res = {(u8*)chars, str8len(chars)};
-  return res;
+fn String8 str8_from_stream(Arena *arena, StringStream stream) {
+  u8 *str = New(arena, u8, stream.total_size);
+  u8 *ptr = str;
+  for (StringNode *curr = stream.first; curr; curr = curr->next) {
+    memCopy(ptr, curr->value.str, curr->value.size);
+    ptr += curr->value.size;
+  }
+
+  return str8(str, stream.total_size);
 }
 
-inline fn String8 strFromUnixTime(Arena *arena, u64 unix_timestamp) {
-  DateTime dt = dateTimeFromUnix(unix_timestamp);
-  return strFromDateTime(arena, dt);
+fn String8 str8_from_cstr(char *chars) {
+  return str8((u8*)chars, str8_len(chars));
 }
 
-inline fn String8 strFromDateTime(Arena *arena, DateTime dt) {
-  return strFormat(arena, "%02d/%02d/%04d %02d:%02d:%02d.%02d",
-                   dt.day, dt.month, dt.year,
-                   dt.hour, dt.minute, dt.second, dt.ms);
-}
-
-fn char* cstrFromStr8(Arena *arena, String8 str) {
-  char *res = New(arena, char, str.size + 1);
-  memCopy(res, str.str, str.size);
-  res[str.size] = 0;
-  return res;
-}
-
-fn bool strEq(String8 s1, String8 s2) {
-  if (s1.size != s2.size) {
-    return false;
-  }
-
-  for (isize i = 0; i < s1.size; ++i) {
-    if (s1.str[i] != s2.str[i]) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-fn bool strEqCstr(String8 s, const char *cstr) {
-  if (s.size == 0 && !cstr) {
-    return true;
-  } else if (!cstr || s.size == 0) {
-    return false;
-  }
-
-  isize i = 0;
-  for (; i < s.size; ++i) {
-    if (s.str[i] != cstr[i]) {
-      return false;
-    }
-  }
-
-  if (cstr[i]) {
-    return false;
-  } else {
-    return true;
-  }
-}
-
-fn bool cstrEq(char *s1, char *s2) {
-  if (s1 == s2) {
-    return true;
-  }
-  if (!s1 || !s2) {
-    return false;
-  }
-
-  char *it1 = s1, *it2 = s2;
-  for (; *it1 && *it2; ++it1, ++it2) {
-    if (*it1 != *it2) {
-      return false;
-    }
-  }
-
-  return !*it1 && !*it2;
-}
-
-fn bool strIsSignedInteger(String8 s) {
-  u8 *curr = s.str;
-  if (*curr == '-' || *curr == '+') {
-    ++curr;
-  }
-
-  for (; curr < s.str + s.size; ++curr) {
-    if (!charIsDigit(*curr)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-fn bool strIsInteger(String8 s) {
-  for (u8 *curr = s.str; curr < s.str + s.size; ++curr) {
-    if (!charIsDigit(*curr)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-fn bool strIsFloating(String8 s) {
-  bool decimal_found = false;
-  u8 *curr = s.str;
-  if (*curr == '-' || *curr == '+') {
-    ++curr;
-  }
-
-  for (; curr < s.str + s.size; ++curr) {
-    if (!charIsDigit(*curr)) {
-      if (*curr == '.' && !decimal_found) {
-        decimal_found = true;
-      } else {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-inline fn bool strIsNumerical(String8 s) {
-  return strIsFloating(s) || strIsInteger(s);
-}
-
-fn i64 i64FromStr(String8 s) {
-  i64 res = 0, decimal = 1;
-
-  Assert(strIsSignedInteger(s));
-  for (u8 *curr = s.str + s.size - 1; curr > s.str; --curr, decimal *= 10) {
-    res += (*curr - '0') * decimal;
-  }
-
-  if (s.str[0] == '-') {
-    return -res;
-  } else if (s.str[0] == '+') {
-    return res;
-  } else {
-    return res + (s.str[0] - '0') * decimal;
-  }
-}
-
-fn u64 u64FromStr(String8 s) {
-  i64 res = 0, decimal = 1;
-
-  Assert(strIsInteger(s));
-  for (u8 *curr = s.str + s.size - 1; curr >= s.str; --curr, decimal *= 10) {
-    res += (*curr - '0') * decimal;
-  }
-
-  return res;
-}
-
-fn f64 f64FromStr(String8 s) {
-  Scratch scratch = ScratchBegin(0, 0);
-  f64 res = strtod(cstrFromStr8(scratch.arena, s), 0);
-  ScratchEnd(scratch);
-  return res;
-}
-
-/* Djb2: http://www.cse.yorku.ca/~oz/hash.html */
-fn usize strHash(String8 s) {
-  usize hash = 5381;
-  for (isize i = 0; i < s.size; ++i) {
-    hash = (hash << 5) + hash + s.str[i];
-  }
-
-  return hash;
-}
-
-fn String8 stringifyI64(Arena *arena, i64 n) {
+fn String8 str8_from_i64(Arena *arena, i64 n) {
   i64 sign = n;
   if (n < 0) {
     n = -n;
@@ -373,7 +210,7 @@ fn String8 stringifyI64(Arena *arena, i64 n) {
   return str8(str,i);
 }
 
-fn String8 stringifyU64(Arena *arena, u64 n) {
+fn String8 str8_from_u64(Arena *arena, u64 n) {
   usize i = 0, approx = 30;
   u8 *str = New(arena, u8, approx);
   for (; n > 0; ++i, n /= 10) {
@@ -391,7 +228,7 @@ fn String8 stringifyU64(Arena *arena, u64 n) {
   return str8(str, i);
 }
 
-fn String8 stringifyF64(Arena *arena, f64 n) {
+fn String8 str8_from_f64(Arena *arena, f64 n) {
   usize approx = 100, size = 0;
   u8 *str = New(arena, u8, approx);
 
@@ -402,56 +239,39 @@ fn String8 stringifyF64(Arena *arena, f64 n) {
   return str8(str, size);
 }
 
-fn isize str8len(char *chars) {
-  char *start = chars;
-  for (; *start; ++start)
-    ;
-
-  return start - chars;
+fn String8 str8_from_datetime(Arena *arena, DateTime dt) {
+  return str8_format(arena, "%02d/%02d/%04d %02d:%02d:%02d.%02d",
+                     dt.day, dt.month, dt.year,
+                     dt.hour, dt.minute, dt.second, dt.ms);
 }
 
-fn String8 strFormat(Arena *arena, const char *fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  String8 res = strFormatVa(arena, fmt, args);
-  va_end(args);
-
-  return res;
+fn String8 str8_from_unixtime(Arena *arena, u64 unix_timestamp) {
+  DateTime dt = dateTimeFromUnix(unix_timestamp);
+  return str8_from_datetime(arena, dt);
 }
 
-fn String8 strFormatVa(Arena *arena, const char *fmt, va_list args) {
-  va_list args2;
-  va_copy(args2, args);
-  u32 needed_bytes = vsnprintf(0, 0, fmt, args2) + 1;
-
-  String8 res;
-  res.str = New(arena, u8, needed_bytes);
-  res.size = vsnprintf((char *)res.str, needed_bytes, fmt, args);
-  res.str[res.size] = 0;
-
-  va_end(args2);
-  return res;
+fn String8 str8_from_time64(Arena *arena, time64 timestamp) {
+  DateTime dt = dateTimeFromTime64(timestamp);
+  return str8_from_datetime(arena, dt);
 }
 
-inline fn String8 strPrefix(String8 s, isize end) {
+inline fn String8 str8_prefix(String8 s, isize end) {
   return str8(s.str, ClampTop(s.size, end));
 }
 
-inline fn String8 strPostfix(String8 s, isize start) {
+inline fn String8 str8_postfix(String8 s, isize start) {
   return str8(s.str + start, s.size >= start ? s.size - start : 0);
 }
 
-inline fn String8 substr(String8 s, isize end) {
+fn String8 str8_substr(String8 s, isize end) {
   return str8(s.str, ClampTop(s.size,end));
 }
 
-inline fn String8 strRange(String8 s, isize start, isize end) {
+inline fn String8 str8_range(String8 s, isize start, isize end) {
   return str8(s.str + start, ClampTop(end, s.size) - start);
 }
 
-inline fn bool strEndsWith(String8 s, char ch) { return s.str[s.size - 1] == ch; }
-
-fn String8 longestCommonSubstring(Arena *arena, String8 s1, String8 s2) {
+fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
 #define at(m,i,j) m.x[(i)*m.n + (j)]
   typedef struct Table Table;
   struct Table {
@@ -497,51 +317,105 @@ fn String8 longestCommonSubstring(Arena *arena, String8 s1, String8 s2) {
   return str8(str, size);
 }
 
-fn String8 upperFromStr(Arena *arena, String8 s) {
+fn String8 str8_to_upper(Arena *arena, String8 s) {
   String8 res = {New(arena, u8, s.size), s.size};
 
   for (isize i = 0; i < s.size; ++i) {
-    res.str[i] = charToUpper(s.str[i]);
+    res.str[i] = char_to_upper(s.str[i]);
   }
 
   return res;
 }
 
-fn String8 lowerFromStr(Arena *arena, String8 s) {
+fn String8 str8_to_lower(Arena *arena, String8 s) {
   String8 res = {New(arena, u8, s.size), s.size};
 
   for (isize i = 0; i < s.size; ++i) {
-    res.str[i] = charToLower(s.str[i]);
+    res.str[i] = char_to_lower(s.str[i]);
   }
 
   return res;
 }
 
-fn String8 capitalizeFromStr(Arena *arena, String8 s) {
+fn String8 str8_to_capitalized(Arena *arena, String8 s) {
   String8 res = {New(arena, u8, s.size), s.size};
 
-  res.str[0] = charToUpper(s.str[0]);
+  res.str[0] = char_to_upper(s.str[0]);
   for (isize i = 1; i < s.size; ++i) {
-    if (charIsSpace(s.str[i])) {
+    if (char_is_space(s.str[i])) {
       res.str[i] = s.str[i];
       ++i;
-      res.str[i] = charToUpper(s.str[i]);
+      res.str[i] = char_to_upper(s.str[i]);
     } else {
-      res.str[i] = charToLower(s.str[i]);
+      res.str[i] = char_to_lower(s.str[i]);
     }
   }
 
   return res;
 }
 
-fn StringStream strSplit(Arena *arena, String8 s, char ch) {
+fn String8 str8_trim(String8 s) {
+  isize start = 0;
+  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
+                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
+
+  isize end = s.size - 1;
+  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
+                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
+
+  String8 res = str8(s.str + start, end - start + 1);
+  return res;
+}
+
+fn String8 str8_trim_left(String8 s) {
+  isize start = 0;
+  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
+                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
+
+  String8 res = str8(s.str + start, s.size - start + 1);
+  return res;
+}
+
+fn String8 str8_trim_right(String8 s) {
+  isize end = s.size - 1;
+  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
+                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
+
+  String8 res = str8(s.str, end + 1);
+  return res;
+}
+
+fn String8 str8_format(Arena *arena, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  String8 res = _str8_format(arena, fmt, args);
+  va_end(args);
+
+  return res;
+}
+
+fn String8 _str8_format(Arena *arena, const char *fmt, va_list args) {
+  va_list args2;
+  va_copy(args2, args);
+  u32 needed_bytes = vsnprintf(0, 0, fmt, args2) + 1;
+
+  String8 res;
+  res.str = New(arena, u8, needed_bytes);
+  res.size = vsnprintf((char *)res.str, needed_bytes, fmt, args);
+  res.str[res.size] = 0;
+
+  va_end(args2);
+  return res;
+}
+
+fn StringStream str8_split(Arena *arena, String8 s, char ch) {
   StringStream res = {0};
 
   isize prev = 0;
   for (isize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
-        strstream_append_str(arena, &res, strRange(s, prev, i));
+        strstream_append_str(arena, &res, str8_range(s, prev, i));
       }
 
       do {
@@ -553,13 +427,13 @@ fn StringStream strSplit(Arena *arena, String8 s, char ch) {
   }
 
   if (prev != s.size) {
-    strstream_append_str(arena, &res, strRange(s, prev, s.size));
+    strstream_append_str(arena, &res, str8_range(s, prev, s.size));
   }
 
   return res;
 }
 
-fn usize strFindFirst(String8 s, char ch) {
+fn usize str8_find_first_ch(String8 s, char ch) {
   for (u8 *curr = s.str; curr < s.str + s.size + 1; ++curr) {
     if (*curr == ch) {
       return curr - s.str;
@@ -569,7 +443,7 @@ fn usize strFindFirst(String8 s, char ch) {
   return 0;
 }
 
-fn usize strFindFirstSubstr(String8 haystack, String8 needle) {
+fn usize str8_find_first_str8(String8 haystack, String8 needle) {
   if (haystack.size < needle.size) {
     return 0;
   }
@@ -591,77 +465,189 @@ fn usize strFindFirstSubstr(String8 haystack, String8 needle) {
   return 0;
 }
 
-fn bool strContains(String8 s, char ch) {
+/* Djb2: http://www.cse.yorku.ca/~oz/hash.html */
+fn usize str8_hash(String8 s) {
+  usize hash = 5381;
+  for (isize i = 0; i < s.size; ++i) {
+    hash = (hash << 5) + hash + s.str[i];
+  }
+
+  return hash;
+}
+
+fn isize str8_len(char *chars) {
+  char *start = chars;
+  for (; *start; ++start);
+  return start - chars;
+}
+
+fn bool str8_eq(String8 s1, String8 s2) {
+  if (s1.size != s2.size) {
+    return false;
+  }
+
+  for (isize i = 0; i < s1.size; ++i) {
+    if (s1.str[i] != s2.str[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn bool str8_eq_cstr(String8 s, const char *cstr) {
+  if (s.size == 0 && !cstr) {
+    return true;
+  } else if (!cstr || s.size == 0) {
+    return false;
+  }
+
+  isize i = 0;
+  for (; i < s.size; ++i) {
+    if (s.str[i] != cstr[i]) {
+      return false;
+    }
+  }
+  return !cstr[i];
+}
+
+fn bool str8_ends_with(String8 s, char ch) { return s.str[s.size - 1] == ch; }
+
+fn bool str8_contains(String8 s, char ch) {
   for (u8 *curr = s.str; curr < s.str + s.size + 1; ++curr) {
     if (*curr == ch) {
       return true;
     }
   }
-
   return false;
 }
 
-fn bool charIsSpace(u8 ch) { return ch == ' '; }
-fn bool charIsSlash(u8 ch) { return ch == '/'; }
-fn bool charIsUpper(u8 ch) { return ch >= 'A' && ch <= 'Z'; }
-fn bool charIsLower(u8 ch) { return ch >= 'a' && ch <= 'z'; }
-fn bool charIsDigit(u8 ch) { return ch >= '0' && ch <= '9'; }
-fn bool charIsAlpha(u8 ch) {
+fn bool str8_is_integer(String8 s) {
+  for (u8 *curr = s.str; curr < s.str + s.size; ++curr) {
+    if (!char_is_digit(*curr)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+fn bool str8_is_integer_signed(String8 s) {
+  u8 *curr = s.str;
+  if (*curr == '-' || *curr == '+') {
+    ++curr;
+  }
+
+  for (; curr < s.str + s.size; ++curr) {
+    if (!char_is_digit(*curr)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+fn bool str8_is_floating(String8 s) {
+  bool decimal_found = false;
+  u8 *curr = s.str;
+  if (*curr == '-' || *curr == '+') {
+    ++curr;
+  }
+
+  for (; curr < s.str + s.size; ++curr) {
+    if (!char_is_digit(*curr)) {
+      if (*curr == '.' && !decimal_found) {
+        decimal_found = true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+fn bool str8_is_numerical(String8 s) {
+  return str8_is_floating(s) || str8_is_integer(s);
+}
+
+fn char* cstr_from_str8(Arena *arena, String8 str) {
+  char *res = New(arena, char, str.size + 1);
+  memCopy(res, str.str, str.size);
+  res[str.size] = 0;
+  return res;
+}
+
+fn bool cstr_eq(char *s1, char *s2) {
+  if (s1 == s2) {
+    return true;
+  }
+  if (!s1 || !s2) {
+    return false;
+  }
+
+  char *it1 = s1, *it2 = s2;
+  for (; *it1 && *it2; ++it1, ++it2) {
+    if (*it1 != *it2) {
+      return false;
+    }
+  }
+  return !*it1 && !*it2;
+}
+
+fn i64 i64_from_str8(String8 s) {
+  i64 res = 0, decimal = 1;
+
+  Assert(str8_is_integer_signed(s));
+  for (u8 *curr = s.str + s.size - 1; curr > s.str; --curr, decimal *= 10) {
+    res += (*curr - '0') * decimal;
+  }
+
+  if (s.str[0] == '-') {
+    return -res;
+  } else if (s.str[0] == '+') {
+    return res;
+  } else {
+    return res + (s.str[0] - '0') * decimal;
+  }
+}
+
+fn u64 u64_from_str8(String8 s) {
+  i64 res = 0, decimal = 1;
+
+  Assert(str8_is_integer(s));
+  for (u8 *curr = s.str + s.size - 1; curr >= s.str; --curr, decimal *= 10) {
+    res += (*curr - '0') * decimal;
+  }
+
+  return res;
+}
+
+fn f64 f64_from_str8(String8 s) {
+  Scratch scratch = ScratchBegin(0, 0);
+  f64 res = strtod(cstr_from_str8(scratch.arena, s), 0);
+  ScratchEnd(scratch);
+  return res;
+}
+
+fn bool char_is_space(u8 ch) { return ch == ' '; }
+fn bool char_is_slash(u8 ch) { return ch == '/'; }
+fn bool char_is_upper(u8 ch) { return ch >= 'A' && ch <= 'Z'; }
+fn bool char_is_lower(u8 ch) { return ch >= 'a' && ch <= 'z'; }
+fn bool char_is_digit(u8 ch) { return ch >= '0' && ch <= '9'; }
+fn bool char_is_alpha(u8 ch) {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
 }
-
-fn bool charIsAlphanumeric(u8 ch) {
-  return charIsDigit(ch) || charIsAlpha(ch);
+fn bool char_is_alphanumeric(u8 ch) {
+  return char_is_digit(ch) || char_is_alpha(ch);
 }
-
-fn u8 charToUpper(u8 ch) { return charIsLower(ch) ? ch - 32 : ch; }
-fn u8 charToLower(u8 ch) { return charIsUpper(ch) ? ch + 32 : ch; }
-fn u8 getCorrectPathSeparator(void) {
+fn u8 char_to_upper(u8 ch) { return char_is_lower(ch) ? ch - 32 : ch; }
+fn u8 char_to_lower(u8 ch) { return char_is_upper(ch) ? ch + 32 : ch; }
+fn u8 path_separator(void) {
 #if OS_WINDOWS
   return '\\';
 #else
   return '/';
 #endif
-}
-
-fn String8 strLeftTrim(String8 s) {
-  isize start = 0;
-  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
-                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
-
-  String8 res = {
-    .str = s.str + start,
-    .size = s.size - start + 1,
-  };
-  return res;
-}
-
-fn String8 strRightTrim(String8 s) {
-  isize end = s.size - 1;
-  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
-                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
-
-  String8 res = {
-    .str = s.str,
-    .size = end + 1,
-  };
-  return res;
-}
-
-fn String8 strTrim(String8 s) {
-  isize start = 0;
-  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
-                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
-
-  isize end = s.size - 1;
-  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
-                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
-
-  String8 res = {
-    .str = s.str + start,
-    .size = end - start + 1,
-  };
-  return res;
 }
 
 // =============================================================================

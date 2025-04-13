@@ -493,19 +493,19 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
   Scratch scratch = ScratchBegin(0, 0);
   StringStream ss = {0};
   switch (kind) {
-    case OS_SemaphoreKind_Thread: {
-      if (name.size == 0) { goto skip_semname; }
-      strstream_append_str(scratch.arena, &ss, Strlit("Local\\\\"));
-    } break;
-    case OS_SemaphoreKind_Process: {
-      strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
-    } break;
+  case OS_SemaphoreKind_Thread: {
+    if (name.size == 0) { goto skip_semname; }
+    strstream_append_str(scratch.arena, &ss, Strlit("Local\\\\"));
+  } break;
+  case OS_SemaphoreKind_Process: {
+    strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
+  } break;
   }
   strstream_append_str(scratch.arena, &ss, name);
   prim->semaphore = CreateSemaphoreA(0, init_count, max_count,
-                                     cstrFromStr8(scratch.arena,
-                                                  str8FromStream(scratch.arena,
-                                                                 ss)));
+                                     cstr_from_str8(scratch.arena,
+                                                    str8_from_stream(scratch.arena,
+                                                                     ss)));
  skip_semname:
   ScratchEnd(scratch);
   OS_Handle res = {(u64)prim};
@@ -552,13 +552,13 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   StringStream ss = {0};
   strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
   strstream_append_str(scratch.arena, &ss, name);
-  res.path = str8FromStream(scratch.arena, ss);
+  res.path = str8_from_stream(scratch.arena, ss);
   res.mmap_handle.h[0] = (u64)
     CreateFileMapping(INVALID_HANDLE_VALUE, 0, access_flags,
                       (u32)((size >> 32) & bitmask32),
                       (u32)(size & bitmask32),
-                      !name.size ? (char *)0 : cstrFromStr8(scratch.arena,
-                                                            res.path));
+                      !name.size ? (char *)0 : cstr_from_str8(scratch.arena,
+                                                              res.path));
   ScratchEnd(scratch);
   if (!res.mmap_handle.h[0]) { return res; }
 
@@ -600,7 +600,7 @@ fn OS_Handle os_lib_open(String8 path){
 
 fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol){
   Scratch scratch = ScratchBegin(0,0);
-  char *symbol_cstr = cstrFromStr8(scratch.arena, symbol);
+  char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
   HMODULE module = (HMODULE)lib.h[0];
   VoidFunc *result = (VoidFunc*)GetProcAddress(module, symbol_cstr);
   ScratchEnd(scratch);
@@ -698,7 +698,7 @@ fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
 }
 
 fn String8 fs_read(Arena *arena, OS_Handle handle) {
-  String8 result = {0};
+  String8 result = {};
 
   OS_W32_Primitive *prim = (OS_W32_Primitive*)handle.h[0];
   Assert(prim);
@@ -820,7 +820,7 @@ fn FS_Properties fs_getProp(OS_Handle file) {
 }
 
 fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
-  String8 res = {0};
+  String8 res = {};
   res.str = New(arena, u8, MAX_PATH);
   res.size = GetFinalPathNameByHandleA(((OS_W32_Primitive*)handle.h[0])->file.handle, (LPSTR)res.str,
                                        MAX_PATH, FILE_NAME_NORMALIZED);
@@ -833,10 +833,10 @@ fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
-  String8 res = {0};
+  String8 res = {};
   res.str = New(arena, u8, MAX_PATH);
   Scratch scratch = ScratchBegin(&arena, 1);
-  HANDLE pathfd = CreateFileA(cstrFromStr8(scratch.arena, path),
+  HANDLE pathfd = CreateFileA(cstr_from_str8(scratch.arena, path),
                               GENERIC_READ, FILE_SHARE_READ, 0,
                               OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
   res.size = GetFinalPathNameByHandleA(pathfd, (LPSTR)res.str,
@@ -1008,7 +1008,7 @@ inline fn bool fs_frename(File *file, String8 to) {
 // Misc operation on the filesystem
 inline fn bool fs_delete(String8 filepath) {
   Scratch scratch = ScratchBegin(0, 0);
-  bool res = DeleteFileA(cstrFromStr8(scratch.arena, filepath));
+  bool res = DeleteFileA(cstr_from_str8(scratch.arena, filepath));
   ScratchEnd(scratch);
   return res;
 }
@@ -1036,7 +1036,7 @@ fs_iter_begin(Arena *arena, String8 path)
 
   strstream_append_str(scratch.arena, &list, path);
   strstream_append_str(scratch.arena, &list, Strlit("\\*"));
-  path = str8FromStream(scratch.arena, list);
+  path = str8_from_stream(scratch.arena, list);
 
   String16 path16 = UTF16From8(scratch.arena, path);
   WIN32_FIND_DATAW file_data = {0};
