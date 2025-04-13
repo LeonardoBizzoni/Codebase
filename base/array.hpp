@@ -6,12 +6,12 @@ struct ArrayList {
   struct Node {
     T *block;
     usize size;
-    ArrayList::Node *next = 0;
-    ArrayList::Node *prev = 0;
+    Node *next = 0;
+    Node *prev = 0;
   };
 
   usize node_count = 0;
-  usize total_size = 0;
+  usize capacity = 0;
   Node *first = 0;
   Node *last = 0;
 
@@ -19,7 +19,7 @@ struct ArrayList {
 };
 
 template <typename T>
-fn void arraylist_append(Arena *arena, ArrayList<T> *list, usize size);
+fn void arraylist_append(Arena *arena, ArrayList<T> *list, T *array, usize size);
 
 template <typename T>
 fn void arraylist_append_new(Arena *arena, ArrayList<T> *list, usize size);
