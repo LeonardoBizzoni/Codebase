@@ -246,12 +246,12 @@ fn String8 str8_from_datetime(Arena *arena, DateTime dt) {
 }
 
 fn String8 str8_from_unixtime(Arena *arena, u64 unix_timestamp) {
-  DateTime dt = dateTimeFromUnix(unix_timestamp);
+  DateTime dt = datetime_from_unix(unix_timestamp);
   return str8_from_datetime(arena, dt);
 }
 
 fn String8 str8_from_time64(Arena *arena, time64 timestamp) {
-  DateTime dt = dateTimeFromTime64(timestamp);
+  DateTime dt = datetime_from_time64(timestamp);
   return str8_from_datetime(arena, dt);
 }
 

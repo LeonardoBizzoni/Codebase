@@ -23,17 +23,18 @@ typedef u64 time64;
 
 global const u8 daysXmonth[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-inline fn bool isLeapYear(u32 year);
+inline fn bool is_leap_year(u32 year);
 
 // =============================================================================
 // Time format conversions
-fn DateTime dateTimeFromTime64(time64 timestamp);
-fn time64 time64FromDateTime(DateTime *dt);
-fn time64 time64FromUnix(u64 timestamp);
+fn DateTime datetime_from_time64(time64 timestamp);
+fn DateTime datetime_from_unix(u64 timestamp);
 
-fn DateTime dateTimeFromUnix(u64 timestamp);
-fn u64 unixFromDateTime(DateTime *dt);
-fn u64 unixFromTime64(time64 timestamp);
+fn time64 time64_from_datetime(DateTime *dt);
+fn time64 time64_from_unix(u64 timestamp);
+
+fn u64 unix_from_datetime(DateTime *dt);
+fn u64 unix_from_time64(time64 timestamp);
 
 #define TimedScope                                                           \
   for (OS_Handle __start = os_timer_start(), __end = {0};                    \

@@ -50,9 +50,9 @@ fn FS_Properties lnx_propertiesFromStat(struct stat *stat) {
   result.ownerID = stat->st_uid;
   result.groupID = stat->st_gid;
   result.size = (usize)stat->st_size;
-  result.last_access_time = time64FromUnix(stat->st_atime);
-  result.last_modification_time = time64FromUnix(stat->st_mtime);
-  result.last_status_change_time = time64FromUnix(stat->st_ctime);
+  result.last_access_time = time64_from_unix(stat->st_atime);
+  result.last_modification_time = time64_from_unix(stat->st_mtime);
+  result.last_status_change_time = time64_from_unix(stat->st_ctime);
 
   switch (stat->st_mode & S_IFMT) {
   case S_IFBLK:  result.type = OS_FileType_BlkDevice;  break;
@@ -125,7 +125,7 @@ fn time64 os_local_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64FromUnix(tms.tv_sec + lnx_state.unix_utc_offset);
+  time64 res = time64_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
   res |= (u64)(tms.tv_nsec / 1e6);
   return res;
 }
@@ -134,20 +134,20 @@ fn DateTime os_local_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = dateTimeFromUnix(tms.tv_sec + lnx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
   res.ms = tms.tv_nsec / 1e6;
   return res;
 }
 
 fn time64 os_local_fromUTCTime64(time64 t) {
-  u64 utc_time = unixFromTime64(t);
-  time64 res = time64FromUnix(utc_time + lnx_state.unix_utc_offset);
+  u64 utc_time = unix_from_time64(t);
+  time64 res = time64_from_unix(utc_time + lnx_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
-  u64 utc_time = unixFromDateTime(dt);
-  DateTime res = dateTimeFromUnix(utc_time + lnx_state.unix_utc_offset);
+  u64 utc_time = unix_from_datetime(dt);
+  DateTime res = datetime_from_unix(utc_time + lnx_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
@@ -156,7 +156,7 @@ fn time64 os_utc_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64FromUnix(tms.tv_sec);
+  time64 res = time64_from_unix(tms.tv_sec);
   res |= (u64)(tms.tv_nsec / 1e6);
   return res;
 }
@@ -165,7 +165,7 @@ fn DateTime os_utc_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = dateTimeFromUnix(tms.tv_sec);
+  DateTime res = datetime_from_unix(tms.tv_sec);
   res.ms = tms.tv_nsec / 1e6;
   return res;
 }
@@ -174,7 +174,7 @@ fn time64 os_utc_localizedTime64(i8 utc_offset) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64FromUnix(tms.tv_sec + utc_offset * UNIX_HOUR);
+  time64 res = time64_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
   res |= (u64)(tms.tv_nsec / 1e6);
   return res;
 }
@@ -183,20 +183,20 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = dateTimeFromUnix(tms.tv_sec + utc_offset * UNIX_HOUR);
+  DateTime res = datetime_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
   res.ms = tms.tv_nsec / 1e6;
   return res;
 }
 
 fn time64 os_utc_fromLocalTime64(time64 t) {
-  u64 local_time = unixFromTime64(t);
-  time64 res = time64FromUnix(local_time - lnx_state.unix_utc_offset);
+  u64 local_time = unix_from_time64(t);
+  time64 res = time64_from_unix(local_time - lnx_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {
-  u64 local_time = unixFromDateTime(dt);
-  DateTime res = dateTimeFromUnix(local_time - lnx_state.unix_utc_offset);
+  u64 local_time = unix_from_datetime(dt);
+  DateTime res = datetime_from_unix(local_time - lnx_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
