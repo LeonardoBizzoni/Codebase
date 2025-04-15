@@ -47,7 +47,7 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   XSetWMProtocols(lnx11_state.xdisplay, window->xwindow, &lnx11_state.xatom_close, 1);
 
   Scratch scratch = ScratchBegin(&lnx11_state.arena, 1);
-  XStoreName(lnx11_state.xdisplay, window->xwindow, cstrFromStr8(scratch.arena, name));
+  XStoreName(lnx11_state.xdisplay, window->xwindow, cstr_from_str8(scratch.arena, name));
   ScratchEnd(scratch);
 
 #if USING_OPENGL

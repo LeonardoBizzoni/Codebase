@@ -39,7 +39,7 @@ fn bool hashmap_insert(Arena *arena, HashMap<T, U> *map,
 
     if (!map->perfect &&
         (f32)map->size/(f32)map->slots.capacity >= HIGH_LOAD_FACTOR) {
-      Warn(Strlit("High load factor"));
+      Warn("High load factor");
       hashmap_rehash(map);
     }
   }
@@ -81,7 +81,7 @@ fn U* hashmap_from_key(Arena *arena, HashMap<T, U> *map,
 
     if (!map->perfect &&
         (f32)map->size/(f32)map->slots.capacity >= HIGH_LOAD_FACTOR) {
-      Warn(Strlit("High load factor"));
+      Warn("High load factor");
       hashmap_rehash(map);
     }
   }

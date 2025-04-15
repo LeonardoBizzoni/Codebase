@@ -616,7 +616,7 @@ fn i32 os_lib_close(OS_Handle lib){
 // =============================================================================
 // Misc
 fn String8 os_currentDir(Arena *arena) {
-  String8 res = {0};
+  String8 res = {};
   res.str = New(arena, u8, MAX_PATH);
   res.size = GetCurrentDirectoryA(MAX_PATH, (LPSTR)res.str);
   arenaPop(arena, MAX_PATH - res.size);
@@ -626,12 +626,12 @@ fn String8 os_currentDir(Arena *arena) {
 // =============================================================================
 // Networking
 fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
-  NetInterfaceList res = {0};
+  NetInterfaceList res = {};
   return res;
 }
 
 fn NetInterface os_net_interfaceFromStr8(String8 strip) {
-  NetInterface res = {0};
+  NetInterface res = {};
   return res;
 }
 

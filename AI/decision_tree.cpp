@@ -243,17 +243,16 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
     res->label.size = most_frequent.size;
     memCopy(res->label.str, most_frequent.str, most_frequent.size);
   } else {
-    Info(strFormat(scratch.arena, "Split by: `%.*s` (gini: %.3lf)",
-                   Strexpand((*header)[res->cond.split_idx]), res->cond.gini));
-    Info(strFormat(scratch.arena, "Will split into %ld branches",
-                   maps[res->cond.split_idx].size));
+    Info("Split by: `%.*s` (gini: %.3lf)",
+         Strexpand((*header)[res->cond.split_idx]), res->cond.gini);
+    Info("Will split into %ld branches", maps[res->cond.split_idx].size);
 
     HashMap<String8, File> filemap(scratch.arena, strHash);
     for (usize i = 0; i < features[0].size; ++i) {
       File *file = filemap.fromKey(scratch.arena,
                                    features[target_feature_idx][i].name,
                                    fs_fopenTmp(scratch.arena));
-      Info(file->path);
+      Info("%.*s", Strexpand(file->path));
       for (isize f = 0; f < (isize)features.size; ++f) {
         if (f == res->cond.split_idx) { continue; }
         switch (features[f][i].kind) {

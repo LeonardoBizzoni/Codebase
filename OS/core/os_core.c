@@ -1,7 +1,7 @@
 // =============================================================================
 // Logging
 fn void os_print(OS_LogLevel level, const char *caller, const char *file,
-                 i32 line, String8 str) {
+                 i32 line, const char *fmt, ...) {
   switch (level) {
     case OS_LogLevel_Info: {
       printf(ANSI_COLOR_CYAN "[INFO ");
@@ -17,7 +17,13 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
   printf("%s:%s@L%d] " ANSI_COLOR_RESET, file, caller, line);
 
  print_str:
-  printf("%.*s\n", Strexpand(str));
+  va_list args;
+  Scratch scratch = ScratchBegin(0, 0);
+  va_start(args, fmt);
+  String8 msg = _str8_format(scratch.arena, fmt, args);
+  printf("%.*s\n", Strexpand(msg));
+  va_end(args);
+  ScratchEnd(scratch);
 }
 
 // =============================================================================

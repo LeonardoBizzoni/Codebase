@@ -52,8 +52,8 @@ inline fn void arenaPop(Arena *arena, usize bytes) {
   if (arena->head < (arena->commits - 1) * arena->commit_size) {
     arena->commits -= 1;
     os_decommit((void *)forwardAlign((usize)arena->base + arena->head,
-				     arena->commit_size),
-		arena->commit_size);
+                                     arena->commit_size),
+                arena->commit_size);
   }
 }
 
@@ -71,11 +71,11 @@ fn void *arenaPush(Arena *arena, usize size, usize align) {
     if (arena->next) {
       return arenaPush(arena->next, size, align);
     } else if (arena->flags & Arena_Growable) {
-      Warn(Strlit("Resizing arena."));
+      Warn("Resizing arena.");
       Arena *next = ArenaBuild(.base_addr = (usize)arena->base + arena->reserve_size,
                                .commit_size = arena->commit_size,
-			       .reserve_size = arena->reserve_size,
-			       .flags = arena->flags);
+                               .reserve_size = arena->reserve_size,
+                               .flags = arena->flags);
       Assert(next);
       arena->next = next;
       next->prev = arena;
