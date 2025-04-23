@@ -510,7 +510,15 @@ fn bool str8_eq_cstr(String8 s, const char *cstr) {
   return !cstr[i];
 }
 
-fn bool str8_ends_with(String8 s, char ch) { return s.str[s.size - 1] == ch; }
+fn bool str8_ends_with_ch(String8 s, char ch) { return s.str[s.size - 1] == ch; }
+
+fn bool str8_ends_with_str8(String8 s, String8 needle) {
+  if (needle.size > s.size) { return false; }
+  for (isize i = s.size - 1, j = needle.size - 1; j >= 0; --i, --j) {
+    if (s.str[i] != needle.str[j]) { return false; }
+  }
+  return true;
+}
 
 fn bool str8_contains(String8 s, char ch) {
   for (u8 *curr = s.str; curr < s.str + s.size + 1; ++curr) {
