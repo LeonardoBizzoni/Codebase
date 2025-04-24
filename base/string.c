@@ -642,11 +642,17 @@ fn bool char_is_slash(u8 ch) { return ch == '/'; }
 fn bool char_is_upper(u8 ch) { return ch >= 'A' && ch <= 'Z'; }
 fn bool char_is_lower(u8 ch) { return ch >= 'a' && ch <= 'z'; }
 fn bool char_is_digit(u8 ch) { return ch >= '0' && ch <= '9'; }
-fn bool char_is_alpha(u8 ch) {
+fn bool char_is_octal(u8 ch) { return ch >= '0' && ch <= '7'; }
+fn bool char_is_hex(u8 ch) {
+  return (ch >= '0' && ch <= '9') ||
+         (ch >= 'a' && ch <= 'f') ||
+         (ch >= 'A' && ch <= 'F');
+}
+fn bool char_is_alphabetic(u8 ch) {
   return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
 }
 fn bool char_is_alphanumeric(u8 ch) {
-  return char_is_digit(ch) || char_is_alpha(ch);
+  return char_is_digit(ch) || char_is_alphabetic(ch);
 }
 fn u8 char_to_upper(u8 ch) { return char_is_lower(ch) ? ch - 32 : ch; }
 fn u8 char_to_lower(u8 ch) { return char_is_upper(ch) ? ch + 32 : ch; }
