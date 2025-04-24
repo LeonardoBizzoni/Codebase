@@ -664,12 +664,9 @@ fn bool os_sharedmem_close(SharedMem *shm) {
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
   Scratch scratch = ScratchBegin(0, 0);
-  char *path_cstr = cstr_from_str8(scratch.arena, path);
-
-  void *handle = dlopen(path_cstr, RTLD_LAZY);
-  if(handle){
-    result.h[0] = (u64)handle;
-  }
+  void *handle = dlopen(cstr_from_str8(scratch.arena, path),
+                        RTLD_LAZY);
+  if (handle) { result.h[0] = (u64)handle; }
   ScratchEnd(scratch);
   return result;
 }
@@ -804,8 +801,10 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   }
   if(flags & OS_acfAppend) { access_flags |= O_APPEND; }
 
-  i32 fd = open((char*)filepath.str, access_flags,
+  Scratch scratch = ScratchBegin(0, 0);
+  i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  ScratchEnd(scratch);
   if(fd < 0) {
     fd = 0;
   }
@@ -983,7 +982,9 @@ fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   OS_FileIter *os_iter = New(arena, OS_FileIter);
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   iter->path = path;
-  iter->dir = opendir((char *)path.str);
+  Scratch scratch = ScratchBegin(&arena, 1);
+  iter->dir = opendir(cstr_from_str8(scratch.arena, path));
+  ScratchEnd(scratch);
 
   return os_iter;
 }
@@ -992,7 +993,9 @@ fn OS_FileIter* fs_iter_beginFiltered(Arena *arena, String8 path, OS_FileType al
   OS_FileIter *os_iter = New(arena, OS_FileIter);
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   iter->path = path;
-  iter->dir = opendir((char *)path.str);
+  Scratch scratch = ScratchBegin(&arena, 1);
+  iter->dir = opendir(cstr_from_str8(scratch.arena, path));
+  ScratchEnd(scratch);
   os_iter->filter_allowed = allowed;
 
   return os_iter;
