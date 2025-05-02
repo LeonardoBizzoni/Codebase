@@ -61,10 +61,10 @@ fn time64 time64_from_datetime(DateTime *dt) {
   res |= (u64)((dt->year >= 0 ? dt->year : -dt->year) & ~bit28) << 36;
   res |= (u64)(dt->month) << 32;
   res |= (u64)(dt->day) << 27;
-  res |= (dt->hour) << 22;
-  res |= (dt->minute) << 16;
-  res |= (dt->second) << 10;
-  res |= dt->ms;
+  res |= (u64)(dt->hour) << 22;
+  res |= (u64)(dt->minute) << 16;
+  res |= (u64)(dt->second) << 10;
+  res |= (u64)dt->ms;
   return res;
 }
 

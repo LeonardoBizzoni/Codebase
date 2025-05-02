@@ -179,6 +179,15 @@ fn String8 str8_from_stream(Arena *arena, StringStream stream) {
   return str8(str, stream.total_size);
 }
 
+fn String8 str8_from_char(Arena *arena, char ch) {
+  String8 res = {
+    .str = New(arena, u8),
+    .size = 1,
+  };
+  res.str[0] = ch;
+  return res;
+}
+
 fn String8 str8_from_cstr(char *chars) {
   return str8((u8*)chars, str8_len(chars));
 }

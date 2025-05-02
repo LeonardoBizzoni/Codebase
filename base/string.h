@@ -70,6 +70,7 @@ fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str);
 
 fn String8 str8(u8 *chars, isize len);
 fn String8 str8_from_stream(Arena *arena, StringStream stream);
+fn String8 str8_from_char(Arena *arena, char ch);
 fn String8 str8_from_cstr(char *chars);
 fn String8 str8_from_i64(Arena *arena, i64 n);
 fn String8 str8_from_u64(Arena *arena, u64 n);

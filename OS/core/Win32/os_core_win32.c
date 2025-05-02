@@ -27,10 +27,10 @@ os_w32_time64_from_system_time(SYSTEMTIME* in) {
   res |= (u64)((year >= 0 ? year : -year) & ~(1 << 27)) << 36;
   res |= (u64)(in->wMonth) << 32;
   res |= (u64)(in->wDay) << 27;
-  res |= (in->wHour) << 22;
-  res |= (in->wMinute) << 16;
-  res |= (in->wSecond) << 10;
-  res |= in->wMilliseconds;
+  res |= (u64)(in->wHour) << 22;
+  res |= (u64)(in->wMinute) << 16;
+  res |= (u64)(in->wSecond) << 10;
+  res |= (u64)in->wMilliseconds;
   return res;
 }
 
@@ -314,6 +314,10 @@ os_w32_thread_entry_point(void *ptr)
   ThreadFunc *func = primitive->thread.func;
   func(primitive->thread.arg);
   return 0;
+}
+
+fn void os_exit(u8 status_code) {
+  ExitProcess(status_code);
 }
 
 ////////////////////////////////
@@ -718,7 +722,7 @@ fn String8 fs_read(Arena *arena, OS_Handle handle) {
     u32 amount32 = amount64 > U32_MAX ? U32_MAX : (u32)amount64;
     OVERLAPPED overlapped = {0};
     DWORD bytes_read = 0;
-    ReadFile(file, ptr + total_read, amount32, &bytes_read, &overlapped);
+    (void)ReadFile(file, ptr + total_read, amount32, &bytes_read, &overlapped);
     total_read += bytes_read;
     if(bytes_read != amount32)
     {
