@@ -55,7 +55,7 @@ fn void cb_deinit(void) {
 }
 
 fn void cb_motor_move(u8 left_right_motor, CB_Direction dir,
-                      f32 duty_cycle, u32 at_least_millisec) {
+                      f32 duty_cycle) {
   Assert((dir == CB_Direction_Forward ||
           dir == CB_Direction_Backward ||
           dir == CB_Direction_None) &&
@@ -78,14 +78,20 @@ fn void cb_motor_move(u8 left_right_motor, CB_Direction dir,
     gpioPWM(cb_motor[left_right_motor].pin_bw, pwm);
   } break;
   }
-  os_sleep_milliseconds(at_least_millisec);
 }
 
-fn void cb_encoder_register_callback(u8 left_right_encoder,
-                                     CB_Encoder_Channel chan,
-                                     CB_Encoder_Edge edge,
-                                     u32 timeout_millisec,
-                                     CB_GPIO_ISR_Fn *func) {
+fn void cb_encoder_bind(u8 left_right_encoder, CB_Encoder_Edge edge,
+                        u32 timeout_millisec, CB_GPIO_ISR_Fn func_chan_a,
+                        CB_GPIO_ISR_Fn func_chan_b) {
+  cb_encoder_bind_channel(left_right_encoder, CB_Encoder_Channel_A, edge,
+                          timeout_millisec, func_chan_a);
+  cb_encoder_bind_channel(left_right_encoder, CB_Encoder_Channel_B, edge,
+                          timeout_millisec, func_chan_b);
+}
+
+fn void cb_encoder_bind_channel(u8 left_right_encoder, CB_Encoder_Channel chan,
+                                CB_Encoder_Edge edge, u32 timeout_millisec,
+                                CB_GPIO_ISR_Fn func) {
   Assert((left_right_encoder == CB_ENCODER_LEFT ||
           left_right_encoder == CB_ENCODER_RIGHT) &&
          (chan == CB_Encoder_Channel_A ||
@@ -103,8 +109,12 @@ fn void cb_encoder_register_callback(u8 left_right_encoder,
                    &cb_encoder[left_right_encoder]);
 }
 
-fn void cb_encoder_unregister_callback(u8 left_right_encoder,
-                                       CB_Encoder_Channel chan) {
+fn void cb_encoder_unbind(u8 left_right_encoder) {
+  cb_encoder_unbind_channel(left_right_encoder, CB_Encoder_Channel_A);
+  cb_encoder_unbind_channel(left_right_encoder, CB_Encoder_Channel_B);
+}
+
+fn void cb_encoder_unbind_channel(u8 left_right_encoder, CB_Encoder_Channel chan) {
   Assert((left_right_encoder == CB_ENCODER_LEFT ||
           left_right_encoder == CB_ENCODER_RIGHT) &&
          (chan == CB_Encoder_Channel_A ||

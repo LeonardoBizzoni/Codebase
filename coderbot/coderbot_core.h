@@ -106,6 +106,7 @@ typedef u8 CB_Encoder_Edge;
 enum {
   CB_Encoder_Edge_Rising  = (1 << 0),
   CB_Encoder_Edge_Falling = (1 << 1),
+  CB_Encoder_Edge_Both = 3,
 };
 
 typedef u8 CB_Encoder_Level;
@@ -131,6 +132,11 @@ typedef struct {
 #define CB_ENCODER_LEFT 0
 #define CB_ENCODER_RIGHT 1
 
+typedef struct {
+  CB_Encoder encoder[2];
+  CB_Motor motor[2];
+} CB_Robot;
+
 typedef void (*CB_GPIO_ISR_Fn)(CB_GPIO gpio,
                                CB_Encoder_Level level,
                /* Aka ticks */ u32 microsecs_since_boot,
@@ -141,16 +147,18 @@ fn void cb_deinit(void);
 
 // TODO(lb): add tracing functionality so that we can undo the
 //           the movement of the motor.
+// TODO(lb): add an interface to plan the motor motion without
+//           actually executing it until a start function is called (?)
 fn void cb_motor_move(u8 left_right_motor, CB_Direction dir,
-                      f32 duty_cycle, u32 at_least_millisec);
+                      f32 duty_cycle);
 
-fn void cb_encoder_register_callback(u8 left_right_encoder,
-                                     CB_Encoder_Channel chan,
-                                     CB_Encoder_Edge edge,
-                                     u32 timeout_millisec,
-                                     CB_GPIO_ISR_Fn *func);
-
-fn void cb_encoder_unregister_callback(u8 left_right_encoder,
-                                       CB_Encoder_Channel chan);
+fn void cb_encoder_bind(u8 left_right_encoder, CB_Encoder_Edge edge,
+                        u32 timeout_millisec, CB_GPIO_ISR_Fn func_chan_a,
+                        CB_GPIO_ISR_Fn func_chan_b);
+fn void cb_encoder_bind_channel(u8 left_right_encoder, CB_Encoder_Channel chan,
+                                CB_Encoder_Edge edge, u32 timeout_millisec,
+                                CB_GPIO_ISR_Fn func);
+fn void cb_encoder_unbind(u8 left_right_encoder);
+fn void cb_encoder_unbind_channel(u8 left_right_encoder, CB_Encoder_Channel chan);
 
 #endif
