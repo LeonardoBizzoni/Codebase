@@ -134,6 +134,8 @@
 #ifndef _assert_break
 #  if OS_WINDOWS
 #    define _assert_break() __debugbreak()
+#  elif defined(CODERBOT)
+#    define _assert_break() exit(69)
 #  else
 #    define _assert_break() __builtin_trap()
 #  endif

@@ -349,6 +349,10 @@ fn void os_exit(u8 status_code) {
   exit(status_code);
 }
 
+fn void os_atexit(VoidFunc *callback) {
+  atexit(callback);
+}
+
 fn OS_Handle os_mutex_alloc(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Mutex);
   pthread_mutexattr_t attr;

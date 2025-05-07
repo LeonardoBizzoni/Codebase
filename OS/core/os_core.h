@@ -217,6 +217,7 @@ fn void os_proc_kill(OS_ProcHandle proc);
 fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc);
 
 fn void os_exit(u8 status_code);
+fn void os_atexit(VoidFunc *callback);
 
 fn OS_Handle os_mutex_alloc(void);
 fn void os_mutex_lock(OS_Handle handle);
