@@ -323,6 +323,7 @@ typedef struct {
 } NetInterfaceList;
 
 typedef struct {
+  OS_Net_Transport protocol_transport;
   OS_Handle handle;
   struct {
     IP addr;
@@ -334,18 +335,17 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint);
 fn NetInterface os_net_interface_from_str8(String8 strip);
 fn NetInterfaceList os_net_interfaces(Arena *arena);
 
-fn OS_Socket os_net_socket_connect(String8 name, u16 port,
-                                   OS_Net_Transport protocol);
-fn void os_net_socket_send_format(OS_Socket socket, char *format, ...);
-fn void os_net_socket_send_str8(OS_Socket socket, String8 msg);
-fn void os_net_socket_disconnect(OS_Socket sock);
-
+fn OS_Socket os_net_socket_open(String8 name, u16 port, OS_Net_Transport protocol);
+fn void os_net_socket_listen(OS_Socket *socket, u8 max_backlog);
+fn void os_net_socket_connect(OS_Socket *server);
+fn void os_net_socket_send_format(OS_Socket *socket, char *format, ...);
+fn void os_net_socket_send_str8(OS_Socket *socket, String8 msg);
+fn void os_net_socket_close(OS_Socket *socket);
 #define os_net_socket_send(SOCKET, FORMAT_OR_MSG, ...) \
   _Generic((FORMAT_OR_MSG),                            \
     String8: os_net_socket_send_str8,                  \
     char*: os_net_socket_send_format                   \
   )(SOCKET, FORMAT_OR_MSG, ##__VA_ARGS__)
-
 
 // =============================================================================
 // File reading and writing/appending

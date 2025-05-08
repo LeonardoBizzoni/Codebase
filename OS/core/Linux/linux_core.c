@@ -811,32 +811,17 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   return res;
 }
 
-fn OS_Socket os_net_socket_connect(String8 name, u16 port,
-                                   OS_Net_Transport protocol) {
+fn OS_Socket os_net_socket_open(String8 name, u16 port,
+                                OS_Net_Transport protocol) {
   OS_Socket res = {0};
-
   IP server = os_net_ip_from_str8(name, 0);
   i32 ctype, cdomain;
-  socklen_t serv_len;
-  struct sockaddr *serv_addr;
-  struct sockaddr_in addr4 = {0};
-  struct sockaddr_in6 addr6 = {0};
   switch (server.version) {
     case OS_Net_Network_IPv4: {
       cdomain = AF_INET;
-      addr4.sin_family = AF_INET;
-      addr4.sin_port = htons(port);
-      memCopy(&addr4.sin_addr, server.v4.bytes, 4);
-      serv_addr = (struct sockaddr *)&addr4;
-      serv_len = sizeof(addr4);
     } break;
     case OS_Net_Network_IPv6: {
       cdomain = AF_INET6;
-      addr6.sin6_family = AF_INET6;
-      addr6.sin6_port = htons(port);
-      memCopy(&addr6.sin6_addr, server.v6.words, 8 * sizeof(u16));
-      serv_addr = (struct sockaddr *)&addr6;
-      serv_len = sizeof(addr6);
     } break;
     default: {
       AssertMsg(false, Strlit("Invalid server address."));
@@ -856,39 +841,114 @@ fn OS_Socket os_net_socket_connect(String8 name, u16 port,
 
   i32 fd = socket(cdomain, ctype, 0);
   if (fd == -1) {
-    perror("socket");
-    return res;
-  }
-  if (connect(fd, serv_addr, serv_len) == -1) {
-    perror("connect");
+    perror("os_net_socket");
     return res;
   }
 
+  res.protocol_transport = protocol;
   res.server.addr = server;
   res.server.port = port;
   res.handle.h[0] = fd;
-
-  struct sockaddr client = {0};
-  socklen_t client_len = sizeof(struct sockaddr);
-  (void)getsockname(fd, &client, &client_len);
-  switch (client.sa_family) {
-  case AF_INET: {
-    struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
-    memCopy(res.client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
-    res.client.port = clientv4->sin_port;
-    res.client.addr.version = OS_Net_Network_IPv4;
-  } break;
-  case AF_INET6: {
-    struct sockaddr_in6 *clientv6 = (struct sockaddr_in6 *)&client;
-    memCopy(res.client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
-    res.client.port = clientv6->sin6_port;
-    res.client.addr.version = OS_Net_Network_IPv6;
-  } break;
-  }
   return res;
 }
 
-fn void os_net_socket_send_format(OS_Socket socket, char *format, ...) {
+fn void os_net_socket_listen(OS_Socket *socket, u8 max_backlog) {
+  i32 optval = 1;
+  (void)setsockopt(socket->handle.h[0], SOL_SOCKET,
+                   SO_REUSEPORT | SO_REUSEADDR, &optval,
+                   sizeof(optval));
+
+  i32 cdomain;
+  socklen_t serv_len;
+  struct sockaddr *serv_addr;
+  struct sockaddr_in addr4 = {0};
+  struct sockaddr_in6 addr6 = {0};
+  switch (socket->server.addr.version) {
+    case OS_Net_Network_IPv4: {
+      cdomain = AF_INET;
+    } break;
+    case OS_Net_Network_IPv6: {
+      cdomain = AF_INET6;
+    } break;
+    default: {
+      AssertMsg(false, Strlit("Invalid server address."));
+    }
+  }
+  switch (socket->server.addr.version) {
+  case OS_Net_Network_IPv4: {
+    addr4.sin_family = cdomain;
+    addr4.sin_port = htons(socket->server.port);
+    memCopy(&addr4.sin_addr, socket->server.addr.v4.bytes,
+            4 * sizeof(u8));
+    serv_addr = (struct sockaddr *)&addr4;
+    serv_len = sizeof(addr4);
+  } break;
+  case OS_Net_Network_IPv6: {
+    addr6.sin6_family = cdomain;
+    addr6.sin6_port = htons(socket->server.port);
+    memCopy(&addr6.sin6_addr, socket->server.addr.v6.words,
+            8 * sizeof(u16));
+    serv_addr = (struct sockaddr *)&addr6;
+    serv_len = sizeof(addr6);
+  } break;
+  }
+
+  (void)bind(socket->handle.h[0], serv_addr, serv_len);
+  (void)listen(socket->handle.h[0], max_backlog);
+}
+
+fn void os_net_socket_connect(OS_Socket *server) {
+  Assert(server);
+
+  socklen_t serv_len;
+  struct sockaddr *serv_addr;
+  struct sockaddr_in addr4 = {0};
+  struct sockaddr_in6 addr6 = {0};
+  switch (server->server.addr.version) {
+    case OS_Net_Network_IPv4: {
+      addr4.sin_family = AF_INET;
+      addr4.sin_port = htons(server->server.port);
+      memCopy(&addr4.sin_addr, server->server.addr.v4.bytes, 4);
+      serv_addr = (struct sockaddr *)&addr4;
+      serv_len = sizeof(addr4);
+    } break;
+    case OS_Net_Network_IPv6: {
+      addr6.sin6_family = AF_INET6;
+      addr6.sin6_port = htons(server->server.port);
+      memCopy(&addr6.sin6_addr, server->server.addr.v6.words, 8 * sizeof(u16));
+      serv_addr = (struct sockaddr *)&addr6;
+      serv_len = sizeof(addr6);
+    } break;
+    default: {
+      AssertMsg(false, Strlit("Invalid server address."));
+    }
+  }
+
+  if (connect(server->handle.h[0], serv_addr, serv_len) == -1) {
+    perror("os_net_socket_connect");
+    return;
+  }
+
+  struct sockaddr client = {0};
+  socklen_t client_len = sizeof(struct sockaddr);
+  (void)getsockname(server->handle.h[0], &client, &client_len);
+  switch (client.sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
+    memCopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
+    server->client.port = clientv4->sin_port;
+    server->client.addr.version = OS_Net_Network_IPv4;
+  } break;
+  case AF_INET6: {
+    struct sockaddr_in6 *clientv6 = (struct sockaddr_in6 *)&client;
+    memCopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
+    server->client.port = clientv6->sin6_port;
+    server->client.addr.version = OS_Net_Network_IPv6;
+  } break;
+  }
+}
+
+fn void os_net_socket_send_format(OS_Socket *socket, char *format, ...) {
   Scratch scratch = ScratchBegin(0, 0);
   va_list args;
   va_start(args, format);
@@ -897,14 +957,14 @@ fn void os_net_socket_send_format(OS_Socket socket, char *format, ...) {
   ScratchEnd(scratch);
 }
 
-fn void os_net_socket_send_str8(OS_Socket socket, String8 msg) {
+fn void os_net_socket_send_str8(OS_Socket *socket, String8 msg) {
   Scratch scratch = ScratchBegin(0, 0);
-  send(socket.handle.h[0], cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  send(socket->handle.h[0], cstr_from_str8(scratch.arena, msg), msg.size, 0);
   ScratchEnd(scratch);
 }
 
-fn void os_net_socket_disconnect(OS_Socket sock) {
-  close(sock.handle.h[0]);
+fn void os_net_socket_close(OS_Socket *socket) {
+  close(socket->handle.h[0]);
 }
 
 // =============================================================================
