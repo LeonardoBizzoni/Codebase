@@ -814,14 +814,25 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
 fn OS_Socket os_net_socket_open(String8 name, u16 port,
                                 OS_Net_Transport protocol) {
   OS_Socket res = {0};
+  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Socket);
   IP server = os_net_ip_from_str8(name, 0);
   i32 ctype, cdomain;
   switch (server.version) {
     case OS_Net_Network_IPv4: {
       cdomain = AF_INET;
+      struct sockaddr_in *addr = (struct sockaddr_in*)&prim->socket.addr;
+      addr->sin_family = cdomain;
+      addr->sin_port = htons(port);
+      memCopy(&addr->sin_addr, server.v4.bytes, 4 * sizeof(u8));
+      prim->socket.size = sizeof(struct sockaddr_in);
     } break;
     case OS_Net_Network_IPv6: {
       cdomain = AF_INET6;
+      struct sockaddr_in6 *addr = (struct sockaddr_in6*)&prim->socket.addr;
+      addr->sin6_family = cdomain;
+      addr->sin6_port = htons(port);
+      memCopy(&addr->sin6_addr, server.v4.bytes, 8 * sizeof(u16));
+      prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
       AssertMsg(false, Strlit("Invalid server address."));
@@ -839,8 +850,9 @@ fn OS_Socket os_net_socket_open(String8 name, u16 port,
     }
   }
 
-  i32 fd = socket(cdomain, ctype, 0);
-  if (fd == -1) {
+  prim->socket.fd = socket(cdomain, ctype, 0);
+  if (prim->socket.fd == -1) {
+    lnx_primitiveFree(prim);
     perror("os_net_socket");
     return res;
   }
@@ -848,90 +860,75 @@ fn OS_Socket os_net_socket_open(String8 name, u16 port,
   res.protocol_transport = protocol;
   res.server.addr = server;
   res.server.port = port;
-  res.handle.h[0] = fd;
+  res.handle.h[0] = (u64)prim;
   return res;
 }
 
 fn void os_net_socket_listen(OS_Socket *socket, u8 max_backlog) {
+  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
+
   i32 optval = 1;
-  (void)setsockopt(socket->handle.h[0], SOL_SOCKET,
+  (void)setsockopt(prim->socket.fd, SOL_SOCKET,
                    SO_REUSEPORT | SO_REUSEADDR, &optval,
                    sizeof(optval));
+  (void)bind(prim->socket.fd, &prim->socket.addr, prim->socket.size);
+  (void)listen(prim->socket.fd, max_backlog);
+}
 
-  i32 cdomain;
-  socklen_t serv_len;
-  struct sockaddr *serv_addr;
-  struct sockaddr_in addr4 = {0};
-  struct sockaddr_in6 addr6 = {0};
-  switch (socket->server.addr.version) {
-    case OS_Net_Network_IPv4: {
-      cdomain = AF_INET;
-    } break;
-    case OS_Net_Network_IPv6: {
-      cdomain = AF_INET6;
-    } break;
-    default: {
-      AssertMsg(false, Strlit("Invalid server address."));
-    }
-  }
-  switch (socket->server.addr.version) {
-  case OS_Net_Network_IPv4: {
-    addr4.sin_family = cdomain;
-    addr4.sin_port = htons(socket->server.port);
-    memCopy(&addr4.sin_addr, socket->server.addr.v4.bytes,
-            4 * sizeof(u8));
-    serv_addr = (struct sockaddr *)&addr4;
-    serv_len = sizeof(addr4);
-  } break;
-  case OS_Net_Network_IPv6: {
-    addr6.sin6_family = cdomain;
-    addr6.sin6_port = htons(socket->server.port);
-    memCopy(&addr6.sin6_addr, socket->server.addr.v6.words,
-            8 * sizeof(u16));
-    serv_addr = (struct sockaddr *)&addr6;
-    serv_len = sizeof(addr6);
-  } break;
+fn OS_Socket os_net_socket_accept(OS_Socket *socket) {
+  OS_Socket res = {0};
+
+  LNX_Primitive *server_prim = (LNX_Primitive*)socket->handle.h[0];
+  LNX_Primitive *client_prim = lnx_primitiveAlloc(LNX_Primitive_Socket);
+  client_prim->socket.size = sizeof(client_prim->socket.addr);
+  client_prim->socket.fd = accept(server_prim->socket.fd,
+                                  &client_prim->socket.addr,
+                                  &client_prim->socket.size);
+  if (client_prim->socket.fd == -1) {
+    perror("accept");
+    return res;
   }
 
-  (void)bind(socket->handle.h[0], serv_addr, serv_len);
-  (void)listen(socket->handle.h[0], max_backlog);
+  memCopy(&res, socket, sizeof(OS_Socket));
+  res.handle.h[0] = (u64)client_prim;
+  switch (client_prim->socket.addr.sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *client = (struct sockaddr_in *)&client_prim->socket.addr;
+    memCopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
+    res.client.port = client->sin_port;
+    res.client.addr.version = OS_Net_Network_IPv4;
+  } break;
+  case AF_INET6: {
+    struct sockaddr_in6 *client = (struct sockaddr_in6 *)&client_prim->socket.addr;
+    memCopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
+    res.client.port = client->sin6_port;
+    res.client.addr.version = OS_Net_Network_IPv6;
+  } break;
+  default: {
+    Err("Unknown network protocol: %ld", client_prim->socket.addr.sa_family);
+  }
+  }
+  return res;
+}
+
+fn u8* os_net_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
+  u8 *res = New(arena, u8, buffer_size);
+  LNX_Primitive *prim = (LNX_Primitive*)client->handle.h[0];
+  read(prim->socket.fd, res, buffer_size);
+  return res;
 }
 
 fn void os_net_socket_connect(OS_Socket *server) {
-  Assert(server);
-
-  socklen_t serv_len;
-  struct sockaddr *serv_addr;
-  struct sockaddr_in addr4 = {0};
-  struct sockaddr_in6 addr6 = {0};
-  switch (server->server.addr.version) {
-    case OS_Net_Network_IPv4: {
-      addr4.sin_family = AF_INET;
-      addr4.sin_port = htons(server->server.port);
-      memCopy(&addr4.sin_addr, server->server.addr.v4.bytes, 4);
-      serv_addr = (struct sockaddr *)&addr4;
-      serv_len = sizeof(addr4);
-    } break;
-    case OS_Net_Network_IPv6: {
-      addr6.sin6_family = AF_INET6;
-      addr6.sin6_port = htons(server->server.port);
-      memCopy(&addr6.sin6_addr, server->server.addr.v6.words, 8 * sizeof(u16));
-      serv_addr = (struct sockaddr *)&addr6;
-      serv_len = sizeof(addr6);
-    } break;
-    default: {
-      AssertMsg(false, Strlit("Invalid server address."));
-    }
-  }
-
-  if (connect(server->handle.h[0], serv_addr, serv_len) == -1) {
+  LNX_Primitive *prim = (LNX_Primitive*)server->handle.h[0];
+  if (connect(prim->socket.fd, &prim->socket.addr,
+              prim->socket.size) == -1) {
     perror("os_net_socket_connect");
     return;
   }
 
   struct sockaddr client = {0};
   socklen_t client_len = sizeof(struct sockaddr);
-  (void)getsockname(server->handle.h[0], &client, &client_len);
+  (void)getsockname(prim->socket.fd, &client, &client_len);
   switch (client.sa_family) {
   case AF_INET: {
     struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
@@ -958,13 +955,17 @@ fn void os_net_socket_send_format(OS_Socket *socket, char *format, ...) {
 }
 
 fn void os_net_socket_send_str8(OS_Socket *socket, String8 msg) {
+  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
-  send(socket->handle.h[0], cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), msg.size, 0);
   ScratchEnd(scratch);
 }
 
 fn void os_net_socket_close(OS_Socket *socket) {
-  close(socket->handle.h[0]);
+  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
+  shutdown(prim->socket.fd, SHUT_RDWR);
+  close(prim->socket.fd);
+  lnx_primitiveFree(prim);
 }
 
 // =============================================================================

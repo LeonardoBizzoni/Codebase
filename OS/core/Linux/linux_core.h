@@ -18,6 +18,7 @@ enum {
   LNX_Primitive_Timer,
   LNX_Primitive_Thread,
   LNX_Primitive_Semaphore,
+  LNX_Primitive_Socket,
 };
 
 typedef struct LNX_Primitive {
@@ -44,6 +45,11 @@ typedef struct LNX_Primitive {
       u32 count;
       sem_t *sem;
     } semaphore;
+    struct {
+      i32 fd;
+      socklen_t size;
+      struct sockaddr addr;
+    } socket;
   };
 } LNX_Primitive;
 
