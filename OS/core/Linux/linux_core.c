@@ -888,6 +888,21 @@ fn OS_Socket os_net_socket_connect(String8 name, u16 port,
   return res;
 }
 
+fn void os_net_socket_send_format(OS_Socket socket, char *format, ...) {
+  Scratch scratch = ScratchBegin(0, 0);
+  va_list args;
+  va_start(args, format);
+  os_net_socket_send_str8(socket, _str8_format(scratch.arena, format, args));
+  va_end(args);
+  ScratchEnd(scratch);
+}
+
+fn void os_net_socket_send_str8(OS_Socket socket, String8 msg) {
+  Scratch scratch = ScratchBegin(0, 0);
+  send(socket.handle.h[0], cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  ScratchEnd(scratch);
+}
+
 fn void os_net_socket_disconnect(OS_Socket sock) {
   close(sock.handle.h[0]);
 }
