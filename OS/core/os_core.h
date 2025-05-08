@@ -323,17 +323,20 @@ typedef struct {
 } NetInterfaceList;
 
 typedef struct {
-  OS_Handle h;
+  OS_Handle handle;
   struct {
-    IP *addr;
+    IP addr;
     u16 port;
   } client, server;
-} Socket;
-
-fn NetInterfaceList os_net_interfaces(Arena *arena);
-fn NetInterface os_net_interface_from_str8(String8 strip);
+} OS_Socket;
 
 fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint);
+fn NetInterface os_net_interface_from_str8(String8 strip);
+fn NetInterfaceList os_net_interfaces(Arena *arena);
+
+fn OS_Socket os_net_socket_connect(String8 name, u16 port,
+                                   OS_Net_Transport protocol);
+fn void os_net_socket_disconnect(OS_Socket sock);
 
 // =============================================================================
 // File reading and writing/appending
