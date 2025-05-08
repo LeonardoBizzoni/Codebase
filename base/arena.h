@@ -1,12 +1,6 @@
 #ifndef BASE_ARENA
 #define BASE_ARENA
 
-#if OS_LINUX || OS_BSD
-#include <sys/mman.h>
-#elif OS_WINDOWS
-#include <windows.h>
-#endif
-
 #define New(...) Newx(__VA_ARGS__,New3,New2)(__VA_ARGS__)
 #define Newx(a,b,c,d,...) d
 #define New2(arenaptr, type) (type*)arenaPush(arenaptr, sizeof(type), AlignOf(type))
@@ -58,8 +52,8 @@ fn Arena *_arenaBuild(ArenaArgs args);
 #  define ArenaBuild(...) _arenaBuild(ArenaArgs { __VA_ARGS__ })
 #else
 #  define ArenaBuild(...) _arenaBuild((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
-						   .reserve_size = ArenaDefaultReserveSize, \
-						   __VA_ARGS__})
+                                                   .reserve_size = ArenaDefaultReserveSize, \
+                                                   __VA_ARGS__})
 #endif
 
 inline fn Scratch tmpBegin(Arena *arena);

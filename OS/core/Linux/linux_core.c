@@ -703,7 +703,7 @@ fn String8 os_currentDir(Arena *arena) {
 
 // =============================================================================
 // Networking
-fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
+fn NetInterfaceList os_net_interfaces(Arena *arena) {
   NetInterfaceList res = {0};
   struct ifaddrs *ifaddr;
   if (getifaddrs(&ifaddr) == -1) {
@@ -758,11 +758,11 @@ fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
   return res;
 }
 
-fn NetInterface os_net_interfaceFromStr8(String8 strip) {
+fn NetInterface os_net_interface_from_str8(String8 strip) {
   NetInterface res = {};
 
   Scratch scratch = ScratchBegin(0, 0);
-  NetInterfaceList inters = os_net_getInterfaces(scratch.arena);
+  NetInterfaceList inters = os_net_interfaces(scratch.arena);
   for (NetInterface *curr = inters.first; curr; curr = curr->next) {
     if (str8_eq(curr->strip, strip)) {
       memCopy(&res, curr, sizeof(NetInterface));
@@ -774,20 +774,40 @@ fn NetInterface os_net_interfaceFromStr8(String8 strip) {
   return res;
 }
 
-fn IP os_net_ipFromStr8(String8 strip) {
+fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   IP res = {0};
-  if (inet_pton(AF_INET, (char*)strip.str, &res.v4) == 1) {
-    res.version = OS_Net_Network_IPv4;
-  } else if (inet_pton(AF_INET6, (char*)strip.str, &res.v6) == 1) {
-    res.version = OS_Net_Network_IPv6;
+  struct addrinfo *info = 0;
+  struct addrinfo hints = {0};
+  switch (hint) {
+  case OS_Net_Network_Invalid: {
+    hints.ai_family = AF_UNSPEC;
+  } break;
+  case OS_Net_Network_IPv4: {
+    hints.ai_family = AF_INET;
+  } break;
+  case OS_Net_Network_IPv6: {
+    hints.ai_family = AF_INET6;
+  } break;
   }
 
-  return res;
-}
+  Scratch scratch = ScratchBegin(0, 0);
+  getaddrinfo(cstr_from_str8(scratch.arena, name), 0,
+              &hints, &info);
+  ScratchEnd(scratch);
+  if (!info) { return res; }
+  if (info->ai_family == AF_INET) {
+    res.version = OS_Net_Network_IPv4;
+    memCopy(res.v4.bytes,
+            &((struct sockaddr_in*)info->ai_addr)->sin_addr,
+            4 * sizeof(u8));
+  } else if (info->ai_family == AF_INET6) {
+    res.version = OS_Net_Network_IPv6;
+    memCopy(res.v6.words,
+            &((struct sockaddr_in6*)info->ai_addr)->sin6_addr,
+            8 * sizeof(u16));
+  }
 
-fn IP os_net_dns_resolve(String8 name) {
-  IP res = {0};
-
+  freeaddrinfo(info);
   return res;
 }
 

@@ -1,5 +1,3 @@
-global i32 gpio_pin_counter = 0;
-
 global CB_Robot cb = {
   .motors = {
     {

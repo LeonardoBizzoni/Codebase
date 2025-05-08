@@ -1,5 +1,6 @@
 #include <aclapi.h>
 #pragma comment(lib, "Advapi32.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 fn OS_SystemInfo*
 os_getSystemInfo(void) {
@@ -629,29 +630,50 @@ fn String8 os_currentDir(Arena *arena) {
 
 // =============================================================================
 // Networking
-fn NetInterfaceList os_net_getInterfaces(Arena *arena) {
-  NetInterfaceList res = {};
+fn NetInterfaceList os_net_interfaces(Arena *arena) {
+  NetInterfaceList res = {0};
   return res;
 }
 
-fn NetInterface os_net_interfaceFromStr8(String8 strip) {
-  NetInterface res = {};
+fn NetInterface os_net_interface_from_str8(String8 strip) {
+  NetInterface res = {0};
   return res;
 }
 
-fn IP os_net_ipFromStr8(String8 strip) {
+fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   IP res = {0};
+  ADDRINFOA *info = 0;
+  ADDRINFOA hints = {0};
+  switch (hint) {
+  case OS_Net_Network_Invalid: {
+    hints.ai_family = AF_UNSPEC;
+  } break;
+  case OS_Net_Network_IPv4: {
+    hints.ai_family = AF_INET;
+  } break;
+  case OS_Net_Network_IPv6: {
+    hints.ai_family = AF_INET6;
+  } break;
+  }
+
+  Scratch scratch = ScratchBegin(0, 0);
+  int err = getaddrinfo(cstr_from_str8(scratch.arena, name), 0,
+                        0, &info);
+  ScratchEnd(scratch);
+  Assert(!err);
+  if (info->ai_family == AF_INET) {
+    res.version = OS_Net_Network_IPv4;
+    memCopy(res.v4.bytes,
+            &((struct sockaddr_in*)info->ai_addr)->sin_addr,
+            4 * sizeof(u8));
+  } else if (info->ai_family == AF_INET6) {
+    res.version = OS_Net_Network_IPv6;
+    memCopy(res.v6.words,
+            &((struct sockaddr_in6*)info->ai_addr)->sin6_addr,
+            8 * sizeof(u16));
+  }
   return res;
 }
-
-fn Socket os_net_socket_open(OS_Net_Transport protocol,
-                             IP client, u16 client_port,
-                             IP server, u16 server_port) {
-  Socket res = {0};
-  return res;
-}
-
-fn bool os_net_socket_close(Socket sock) { return false; }
 
 ////////////////////////////////
 //- km: File operations
@@ -1108,6 +1130,9 @@ fn void w32_setup() {
 
   w32_state.arena = ArenaBuild(.reserve_size = GB(1));
   InitializeCriticalSection(&w32_state.mutex);
+
+    WSADATA wsa_data;
+    WSAStartup(MAKEWORD(2, 2), &wsa_data);
 }
 
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {

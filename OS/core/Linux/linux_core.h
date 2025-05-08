@@ -3,7 +3,11 @@
 
 #include <dirent.h>
 #include <semaphore.h>
+#include <netdb.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/mman.h>
 
 typedef u64 LNX_PrimitiveType;
 enum {

@@ -330,11 +330,10 @@ typedef struct {
   } client, server;
 } Socket;
 
-fn NetInterfaceList os_net_getInterfaces(Arena *arena);
-fn NetInterface os_net_interfaceFromStr8(String8 strip);
+fn NetInterfaceList os_net_interfaces(Arena *arena);
+fn NetInterface os_net_interface_from_str8(String8 strip);
 
-fn IP os_net_ipFromStr8(String8 strip);
-fn IP os_net_dns_resolve(String8 name);
+fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint);
 
 // =============================================================================
 // File reading and writing/appending
