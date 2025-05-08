@@ -6,6 +6,12 @@
 #define PWM_FREQ 100
 #define MAX_DUTY_CYCLE 255
 
+// Measures are in millimeter (mm)
+// https://www.olimex.com/Products/Robot-CNC-Parts/Wheels/MG-WHEEL/
+#define WHEEL_OUTER_DIAMETER 66
+#define WHEEL_WIDTH 26
+#define WHEEL_RIM 52
+
 typedef i8 CB_GPIO;
 enum {
     /* STMicroelectronics L293DD - Four channel H-Bridge driver
@@ -99,8 +105,6 @@ typedef struct {
   CB_GPIO pin_fw, pin_bw;
   CB_Direction direction;
 } CB_Motor;
-#define CB_MOTOR_LEFT 0
-#define CB_MOTOR_RIGHT 1
 
 typedef u8 CB_Encoder_Edge;
 enum {
@@ -122,25 +126,48 @@ enum {
   CB_Encoder_Channel_B,
 };
 
-typedef struct {
+typedef struct CB_Encoder CB_Encoder;
+typedef void (*CB_GPIO_ISR_Fn)(CB_GPIO gpio,
+                               CB_Encoder_Level level,
+               /* Aka ticks */ u32 microsecs_since_boot,
+                               CB_Encoder *encoder);
+
+struct CB_Encoder {
   CB_GPIO pin_a, pin_b;
   CB_GPIO last_gpio;
   CB_Direction direction;
   CB_Encoder_Level level_a, level_b;
   i64 ticks, bad_ticks;
-} CB_Encoder;
-#define CB_ENCODER_LEFT 0
-#define CB_ENCODER_RIGHT 1
+
+  struct {
+    u32 timeout;
+    CB_Encoder_Edge trigger;
+    union {
+      CB_GPIO_ISR_Fn channels[2];
+      struct {
+        CB_GPIO_ISR_Fn channel_a;
+        CB_GPIO_ISR_Fn channel_b;
+      };
+    };
+  } callback;
+};
 
 typedef struct {
-  CB_Encoder encoder[2];
-  CB_Motor motor[2];
+  union {
+    CB_Encoder encoders[2];
+    struct {
+      CB_Encoder left;
+      CB_Encoder right;
+    } encoder;
+  };
+  union {
+    CB_Motor motors[2];
+    struct {
+      CB_Motor left;
+      CB_Motor right;
+    } motor;
+  };
 } CB_Robot;
-
-typedef void (*CB_GPIO_ISR_Fn)(CB_GPIO gpio,
-                               CB_Encoder_Level level,
-               /* Aka ticks */ u32 microsecs_since_boot,
-                               CB_Encoder *encoder);
 
 fn void cb_init(void);
 fn void cb_deinit(void);
@@ -149,16 +176,16 @@ fn void cb_deinit(void);
 //           the movement of the motor.
 // TODO(lb): add an interface to plan the motor motion without
 //           actually executing it until a start function is called (?)
-fn void cb_motor_move(u8 left_right_motor, CB_Direction dir,
-                      f32 duty_cycle);
+fn void cb_motor_move(CB_Motor *motor, CB_Direction dir, f32 duty_cycle);
 
-fn void cb_encoder_bind(u8 left_right_encoder, CB_Encoder_Edge edge,
-                        u32 timeout_millisec, CB_GPIO_ISR_Fn func_chan_a,
-                        CB_GPIO_ISR_Fn func_chan_b);
-fn void cb_encoder_bind_channel(u8 left_right_encoder, CB_Encoder_Channel chan,
-                                CB_Encoder_Edge edge, u32 timeout_millisec,
-                                CB_GPIO_ISR_Fn func);
-fn void cb_encoder_unbind(u8 left_right_encoder);
-fn void cb_encoder_unbind_channel(u8 left_right_encoder, CB_Encoder_Channel chan);
+fn void cb_encoder_bind(CB_Encoder *encoder);
+fn void cb_encoder_bind_channel(CB_Encoder *encoder, CB_Encoder_Channel chan);
+fn void cb_encoder_unbind(CB_Encoder *encoder);
+fn void cb_encoder_unbind_channel(CB_Encoder *encoder, CB_Encoder_Channel chan);
+
+fn void cb_encoder_isr_chanA(CB_GPIO gpio, CB_Encoder_Level level,
+                             u32 microsecs_since_boot, CB_Encoder *encoder);
+fn void cb_encoder_isr_chanB(CB_GPIO gpio, CB_Encoder_Level level,
+                             u32 microsecs_since_boot, CB_Encoder *encoder);
 
 #endif

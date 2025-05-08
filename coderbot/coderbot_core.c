@@ -1,126 +1,161 @@
 global i32 gpio_pin_counter = 0;
 
-global CB_Motor cb_motor[2] = {
-  { CB_GPIO_Motor_Left_Forward, CB_GPIO_Motor_Left_Backward, CB_Direction_None },
-  { CB_GPIO_Motor_Right_Forward, CB_GPIO_Motor_Right_Backward, CB_Direction_None },
-};
-
-global CB_Encoder cb_encoder[2] = {
-  { CB_GPIO_Encoder_Left_A, CB_GPIO_Encoder_Left_B, -1, 0, 0, 0, 0, 0 },
-  { CB_GPIO_Encoder_Right_A, CB_GPIO_Encoder_Right_B, -1, 0, 0, 0, 0, 0 },
+global CB_Robot cb = {
+  .motors = {
+    {
+      .pin_fw = CB_GPIO_Motor_Left_Forward,
+      .pin_bw = CB_GPIO_Motor_Left_Backward,
+      .direction = CB_Direction_None,
+    },
+    {
+      .pin_fw = CB_GPIO_Motor_Right_Forward,
+      .pin_bw = CB_GPIO_Motor_Right_Backward,
+      .direction = CB_Direction_None,
+    },
+  },
+  .encoders = {
+    {
+      .pin_a = CB_GPIO_Encoder_Left_A,
+      .pin_b = CB_GPIO_Encoder_Left_B,
+      .last_gpio = -1,
+      .callback = {
+        .timeout = 50,
+        .trigger = CB_Encoder_Edge_Both,
+        .channel_a = cb_encoder_isr_chanA,
+        .channel_b = cb_encoder_isr_chanB,
+      },
+    },
+    {
+      .pin_a = CB_GPIO_Encoder_Right_A,
+      .pin_b = CB_GPIO_Encoder_Right_B,
+      .last_gpio = -1,
+      .callback = {
+        .timeout = 50,
+        .trigger = CB_Encoder_Edge_Both,
+        .channel_a = cb_encoder_isr_chanA,
+        .channel_b = cb_encoder_isr_chanB,
+      },
+    },
+  }
 };
 
 fn void cb_init(void) {
   Assert(gpioInitialise() >= 0);
 
-  gpioSetMode(cb_motor[CB_MOTOR_LEFT].pin_fw, PI_OUTPUT);
-  gpioSetPWMrange(cb_motor[CB_MOTOR_LEFT].pin_fw, MAX_DUTY_CYCLE);
-  gpioSetPWMfrequency(cb_motor[CB_MOTOR_LEFT].pin_fw, PWM_FREQ);
-  gpioSetMode(cb_motor[CB_MOTOR_LEFT].pin_bw, PI_OUTPUT);
-  gpioSetPWMrange(cb_motor[CB_MOTOR_LEFT].pin_bw, MAX_DUTY_CYCLE);
-  gpioSetPWMfrequency(cb_motor[CB_MOTOR_LEFT].pin_bw, PWM_FREQ);
-  gpioSetMode(cb_motor[CB_MOTOR_RIGHT].pin_fw, PI_OUTPUT);
-  gpioSetPWMrange(cb_motor[CB_MOTOR_RIGHT].pin_fw, MAX_DUTY_CYCLE);
-  gpioSetPWMfrequency(cb_motor[CB_MOTOR_RIGHT].pin_fw, PWM_FREQ);
-  gpioSetMode(cb_motor[CB_MOTOR_RIGHT].pin_bw, PI_OUTPUT);
-  gpioSetPWMrange(cb_motor[CB_MOTOR_RIGHT].pin_bw, MAX_DUTY_CYCLE);
-  gpioSetPWMfrequency(cb_motor[CB_MOTOR_RIGHT].pin_bw, PWM_FREQ);
+  gpioSetMode(cb.motor.left.pin_fw, PI_OUTPUT);
+  gpioSetPWMrange(cb.motor.left.pin_fw, MAX_DUTY_CYCLE);
+  gpioSetPWMfrequency(cb.motor.left.pin_fw, PWM_FREQ);
+  gpioSetMode(cb.motor.left.pin_bw, PI_OUTPUT);
+  gpioSetPWMrange(cb.motor.left.pin_bw, MAX_DUTY_CYCLE);
+  gpioSetPWMfrequency(cb.motor.left.pin_bw, PWM_FREQ);
+  gpioSetMode(cb.motor.right.pin_fw, PI_OUTPUT);
+  gpioSetPWMrange(cb.motor.right.pin_fw, MAX_DUTY_CYCLE);
+  gpioSetPWMfrequency(cb.motor.right.pin_fw, PWM_FREQ);
+  gpioSetMode(cb.motor.right.pin_bw, PI_OUTPUT);
+  gpioSetPWMrange(cb.motor.right.pin_bw, MAX_DUTY_CYCLE);
+  gpioSetPWMfrequency(cb.motor.right.pin_bw, PWM_FREQ);
 
-  gpioSetMode(cb_encoder[CB_ENCODER_LEFT].pin_a, PI_INPUT);
-  gpioSetPullUpDown(cb_encoder[CB_ENCODER_LEFT].pin_a, PI_PUD_UP);
-  gpioSetMode(cb_encoder[CB_ENCODER_LEFT].pin_b, PI_INPUT);
-  gpioSetPullUpDown(cb_encoder[CB_ENCODER_LEFT].pin_b, PI_PUD_UP);
-  gpioSetMode(cb_encoder[CB_ENCODER_RIGHT].pin_a, PI_INPUT);
-  gpioSetPullUpDown(cb_encoder[CB_ENCODER_RIGHT].pin_a, PI_PUD_UP);
-  gpioSetMode(cb_encoder[CB_ENCODER_RIGHT].pin_b, PI_INPUT);
-  gpioSetPullUpDown(cb_encoder[CB_ENCODER_RIGHT].pin_b, PI_PUD_UP);
+  gpioSetMode(cb.encoder.left.pin_a, PI_INPUT);
+  gpioSetPullUpDown(cb.encoder.left.pin_a, PI_PUD_UP);
+  gpioSetMode(cb.encoder.left.pin_b, PI_INPUT);
+  gpioSetPullUpDown(cb.encoder.left.pin_b, PI_PUD_UP);
+  gpioSetMode(cb.encoder.right.pin_a, PI_INPUT);
+  gpioSetPullUpDown(cb.encoder.right.pin_a, PI_PUD_UP);
+  gpioSetMode(cb.encoder.right.pin_b, PI_INPUT);
+  gpioSetPullUpDown(cb.encoder.right.pin_b, PI_PUD_UP);
 }
 
 fn void cb_deinit(void) {
-  gpioWrite(cb_motor[CB_MOTOR_LEFT].pin_fw, 0);
-  gpioWrite(cb_motor[CB_MOTOR_LEFT].pin_bw, 0);
-  gpioWrite(cb_motor[CB_MOTOR_RIGHT].pin_fw, 0);
-  gpioWrite(cb_motor[CB_MOTOR_RIGHT].pin_bw, 0);
-  cb_motor[CB_MOTOR_LEFT].direction = CB_Direction_None;
-  cb_motor[CB_MOTOR_RIGHT].direction = CB_Direction_None;
+  gpioWrite(cb.motor.left.pin_fw, 0);
+  gpioWrite(cb.motor.left.pin_bw, 0);
+  gpioWrite(cb.motor.right.pin_fw, 0);
+  gpioWrite(cb.motor.right.pin_bw, 0);
+  cb.motor.left.direction = CB_Direction_None;
+  cb.motor.right.direction = CB_Direction_None;
 
-  gpioSetISRFunc(cb_encoder[CB_ENCODER_LEFT].pin_a, EITHER_EDGE, 0, 0);
-  gpioSetISRFunc(cb_encoder[CB_ENCODER_LEFT].pin_b, EITHER_EDGE, 0, 0);
-  gpioSetISRFunc(cb_encoder[CB_ENCODER_RIGHT].pin_a, EITHER_EDGE, 0, 0);
-  gpioSetISRFunc(cb_encoder[CB_ENCODER_RIGHT].pin_b, EITHER_EDGE, 0, 0);
-  cb_encoder[CB_ENCODER_LEFT].direction = CB_Direction_None;
-  cb_encoder[CB_ENCODER_RIGHT].direction = CB_Direction_None;
+  gpioSetISRFunc(cb.encoder.left.pin_a, EITHER_EDGE, 0, 0);
+  gpioSetISRFunc(cb.encoder.left.pin_b, EITHER_EDGE, 0, 0);
+  gpioSetISRFunc(cb.encoder.right.pin_a, EITHER_EDGE, 0, 0);
+  gpioSetISRFunc(cb.encoder.right.pin_b, EITHER_EDGE, 0, 0);
+  cb.encoder.left.direction = CB_Direction_None;
+  cb.encoder.right.direction = CB_Direction_None;
 
   gpioTerminate();
 }
 
-fn void cb_motor_move(u8 left_right_motor, CB_Direction dir,
-                      f32 duty_cycle) {
+fn void cb_motor_move(CB_Motor *motor, CB_Direction dir, f32 duty_cycle) {
   Assert((dir == CB_Direction_Forward ||
           dir == CB_Direction_Backward ||
           dir == CB_Direction_None) &&
-         (duty_cycle >= 0.f && duty_cycle <= 1.f) &&
-         (left_right_motor == CB_MOTOR_LEFT ||
-          left_right_motor == CB_MOTOR_RIGHT));
+         (duty_cycle >= 0.f && duty_cycle <= 1.f) && motor);
 
   i32 pwm = MAX_DUTY_CYCLE * duty_cycle;
-  switch ((cb_motor[left_right_motor].direction = dir)) {
+  switch ((motor->direction = dir)) {
   case CB_Direction_None: {
-    gpioPWM(cb_motor[left_right_motor].pin_fw, 0);
-    gpioWrite(cb_motor[left_right_motor].pin_bw, 0);
+    gpioPWM(motor->pin_fw, 0);
+    gpioWrite(motor->pin_bw, 0);
   } break;
   case CB_Direction_Forward: {
-    gpioPWM(cb_motor[left_right_motor].pin_fw, pwm);
-    gpioWrite(cb_motor[left_right_motor].pin_bw, 0);
+    gpioPWM(motor->pin_fw, pwm);
+    gpioWrite(motor->pin_bw, 0);
   } break;
   case CB_Direction_Backward: {
-    gpioWrite(cb_motor[left_right_motor].pin_fw, 0);
-    gpioPWM(cb_motor[left_right_motor].pin_bw, pwm);
+    gpioWrite(motor->pin_fw, 0);
+    gpioPWM(motor->pin_bw, pwm);
   } break;
   }
 }
 
-fn void cb_encoder_bind(u8 left_right_encoder, CB_Encoder_Edge edge,
-                        u32 timeout_millisec, CB_GPIO_ISR_Fn func_chan_a,
-                        CB_GPIO_ISR_Fn func_chan_b) {
-  cb_encoder_bind_channel(left_right_encoder, CB_Encoder_Channel_A, edge,
-                          timeout_millisec, func_chan_a);
-  cb_encoder_bind_channel(left_right_encoder, CB_Encoder_Channel_B, edge,
-                          timeout_millisec, func_chan_b);
+fn void cb_encoder_bind(CB_Encoder *encoder) {
+  cb_encoder_bind_channel(encoder, CB_Encoder_Channel_A);
+  cb_encoder_bind_channel(encoder, CB_Encoder_Channel_B);
 }
 
-fn void cb_encoder_bind_channel(u8 left_right_encoder, CB_Encoder_Channel chan,
-                                CB_Encoder_Edge edge, u32 timeout_millisec,
-                                CB_GPIO_ISR_Fn func) {
-  Assert((left_right_encoder == CB_ENCODER_LEFT ||
-          left_right_encoder == CB_ENCODER_RIGHT) &&
-         (chan == CB_Encoder_Channel_A ||
-          chan == CB_Encoder_Channel_B) &&
-         (edge >= 1 && edge <= 3) && func);
+fn void cb_encoder_bind_channel(CB_Encoder *encoder, CB_Encoder_Channel chan) {
+  Assert((chan == CB_Encoder_Channel_A ||
+          chan == CB_Encoder_Channel_B) && encoder);
   gpioSetISRFuncEx((chan == CB_Encoder_Channel_A
-                    ? cb_encoder[left_right_encoder].pin_a
-                    : cb_encoder[left_right_encoder].pin_b),
-                   (edge == CB_Encoder_Edge_Rising
+                    ? encoder->pin_a
+                    : encoder->pin_b),
+                   (encoder->callback.trigger == CB_Encoder_Edge_Rising
                     ? RISING_EDGE
-                    : (edge == CB_Encoder_Edge_Falling
-                       ? FALLING_EDGE
-                       : EITHER_EDGE)),
-                   timeout_millisec, (gpioISRFuncEx_t)func,
-                   &cb_encoder[left_right_encoder]);
+                    : (encoder->callback.trigger == CB_Encoder_Edge_Falling
+                       ? FALLING_EDGE : EITHER_EDGE)),
+                   encoder->callback.timeout,
+                   (gpioISRFuncEx_t)encoder->callback.channels[chan], encoder);
 }
 
-fn void cb_encoder_unbind(u8 left_right_encoder) {
-  cb_encoder_unbind_channel(left_right_encoder, CB_Encoder_Channel_A);
-  cb_encoder_unbind_channel(left_right_encoder, CB_Encoder_Channel_B);
+fn void cb_encoder_unbind(CB_Encoder *encoder) {
+  cb_encoder_unbind_channel(encoder, CB_Encoder_Channel_A);
+  cb_encoder_unbind_channel(encoder, CB_Encoder_Channel_B);
 }
 
-fn void cb_encoder_unbind_channel(u8 left_right_encoder, CB_Encoder_Channel chan) {
-  Assert((left_right_encoder == CB_ENCODER_LEFT ||
-          left_right_encoder == CB_ENCODER_RIGHT) &&
-         (chan == CB_Encoder_Channel_A ||
-          chan == CB_Encoder_Channel_B));
+fn void cb_encoder_unbind_channel(CB_Encoder *encoder, CB_Encoder_Channel chan) {
+  Assert((chan == CB_Encoder_Channel_A ||
+          chan == CB_Encoder_Channel_B) && encoder);
   gpioSetISRFunc((chan == CB_Encoder_Channel_A
-                  ? cb_encoder[left_right_encoder].pin_a
-                  : cb_encoder[left_right_encoder].pin_b),
+                  ? encoder->pin_a : encoder->pin_b),
                  EITHER_EDGE, 0, 0);
+}
+
+fn void cb_encoder_isr_chanA(CB_GPIO gpio, CB_Encoder_Level level,
+                             u32 ticks, CB_Encoder *enc) {
+  if (!enc || gpio == enc->last_gpio) { return; }
+  enc->last_gpio = gpio;
+  enc->level_a = level;
+  if(level ^ enc->level_b) {
+    enc->direction = CB_Direction_Forward;
+    enc->ticks += CB_Direction_Forward;
+  }
+}
+
+fn void cb_encoder_isr_chanB(CB_GPIO gpio, CB_Encoder_Level level,
+                             u32 ticks, CB_Encoder *enc) {
+  if (!enc || gpio == enc->last_gpio) { return; }
+  enc->last_gpio = gpio;
+  enc->level_b = level;
+  if(level ^ enc->level_a) {
+    enc->direction = CB_Direction_Backward;
+    enc->ticks += CB_Direction_Backward;
+  }
 }
