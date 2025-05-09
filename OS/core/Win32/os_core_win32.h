@@ -18,6 +18,7 @@ enum
   OS_W32_Primitive_Mutex,
   OS_W32_Primitive_CondVar,
   OS_W32_Primitive_Semaphore,
+  OS_W32_Primitive_Socket,
 };
 
 typedef struct OS_W32_Primitive OS_W32_Primitive;
@@ -44,6 +45,12 @@ struct OS_W32_Primitive
     SRWLOCK rw_mutex;
     CONDITION_VARIABLE condvar;
     HANDLE semaphore;
+
+    struct {
+      SOCKET handle;
+      socklen_t size;
+      struct sockaddr addr;
+    } socket;
   };
 };
 

@@ -675,6 +675,147 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   return res;
 }
 
+fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
+  OS_Socket res = {0};
+  IP ip = os_net_ip_from_str8(name, 0);
+  OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_Socket);
+  i32 ctype, cdomain;
+  switch (ip.version) {
+    case OS_Net_Network_IPv4: {
+      cdomain = AF_INET;
+      struct sockaddr_in *addr = (struct sockaddr_in*)&prim->socket.addr;
+      addr->sin_family = cdomain;
+      addr->sin_port = htons(port);
+      memCopy(&addr->sin_addr, ip.v4.bytes, 4 * sizeof(u8));
+      prim->socket.size = sizeof(struct sockaddr_in);
+    } break;
+    case OS_Net_Network_IPv6: {
+      cdomain = AF_INET6;
+      struct sockaddr_in6 *addr = (struct sockaddr_in6*)&prim->socket.addr;
+      addr->sin6_family = cdomain;
+      addr->sin6_port = htons(port);
+      memCopy(&addr->sin6_addr, ip.v4.bytes, 8 * sizeof(u16));
+      prim->socket.size = sizeof(struct sockaddr_in6);
+    } break;
+    default: {
+      AssertMsg(false, Strlit("Invalid server address."));
+    }
+  }
+  switch (protocol) {
+    case OS_Net_Transport_TCP: {
+      ctype = SOCK_STREAM;
+    } break;
+    case OS_Net_Transport_UDP: {
+      ctype = SOCK_DGRAM;
+    } break;
+    default: {
+      AssertMsg(false, Strlit("Invalid transport protocol."));
+    }
+  }
+
+  prim->socket.handle = socket(cdomain, ctype, 0);
+  if (prim->socket.handle == INVALID_SOCKET) {
+    os_w32_primitive_release(prim);
+    return res;
+  }
+
+  res.protocol_transport = protocol;
+  res.server.addr = ip;
+  res.server.port = port;
+  res.handle.h[0] = (u64)prim;
+  return res;
+}
+
+fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)socket->handle.h[0];
+
+  i32 optval = 1;
+  (void)setsockopt(prim->socket.handle, SOL_SOCKET,
+                   SO_REUSEADDR, (char*)&optval, sizeof(optval));
+  (void)bind(prim->socket.handle, &prim->socket.addr, prim->socket.size);
+  (void)listen(prim->socket.handle, max_backlog);
+}
+
+fn OS_Socket os_socket_accept(OS_Socket *socket) {
+  OS_Socket res = {0};
+
+  OS_W32_Primitive *server_prim = (OS_W32_Primitive*)socket->handle.h[0];
+  OS_W32_Primitive *client_prim = os_w32_primitive_alloc(OS_W32_Primitive_Socket);
+  client_prim->socket.size = sizeof(client_prim->socket.addr);
+  client_prim->socket.handle = accept(server_prim->socket.handle,
+                                      &client_prim->socket.addr,
+                                      &client_prim->socket.size);
+  if (client_prim->socket.handle == INVALID_SOCKET) {
+    os_w32_primitive_release(client_prim);
+    perror("accept");
+    return res;
+  }
+
+  memCopy(&res, socket, sizeof(OS_Socket));
+  res.handle.h[0] = (u64)client_prim;
+  switch (client_prim->socket.addr.sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *client = (struct sockaddr_in *)&client_prim->socket.addr;
+    memCopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
+    res.client.port = client->sin_port;
+    res.client.addr.version = OS_Net_Network_IPv4;
+  } break;
+  case AF_INET6: {
+    struct sockaddr_in6 *client = (struct sockaddr_in6 *)&client_prim->socket.addr;
+    memCopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
+    res.client.port = client->sin6_port;
+    res.client.addr.version = OS_Net_Network_IPv6;
+  } break;
+  default: {
+    Err("Unknown network protocol: %ld", client_prim->socket.addr.sa_family);
+  }
+  }
+  return res;
+}
+
+fn void os_socket_connect(OS_Socket *server) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)server->handle.h[0];
+  connect(prim->socket.handle, &prim->socket.addr, prim->socket.size);
+
+  struct sockaddr client = {0};
+  socklen_t client_len = sizeof(struct sockaddr);
+  (void)getsockname(prim->socket.handle, &client, &client_len);
+  switch (client.sa_family) {
+  case AF_INET: {
+    struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
+    memCopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
+    server->client.port = clientv4->sin_port;
+    server->client.addr.version = OS_Net_Network_IPv4;
+  } break;
+  case AF_INET6: {
+    struct sockaddr_in6 *clientv6 = (struct sockaddr_in6 *)&client;
+    memCopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
+    server->client.port = clientv6->sin6_port;
+    server->client.addr.version = OS_Net_Network_IPv6;
+  } break;
+  }
+}
+
+fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
+  u8 *res = New(arena, u8, buffer_size);
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)client->handle.h[0];
+  recv(prim->socket.handle, res, buffer_size, MSG_WAITALL);
+  return res;
+}
+
+fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)socket->handle.h[0];
+  Scratch scratch = ScratchBegin(0, 0);
+  send(prim->socket.handle, cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  ScratchEnd(scratch);
+}
+
+fn void os_socket_close(OS_Socket *socket) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)socket->handle.h[0];
+  shutdown(prim->socket.handle, SD_BOTH);
+  closesocket(prim->socket.handle);
+}
+
 ////////////////////////////////
 //- km: File operations
 

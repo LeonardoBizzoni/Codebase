@@ -35,3 +35,13 @@ inline fn void fs_fwrite(File *file, String8 content) {
                                                     (isize)content.size));
   (void)memCopy(file->content, content.str, content.size);
 }
+
+// =============================================================================
+fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
+  Scratch scratch = ScratchBegin(0, 0);
+  va_list args;
+  va_start(args, format);
+  os_socket_send_str8(socket, _str8_format(scratch.arena, format, args));
+  va_end(args);
+  ScratchEnd(scratch);
+}

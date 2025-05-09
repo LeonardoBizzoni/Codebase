@@ -811,7 +811,7 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   return res;
 }
 
-fn OS_Socket os_net_socket_open(String8 name, u16 port,
+fn OS_Socket os_socket_open(String8 name, u16 port,
                                 OS_Net_Transport protocol) {
   OS_Socket res = {0};
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Socket);
@@ -853,7 +853,7 @@ fn OS_Socket os_net_socket_open(String8 name, u16 port,
   prim->socket.fd = socket(cdomain, ctype, 0);
   if (prim->socket.fd == -1) {
     lnx_primitiveFree(prim);
-    perror("os_net_socket");
+    perror("os_socket");
     return res;
   }
 
@@ -864,7 +864,7 @@ fn OS_Socket os_net_socket_open(String8 name, u16 port,
   return res;
 }
 
-fn void os_net_socket_listen(OS_Socket *socket, u8 max_backlog) {
+fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
   LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
 
   i32 optval = 1;
@@ -875,7 +875,7 @@ fn void os_net_socket_listen(OS_Socket *socket, u8 max_backlog) {
   (void)listen(prim->socket.fd, max_backlog);
 }
 
-fn OS_Socket os_net_socket_accept(OS_Socket *socket) {
+fn OS_Socket os_socket_accept(OS_Socket *socket) {
   OS_Socket res = {0};
 
   LNX_Primitive *server_prim = (LNX_Primitive*)socket->handle.h[0];
@@ -911,18 +911,18 @@ fn OS_Socket os_net_socket_accept(OS_Socket *socket) {
   return res;
 }
 
-fn u8* os_net_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
+fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
   u8 *res = New(arena, u8, buffer_size);
   LNX_Primitive *prim = (LNX_Primitive*)client->handle.h[0];
   read(prim->socket.fd, res, buffer_size);
   return res;
 }
 
-fn void os_net_socket_connect(OS_Socket *server) {
+fn void os_socket_connect(OS_Socket *server) {
   LNX_Primitive *prim = (LNX_Primitive*)server->handle.h[0];
   if (connect(prim->socket.fd, &prim->socket.addr,
               prim->socket.size) == -1) {
-    perror("os_net_socket_connect");
+    perror("os_socket_connect");
     return;
   }
 
@@ -945,23 +945,14 @@ fn void os_net_socket_connect(OS_Socket *server) {
   }
 }
 
-fn void os_net_socket_send_format(OS_Socket *socket, char *format, ...) {
-  Scratch scratch = ScratchBegin(0, 0);
-  va_list args;
-  va_start(args, format);
-  os_net_socket_send_str8(socket, _str8_format(scratch.arena, format, args));
-  va_end(args);
-  ScratchEnd(scratch);
-}
-
-fn void os_net_socket_send_str8(OS_Socket *socket, String8 msg) {
+fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
   LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), msg.size, 0);
   ScratchEnd(scratch);
 }
 
-fn void os_net_socket_close(OS_Socket *socket) {
+fn void os_socket_close(OS_Socket *socket) {
   LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
   shutdown(prim->socket.fd, SHUT_RDWR);
   close(prim->socket.fd);
