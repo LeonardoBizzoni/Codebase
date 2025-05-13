@@ -195,7 +195,13 @@ fn DateTime os_utc_fromLocalDateTime(DateTime *dt);
 fn void os_sleep_milliseconds(u32 ms);
 
 fn OS_Handle os_timer_start(void);
-fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end);
+fn u64  os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end);
+fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer, u64 how_much);
+#define os_timer_elapsed(UNIT, TIMER_START, TIMER_END_OR_WAIT_TIME) \
+  _Generic((TIMER_END_OR_WAIT_TIME),                                \
+    OS_Handle: os_timer_elapsed_start2end,                          \
+    default: os_timer_elapsed_time                                  \
+  )(UNIT, TIMER_START, TIMER_END_OR_WAIT_TIME)
 
 // =============================================================================
 // Memory allocation

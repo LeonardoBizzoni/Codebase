@@ -143,7 +143,7 @@ fn void cb_encoder_isr_chanA(CB_GPIO gpio, CB_Encoder_Level level,
   enc->level_a = level;
   if(level ^ enc->level_b) {
     enc->direction = CB_Direction_Forward;
-    enc->ticks += CB_Direction_Forward;
+    enc->ticks += 1;
   }
 }
 
@@ -154,6 +154,6 @@ fn void cb_encoder_isr_chanB(CB_GPIO gpio, CB_Encoder_Level level,
   enc->level_b = level;
   if(level ^ enc->level_a) {
     enc->direction = CB_Direction_Backward;
-    enc->ticks += CB_Direction_Backward;
+    enc->ticks -= 1;
   }
 }

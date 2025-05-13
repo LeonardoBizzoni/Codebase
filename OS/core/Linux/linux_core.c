@@ -215,7 +215,13 @@ fn OS_Handle os_timer_start(void) {
   OS_Handle res = {{(u64)prim}};
   return res;
 }
-fn u64 os_timer_elapsed(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
+
+fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer, u64 how_much) {
+  OS_Handle now = os_timer_start();
+  return os_timer_elapsed_start2end(unit, timer, now) >= how_much;
+}
+
+fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
   struct timespec tstart = ((LNX_Primitive *)start.h[0])->timer;
   struct timespec tend = ((LNX_Primitive *)end.h[0])->timer;
   u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * 1e9 +
