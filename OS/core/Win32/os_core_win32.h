@@ -18,6 +18,7 @@ enum
   OS_W32_Primitive_Mutex,
   OS_W32_Primitive_CondVar,
   OS_W32_Primitive_Semaphore,
+  OS_W32_Primitive_Timer,
   OS_W32_Primitive_Socket,
 };
 
@@ -45,6 +46,7 @@ struct OS_W32_Primitive
     SRWLOCK rw_mutex;
     CONDITION_VARIABLE condvar;
     HANDLE semaphore;
+    LARGE_INTEGER timer;
 
     struct {
       SOCKET handle;
@@ -59,6 +61,7 @@ struct OS_W32_State
 {
   Arena *arena;
   OS_SystemInfo info;
+  LARGE_INTEGER perf_freq;
   OS_W32_Primitive *free_list;
   CRITICAL_SECTION mutex;
 };

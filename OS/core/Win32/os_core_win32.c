@@ -205,6 +205,40 @@ fn void os_sleep_milliseconds(u32 ms) {
   Sleep(ms);
 }
 
+fn OS_Handle os_timer_start(void) {
+  OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Timer);
+  QueryPerformanceCounter(&primitive->timer);
+
+  OS_Handle res = {{(u64)primitive}};
+  return res;
+}
+
+fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
+  OS_W32_Primitive *start_prim = (OS_W32_Primitive*)start.h[0];
+  OS_W32_Primitive *end_prim = (OS_W32_Primitive*)end.h[0];
+
+  u64 micros = (end_prim->timer.QuadPart - start_prim->timer.QuadPart)
+               * 1e6 / w32_state.perf_freq.QuadPart;
+  os_w32_primitive_release(start_prim);
+  os_w32_primitive_release(end_prim);
+
+  switch (unit) {
+    case OS_TimerGranularity_min: {
+      return micros * 1e-6 / 60;
+    } break;
+    case OS_TimerGranularity_sec: {
+      return micros * 1e-6;
+    } break;
+    case OS_TimerGranularity_ms: {
+      return micros * 1e-3;
+    } break;
+    case OS_TimerGranularity_ns: {
+      return micros * 1e3;
+    } break;
+  }
+  return 0;
+}
+
 ////////////////////////////////
 //- km: memory
 
@@ -1272,8 +1306,10 @@ fn void w32_setup() {
   w32_state.arena = ArenaBuild(.reserve_size = GB(1));
   InitializeCriticalSection(&w32_state.mutex);
 
-    WSADATA wsa_data;
-    WSAStartup(MAKEWORD(2, 2), &wsa_data);
+  QueryPerformanceFrequency(&w32_state.perf_freq);
+
+  WSADATA wsa_data;
+  WSAStartup(MAKEWORD(2, 2), &wsa_data);
 }
 
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {

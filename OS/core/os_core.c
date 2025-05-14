@@ -1,5 +1,3 @@
-// =============================================================================
-// Logging
 fn void os_print(OS_LogLevel level, const char *caller, const char *file,
                  i32 line, const char *fmt, ...) {
   switch (level) {
@@ -26,7 +24,6 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
   ScratchEnd(scratch);
 }
 
-// =============================================================================
 inline fn void fs_fwrite(File *file, String8 content) {
   if (file->prop.size < (usize)content.size) {
     fs_fresize(file, content.size);
@@ -36,7 +33,6 @@ inline fn void fs_fwrite(File *file, String8 content) {
   (void)memCopy(file->content, content.str, content.size);
 }
 
-// =============================================================================
 fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
   Scratch scratch = ScratchBegin(0, 0);
   va_list args;
@@ -44,4 +40,10 @@ fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
   os_socket_send_str8(socket, _str8_format(scratch.arena, format, args));
   va_end(args);
   ScratchEnd(scratch);
+}
+
+inline fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
+                                     u64 how_much) {
+  OS_Handle now = os_timer_start();
+  return os_timer_elapsed_start2end(unit, timer, now) >= how_much;
 }

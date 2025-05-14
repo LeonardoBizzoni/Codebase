@@ -39,7 +39,7 @@ fn u64 unix_from_time64(time64 timestamp);
 #define TimedScope                                                           \
   for (OS_Handle __start = os_timer_start(), __end = {0};                    \
        __end.h[0] == 0; __end = os_timer_start(),                            \
-           printf("%ldms (%ldns)\n",                                         \
+           printf("%lums (%luns)\n",                                         \
                   os_timer_elapsed(OS_TimerGranularity_ms, __start, __end),  \
                   os_timer_elapsed(OS_TimerGranularity_ns, __start, __end)))
 
