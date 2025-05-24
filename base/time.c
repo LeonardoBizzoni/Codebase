@@ -5,13 +5,13 @@ inline fn bool is_leap_year(u32 year) {
 
 fn DateTime datetime_from_time64(time64 t) {
   DateTime res = {0};
-  res.ms = t & bitmask10;
-  res.second = (t >> 10) & bitmask6;
-  res.minute = (t >> 16) & bitmask6;
-  res.hour = (t >> 22) & bitmask5;
-  res.day = (t >> 27) & bitmask5;
-  res.month = (t >> 32) & bitmask4;
-  res.year = ((t >> 36) & ~bit28) * (t >> 63 ? 1 : -1);
+  res.ms     = (u16)(t & bitmask10);
+  res.second = (u8)((t >> 10) & bitmask6);
+  res.minute = (u8)((t >> 16) & bitmask6);
+  res.hour   = (u8)((t >> 22) & bitmask5);
+  res.day    = (u8)((t >> 27) & bitmask5);
+  res.month  = (u8)((t >> 32) & bitmask4);
+  res.year   = ((t >> 36) & ~bit28) * (t >> 63 ? 1 : -1);
   return res;
 }
 
@@ -71,7 +71,7 @@ fn time64 time64_from_datetime(DateTime *dt) {
 fn time64 time64_from_unix(u64 timestamp) {
   time64 res = 1ULL << 63;
 
-  u64 year = 1970;
+  u32 year = 1970;
   for (u64 secondsXyear = is_leap_year(year)
                           ? UNIX_LEAP_YEAR
                           : UNIX_YEAR;
@@ -80,8 +80,8 @@ fn time64 time64_from_unix(u64 timestamp) {
                secondsXyear = is_leap_year(year)
                               ? UNIX_LEAP_YEAR
                               : UNIX_YEAR);
-  res |= (year & ~(1 << 27)) << 36;
 
+  res |= (((u64)year & ~(1 << 27)) << 36);
   u64 month = 1;
   while (1) {
     u8 days = daysXmonth[month - 1];
@@ -144,7 +144,7 @@ fn u64 unix_from_time64(time64 timestamp) {
     res += is_leap_year(i) ? UNIX_LEAP_YEAR : UNIX_YEAR;
   }
 
-  u8 time_month = (timestamp >> 32) & bitmask4;
+  u8 time_month = (u8)((timestamp >> 32) & bitmask4);
   for (u8 month = 1; month < time_month; ++month) {
     res += daysXmonth[month - 1] * UNIX_DAY;
     if (month == 2 && is_leap_year(year)) {

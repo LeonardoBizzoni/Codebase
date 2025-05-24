@@ -26,12 +26,12 @@ fn Arena *_arenaBuild(ArenaArgs args) {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->hugepage_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->hugepage_size);
 
-    mem = os_reserveHuge(args.base_addr, reserve);
+    mem = os_reserveHuge(0, reserve);
   } else {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->page_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->page_size);
 
-    mem = os_reserve(args.base_addr, reserve);
+    mem = os_reserve(0, reserve);
   }
 
   if (!mem) { return 0; }
@@ -66,15 +66,20 @@ fn void *arenaPush(Arena *arena, usize size, usize align) {
   usize res = forwardAlign((usize)arena->base + arena->head, align);
   usize offset = res - ((usize)arena->base + arena->head);
   usize new_head = arena->head + size + offset + sizeof(Arena);
-
+  
   if (new_head > arena->reserve_size) {
     if (arena->next) {
       return arenaPush(arena->next, size, align);
     } else if (arena->flags & Arena_Growable) {
       Warn("Resizing arena.");
+      usize reserve_size = arena->reserve_size;
+      if(size + sizeof(Arena) > reserve_size)
+      {
+        reserve_size = forwardAlign(size + sizeof(Arena), align);
+      }
       Arena *next = ArenaBuild(.base_addr = (usize)arena->base + arena->reserve_size,
                                .commit_size = arena->commit_size,
-                               .reserve_size = arena->reserve_size,
+                               .reserve_size = reserve_size,
                                .flags = arena->flags);
       Assert(next);
       arena->next = next;

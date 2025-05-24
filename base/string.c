@@ -37,8 +37,7 @@ fn Codepoint decodeUTF8(u8 *glyph_start) {
 fn Codepoint decodeUTF16(u16 *glyph_start) {
   Codepoint res = {0};
 
-  if (glyph_start[0] <= 0xD7FF ||
-      (glyph_start[0] >= 0xE000 && glyph_start[0] <= 0xFFFF)) {
+  if (glyph_start[0] < 0xD800 || glyph_start[0] > 0xDFFF) {
     res.size = 1;
     res.codepoint = *glyph_start;
   } else if ((glyph_start[0] >= 0xD800 && glyph_start[0] <= 0xDBFF) &&
@@ -116,11 +115,8 @@ fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other)
   DLLPushBack(strlist->first, strlist->last, str);
 }
 
-fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStream other) {
-  if (!other.first) { return; }
-  for (StringNode *curr = other.first; curr; curr = curr->next) {
-    strlist->node_count += curr->value.size;
-  }
+fn void strstream_append_stream(StringStream *strlist, StringStream other) {
+  strlist->total_size += other.total_size;
   strlist->node_count += other.node_count;
   DLLPushBack(strlist->first, strlist->last, other.first);
 }
