@@ -116,10 +116,7 @@ fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other)
 }
 
 fn void strstream_append_stream(StringStream *strlist, StringStream other) {
-  if (!other.first) { return; }
-  for (StringNode *curr = other.first; curr; curr = curr->next) {
-    strlist->node_count += curr->value.size;
-  }
+  strlist->total_size += other.total_size;
   strlist->node_count += other.node_count;
   DLLPushBack(strlist->first, strlist->last, other.first);
 }
