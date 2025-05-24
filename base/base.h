@@ -188,8 +188,13 @@
 
 #define KiB(BYTES) ((BYTES)*1024)
 #define MB(BYTES) (KiB((BYTES)) * 1024)
-#define GB(BYTES) (MB((BYTES)) * 1024UL)
+#define GB(BYTES) (MB((BYTES)) * 1024ULL)
 #define TB(BYTES) (GB((BYTES)) * 1024UL)
+
+#define Thousand(x) ((x)*1000)
+#define Million(x)  ((x)*1000000llu)
+#define Billion(x)  ((x)*1000000000llu)
+#define Trillion(x) ((x)*1000000000000llu)
 
 #define global static
 #define local static

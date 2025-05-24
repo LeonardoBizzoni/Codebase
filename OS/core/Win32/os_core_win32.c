@@ -52,16 +52,16 @@ os_w32_system_time_from_date_time(DateTime *in)
 fn SYSTEMTIME
 os_w32_system_time_from_time64(time64 in) {
   SYSTEMTIME res = {0};
-  i16 year = (in >> 36) & ~(1 << 27)  * (in >> 63 ? 1 : -1);
+  i16 year = (i16)((in >> 36) & ~(1 << 27)  * (in >> 63 ? 1 : -1));
   if (year < 1601 || year > 30827) { return res; }
 
-  res.wYear = year;
-  res.wMonth = (in >> 32) & bitmask4;
-  res.wDay = (in >> 27) & bitmask5;
-  res.wHour = (in >> 22) & bitmask5;
-  res.wMinute = (in >> 16) & bitmask6;
-  res.wSecond = (in >> 10) & bitmask6;
-  res.wMilliseconds = in & bitmask10;
+  res.wYear         = year;
+  res.wMonth        = (WORD)((in >> 32) & bitmask4);
+  res.wDay          = (WORD)((in >> 27) & bitmask5);
+  res.wHour         = (WORD)((in >> 22) & bitmask5);
+  res.wMinute       = (WORD)((in >> 16) & bitmask6);
+  res.wSecond       = (WORD)((in >> 10) & bitmask6);
+  res.wMilliseconds = (WORD)(in & bitmask10);
   return res;
 }
 
@@ -119,10 +119,10 @@ fn time64
 os_utc_localizedTime64(i8 utc_offset) {
   time64 now = os_utc_now();
   i32 year = ((now >> 36) & ~(1 << 27));
-  i8 month = (now >> 32) & bitmask4;
-  i8 day = (now >> 27) & bitmask5;
-  i8 hour = ((now >> 22) & bitmask5) + utc_offset;
 
+  i8 month = (i8)((now >> 32) & bitmask4);
+  i8 day   = (i8)((now >> 27) & bitmask5);
+  i8 hour  = (i8)(((now >> 22) & bitmask5) + utc_offset);
   if (hour < 0) {
     day -= 1;
     hour += 24;
@@ -218,22 +218,22 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
   OS_W32_Primitive *end_prim = (OS_W32_Primitive*)end.h[0];
 
   u64 micros = (end_prim->timer.QuadPart - start_prim->timer.QuadPart)
-               * 1e6 / w32_state.perf_freq.QuadPart;
+    * Million(1) / w32_state.perf_freq.QuadPart;
   os_w32_primitive_release(start_prim);
   os_w32_primitive_release(end_prim);
 
   switch (unit) {
     case OS_TimerGranularity_min: {
-      return micros * 1e-6 / 60;
+      return micros / 60 * Million(1);
     } break;
     case OS_TimerGranularity_sec: {
-      return micros * 1e-6;
+      return micros / Million(1);
     } break;
     case OS_TimerGranularity_ms: {
-      return micros * 1e-3;
+      return micros / Thousand(1);
     } break;
     case OS_TimerGranularity_ns: {
-      return micros * 1e3;
+      return micros * Thousand(1);
     } break;
   }
   return 0;
@@ -486,7 +486,7 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
   if (!mutexprim || mutexprim->kind != OS_W32_Primitive_Mutex) { return false; }
   return SleepConditionVariableCS(&condprim->condvar, &mutexprim->mutex,
                                   (wait_at_most_microsec
-                                   ? wait_at_most_microsec / 1e3
+                                   ? wait_at_most_microsec / Thousand(1)
                                    : INFINITE)) != 0;
 }
 
@@ -496,10 +496,10 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
   OS_W32_Primitive *rwlockprim = (OS_W32_Primitive*)rwlock_handle.h[0];
   if (!condprim || condprim->kind != OS_W32_Primitive_CondVar) { return false; }
   if (!rwlockprim || rwlockprim->kind != OS_W32_Primitive_RWLock)
-    { return false; }
+  { return false; }
   return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
                                    (wait_at_most_microsec
-                                    ? wait_at_most_microsec / 1e3
+                                    ? wait_at_most_microsec / Thousand(1)
                                     : INFINITE),
                                    CONDITION_VARIABLE_LOCKMODE_SHARED) != 0;
 }
@@ -513,7 +513,7 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
     { return false; }
   return SleepConditionVariableSRW(&condprim->condvar, &rwlockprim->rw_mutex,
                                    (wait_at_most_microsec
-                                    ? wait_at_most_microsec / 1e3
+                                    ? wait_at_most_microsec / Thousand(1)
                                     : INFINITE),
                                    CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE) != 0;
 }
@@ -562,7 +562,7 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
   if (!prim || prim->kind != OS_W32_Primitive_Semaphore) { return false; }
   return WaitForSingleObject(prim->semaphore,
                              (wait_at_most_microsec
-                              ? wait_at_most_microsec / 1e3
+                              ? wait_at_most_microsec / Thousand(1)
                               : INFINITE)) == WAIT_OBJECT_0;
 }
 
@@ -833,14 +833,14 @@ fn void os_socket_connect(OS_Socket *server) {
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
   u8 *res = New(arena, u8, buffer_size);
   OS_W32_Primitive *prim = (OS_W32_Primitive*)client->handle.h[0];
-  recv(prim->socket.handle, res, buffer_size, MSG_WAITALL);
+  recv(prim->socket.handle, res, (int)buffer_size, MSG_WAITALL);
   return res;
 }
 
 fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
   OS_W32_Primitive *prim = (OS_W32_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
-  send(prim->socket.handle, cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  send(prim->socket.handle, cstr_from_str8(scratch.arena, msg), (int)msg.size, 0);
   ScratchEnd(scratch);
 }
 
