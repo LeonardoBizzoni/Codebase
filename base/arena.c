@@ -72,9 +72,13 @@ fn void *arenaPush(Arena *arena, usize size, usize align) {
       return arenaPush(arena->next, size, align);
     } else if (arena->flags & Arena_Growable) {
       Warn("Resizing arena.");
+      usize reserve_size = arena->reserve_size;
+      if (size + sizeof(Arena) >= reserve_size) {
+        reserve_size *= 2;
+      }
       Arena *next = ArenaBuild(.base_addr = (usize)arena->base + arena->reserve_size,
                                .commit_size = arena->commit_size,
-                               .reserve_size = arena->reserve_size,
+                               .reserve_size = reserve_size,
                                .flags = arena->flags);
       Assert(next);
       arena->next = next;

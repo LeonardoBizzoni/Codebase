@@ -205,6 +205,14 @@ fn void os_sleep_milliseconds(u32 ms) {
   usleep(ms * 1e3);
 }
 
+fn void lnx_sleep_nanoseconds(u32 ns) {
+  struct timespec duration = {
+    .tv_sec = ns / 1e9,
+    .tv_nsec = ns % (u32)1e9,
+  };
+  (void)nanosleep(&duration, 0);
+}
+
 fn OS_Handle os_timer_start(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Timer);
   if (clock_gettime(CLOCK_MONOTONIC, &prim->timer) != 0) {
