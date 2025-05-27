@@ -1242,12 +1242,11 @@ fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period
   return syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
 }
 
-fn i32 lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                              SignalFunc *deadline_miss_handler) {
-  i32 res = lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns);
-  //                  \CPU time exceeded/
-  if (!res) { (void)signal(SIGXCPU, deadline_miss_handler); }
-  return res;
+fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
+                               SignalFunc *deadline_miss_handler) {
+  Assert(!lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns));
+  //       \CPU time exceeded/
+  (void)signal(SIGXCPU, deadline_miss_handler);
 }
 
 fn void lnx_sched_yield(void) {

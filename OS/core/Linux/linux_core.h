@@ -94,8 +94,8 @@ fn String8 lnx_getHostname(void);
 fn void lnx_parseMeminfo(void);
 
 fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns);
-fn i32 lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                              SignalFunc *deadline_miss_handler);
+fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
+                               SignalFunc *deadline_miss_handler);
 fn void lnx_sched_yield(void);
 
 #endif
