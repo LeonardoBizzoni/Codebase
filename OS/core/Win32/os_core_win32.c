@@ -243,17 +243,18 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
 //- km: memory
 
 fn void*
-os_reserve(usize base_addr, usize size)
+os_reserve(usize size)
 {
-  void *result = VirtualAlloc((void*)base_addr, size, MEM_RESERVE, PAGE_READWRITE);
+  void *result = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
+  DWORD status = GetLastError();
   return result;
 }
 
 fn void*
-os_reserveHuge(usize base_addr, usize size)
+os_reserveHuge(usize size)
 {
-  void *result = VirtualAlloc((void*)base_addr, size,
-                              MEM_RESERVE | MEM_LARGE_PAGES, PAGE_READWRITE);
+  void *result = VirtualAlloc(0, size, MEM_RESERVE | MEM_LARGE_PAGES,
+                              PAGE_READWRITE);
   return result;
 }
 

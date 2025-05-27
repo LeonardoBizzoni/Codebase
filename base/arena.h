@@ -16,7 +16,6 @@ enum {
 };
 
 typedef struct {
-  usize base_addr;
   usize commit_size;
   usize reserve_size;
   ArenaFlags flags;

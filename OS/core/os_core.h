@@ -206,8 +206,8 @@ fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer, u64 how
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve(usize base_addr, usize size);
-fn void* os_reserveHuge(usize base_addr, usize size);
+fn void* os_reserve(usize size);
+fn void* os_reserveHuge(usize size);
 fn void os_release(void *base, usize size);
 
 fn void os_commit(void *base, usize size);

@@ -25,13 +25,11 @@ fn Arena *_arenaBuild(ArenaArgs args) {
   if (args.flags & Arena_UseHugePage) {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->hugepage_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->hugepage_size);
-
-    mem = os_reserveHuge(args.base_addr, reserve);
+    mem = os_reserveHuge(reserve);
   } else {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->page_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->page_size);
-
-    mem = os_reserve(args.base_addr, reserve);
+    mem = os_reserve(reserve);
   }
 
   if (!mem) { return 0; }
@@ -76,8 +74,7 @@ fn void *arenaPush(Arena *arena, usize size, usize align) {
       if (size + sizeof(Arena) >= reserve_size) {
         reserve_size *= 2;
       }
-      Arena *next = ArenaBuild(.base_addr = (usize)arena->base + arena->reserve_size,
-                               .commit_size = arena->commit_size,
+      Arena *next = ArenaBuild(.commit_size = arena->commit_size,
                                .reserve_size = reserve_size,
                                .flags = arena->flags);
       Assert(next);

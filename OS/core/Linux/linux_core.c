@@ -256,9 +256,8 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve(usize base_addr, usize size) {
-  void *res = mmap((void *)base_addr, size, PROT_NONE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+fn void* os_reserve(usize size) {
+  void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (res == MAP_FAILED) {
     res = 0;
   }
@@ -266,10 +265,9 @@ fn void* os_reserve(usize base_addr, usize size) {
   return res;
 }
 
-fn void* os_reserveHuge(usize base_addr, usize size) {
+fn void* os_reserveHuge(usize size) {
   // TODO(lb): MAP_HUGETLB vs MAP_HUGE_2MB/MAP_HUGE_1GB?
-  void *res = mmap((void *)base_addr, size, PROT_NONE,
-                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+  void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
   if (res == MAP_FAILED) {
     res = 0;
   }
@@ -570,7 +568,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
   prim->semaphore.max_count = max_count;
   switch (kind) {
     case OS_SemaphoreKind_Thread: {
-      prim->semaphore.sem = (sem_t *)os_reserve(0, sizeof(sem_t));
+      prim->semaphore.sem = (sem_t *)os_reserve(sizeof(sem_t));
       os_commit(prim->semaphore.sem, sizeof(sem_t));
       if (sem_init(prim->semaphore.sem, 0, init_count)) {
         os_release(prim->semaphore.sem, sizeof(sem_t));

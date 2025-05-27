@@ -188,8 +188,8 @@
 
 #define KiB(BYTES) ((BYTES)*1024)
 #define MB(BYTES) (KiB((BYTES)) * 1024)
-#define GB(BYTES) (MB((BYTES)) * 1024UL)
-#define TB(BYTES) (GB((BYTES)) * 1024UL)
+#define GB(BYTES) (MB((BYTES)) * 1024ULL)
+#define TB(BYTES) (GB((BYTES)) * 1024ULL)
 
 #define global static
 #define local static
