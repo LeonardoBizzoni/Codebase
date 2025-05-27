@@ -147,6 +147,7 @@ typedef struct{
 
 typedef void VoidFunc(void);
 typedef void ThreadFunc(void*);
+typedef void SignalFunc(i32);
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -217,6 +218,7 @@ fn void os_decommit(void *base, usize size);
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
 fn bool os_thread_join(OS_Handle thd);
+fn void os_thread_cancelpoint(void);
 
 fn OS_ProcHandle os_proc_spawn(void);
 fn void os_proc_kill(OS_ProcHandle proc);

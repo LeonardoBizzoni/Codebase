@@ -68,6 +68,22 @@ typedef struct {
   u64 unix_utc_offset;
 } LNX_State;
 
+// Missing in glibc
+struct sched_attr {
+  u32 size;              /* Size of this structure */
+  u32 sched_policy;      /* Policy (SCHED_*) */
+  u64 sched_flags;       /* Flags */
+  i32 sched_nice;        /* Nice value (SCHED_OTHER, SCHED_BATCH) */
+  u32 sched_priority;    /* Static priority (SCHED_FIFO, SCHED_RR) */
+  /* For SCHED_DEADLINE */
+  u64 sched_runtime;
+  u64 sched_deadline;
+  u64 sched_period;
+  /* Utilization hints */
+  u32 sched_util_min;
+  u32 sched_util_max;
+};
+
 fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type);
 fn void lnx_primitiveFree(LNX_Primitive *ptr);
 
@@ -76,5 +92,10 @@ fn void* lnx_threadEntry(void *args);
 fn FS_Properties lnx_propertiesFromStat(struct stat *stat);
 fn String8 lnx_getHostname(void);
 fn void lnx_parseMeminfo(void);
+
+fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns);
+fn i32 lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
+                              SignalFunc *deadline_miss_handler);
+fn void lnx_sched_yield(void);
 
 #endif

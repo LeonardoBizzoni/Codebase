@@ -5,10 +5,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <semaphore.h>
+#include <sched.h>
+#include <linux/sched.h>
 #include <sys/wait.h>
 #include <sys/sysinfo.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 
 #include <dirent.h>
 
@@ -318,6 +321,10 @@ fn bool os_thread_join(OS_Handle thd_handle) {
   bool res = pthread_join(prim->thread.handle, 0) == 0;
   lnx_primitiveFree(prim);
   return res;
+}
+
+fn void os_thread_cancelpoint(void) {
+  pthread_testcancel();
 }
 
 fn OS_ProcHandle os_proc_spawn(void) {
@@ -1219,6 +1226,32 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
 fn void fs_iter_end(OS_FileIter *os_iter) {
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   if (iter->dir) { closedir(iter->dir); }
+}
+
+// =============================================================================
+// Glibc missing wrappers
+fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
+  struct sched_attr attr = {
+    .size = sizeof(attr),
+    .sched_flags = SCHED_FLAG_DL_OVERRUN,
+    .sched_policy = policy,
+    .sched_runtime = runtime_ns,
+    .sched_deadline = deadline_ns,
+    .sched_period = period_ns
+  };
+  return syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
+}
+
+fn i32 lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
+                              SignalFunc *deadline_miss_handler) {
+  i32 res = lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns);
+  //                  \CPU time exceeded/
+  if (!res) { (void)signal(SIGXCPU, deadline_miss_handler); }
+  return res;
+}
+
+fn void lnx_sched_yield(void) {
+  sched_yield();
 }
 
 // =============================================================================
