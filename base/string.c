@@ -180,10 +180,7 @@ fn String8 str8_from_stream(Arena *arena, StringStream stream) {
 }
 
 fn String8 str8_from_char(Arena *arena, char ch) {
-  String8 res = {
-    .str = New(arena, u8),
-    .size = 1,
-  };
+  String8 res = str8(New(arena, u8), 1);
   res.str[0] = ch;
   return res;
 }

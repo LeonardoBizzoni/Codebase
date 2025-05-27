@@ -210,7 +210,7 @@ fn void os_sleep_milliseconds(u32 ms) {
 
 fn void lnx_sleep_nanoseconds(u32 ns) {
   struct timespec duration = {
-    .tv_sec = ns / 1e9,
+    .tv_sec = ns / (u32)1e9,
     .tv_nsec = ns % (u32)1e9,
   };
   (void)nanosleep(&duration, 0);
@@ -1233,8 +1233,8 @@ fn void fs_iter_end(OS_FileIter *os_iter) {
 fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
   struct sched_attr attr = {
     .size = sizeof(attr),
-    .sched_flags = SCHED_FLAG_DL_OVERRUN,
     .sched_policy = policy,
+    .sched_flags = SCHED_FLAG_DL_OVERRUN,
     .sched_runtime = runtime_ns,
     .sched_deadline = deadline_ns,
     .sched_period = period_ns
