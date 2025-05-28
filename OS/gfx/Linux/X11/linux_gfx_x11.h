@@ -2,6 +2,9 @@
 #define OS_GFX_LINUX_X11_H
 
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
+
+#define LNX_SCREEN_DEPTH 24
 
 #if USING_OPENGL
 #  include<GL/gl.h>
@@ -14,10 +17,23 @@ typedef struct LNX11_Window {
   u32 width;
   u32 height;
 
+  i32 xscreen;
   Window xwindow;
-  GLXContext context;
-  XVisualInfo *xvisual;
+  XVisualInfo xvisual;
   XSetWindowAttributes xattrib;
+
+  struct {
+    OS_Event *first;
+    OS_Event *last;
+    OS_Handle lock;
+  } eventlist;
+  OS_Handle eventlistener;
+
+#if USING_OPENGL
+  GLXContext context;
+#else
+  GC xgc;
+#endif
 
   struct LNX11_Window *next;
   struct LNX11_Window *prev;
