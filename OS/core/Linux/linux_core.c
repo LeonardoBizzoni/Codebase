@@ -233,9 +233,6 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
   u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * 1e9 +
                    (tend.tv_nsec - tstart.tv_nsec);
 
-  lnx_primitiveFree((LNX_Primitive *)start.h[0]);
-  lnx_primitiveFree((LNX_Primitive *)end.h[0]);
-
   u64 res = 0;
   switch (unit) {
     case OS_TimerGranularity_min: {
