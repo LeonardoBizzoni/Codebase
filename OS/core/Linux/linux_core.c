@@ -370,8 +370,12 @@ fn void os_atexit(VoidFunc *callback) {
 fn OS_Handle os_mutex_alloc(void) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Mutex);
   pthread_mutexattr_t attr;
+#ifndef PLATFORM_CODERBOT
   if (pthread_mutexattr_init(&attr) != 0 ||
       pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) != 0) {
+#else
+  if (pthread_mutexattr_init(&attr) != 0) {
+#endif
     lnx_primitiveFree(prim);
     prim = 0;
   } else {
@@ -404,47 +408,70 @@ fn void os_mutex_free(OS_Handle handle) {
 }
 
 fn OS_Handle os_rwlock_alloc(void) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Rwlock);
   pthread_rwlock_init(&prim->rwlock, 0);
 
   OS_Handle res = {{(u64)prim}};
   return res;
+#else
+  OS_Handle res = {{0}};
+  return res;
+#endif
 }
 
 fn void os_rwlock_read_lock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_rdlock(&prim->rwlock);
+#endif
 }
 
 fn bool os_rwlock_read_trylock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   return pthread_rwlock_tryrdlock(&prim->rwlock) == 0;
+#else
+  return false;
+#endif
 }
 
 fn void os_rwlock_read_unlock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
+#endif
 }
 
 fn void os_rwlock_write_lock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_wrlock(&prim->rwlock);
+#endif
 }
 
 fn bool os_rwlock_write_trylock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   return pthread_rwlock_trywrlock(&prim->rwlock) == 0;
+#else
+  return false;
+#endif
 }
 
 fn void os_rwlock_write_unlock(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
+#endif
 }
 
 fn void os_rwlock_free(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   pthread_rwlock_destroy(&prim->rwlock);
   lnx_primitiveFree(prim);
+#endif
 }
 
 fn OS_Handle os_cond_alloc(void) {
@@ -492,6 +519,7 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
                             u32 wait_at_most_microsec) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
   LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
 
@@ -520,10 +548,14 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
   (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
   return true;
+#else
+  return false;
+#endif
 }
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
                              u32 wait_at_most_microsec) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
   LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
 
@@ -552,17 +584,25 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
   (void)pthread_mutex_unlock(&cond_prim->condvar.mutex);
   return true;
+#else
+  return false;
+#endif
 }
 
 fn bool os_cond_free(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   i32 res = pthread_cond_destroy(&prim->condvar.cond);
   lnx_primitiveFree(prim);
   return res == 0;
+#else
+  return false;
+#endif
 }
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
                                 u32 max_count, String8 name) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Semaphore);
   prim->semaphore.kind = kind;
   prim->semaphore.max_count = max_count;
@@ -593,18 +633,27 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 
   OS_Handle res = {{(u64)prim}};
   return res;
+#else
+  OS_Handle res = {{0}};
+  return res;
+#endif
 }
 
 fn bool os_semaphore_signal(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
       sem_post(prim->semaphore.sem)) {
     return false;
   }
   return ++prim->semaphore.count;
+#else
+  return false;
+#endif
 }
 
 fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -620,14 +669,22 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
   } else {
     return sem_wait(prim->semaphore.sem) == 0;
   }
+#else
+  return false;
+#endif
 }
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   return sem_trywait(prim->semaphore.sem) == 0;
+#else
+  return false;
+#endif
 }
 
 fn void os_semaphore_free(OS_Handle handle) {
+#ifndef PLATFORM_CODERBOT
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   switch (prim->semaphore.kind) {
     case OS_SemaphoreKind_Thread: {
@@ -639,10 +696,11 @@ fn void os_semaphore_free(OS_Handle handle) {
     } break;
   }
   lnx_primitiveFree(prim);
+#endif
 }
 
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
-  SharedMem res = {};
+  SharedMem res = {0};
   res.path = name;
 
   i32 access_flags = 0;
@@ -681,26 +739,36 @@ fn bool os_sharedmem_close(SharedMem *shm) {
 // Dynamic libraries
 fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
+#ifndef PLATFORM_CODERBOT
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = dlopen(cstr_from_str8(scratch.arena, path),
                         RTLD_LAZY);
   if (handle) { result.h[0] = (u64)handle; }
   ScratchEnd(scratch);
+#endif
   return result;
 }
 
 fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
+#ifndef PLATFORM_CODERBOT
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = (void*)lib.h[0];
   char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
   VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, symbol_cstr);
   ScratchEnd(scratch);
   return result;
+#else
+  return (VoidFunc*)0;
+#endif
 }
 
 fn i32 os_lib_close(OS_Handle lib) {
+#ifndef PLATFORM_CODERBOT
   void *handle = (void*)lib.h[0];
   return dlclose(handle);
+#else
+  return 0;
+#endif
 }
 
 // =============================================================================
@@ -773,7 +841,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
 }
 
 fn NetInterface os_net_interface_from_str8(String8 strip) {
-  NetInterface res = {};
+  NetInterface res = {0};
 
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_interfaces(scratch.arena);
@@ -1005,7 +1073,7 @@ fn bool fs_close(OS_Handle fd) {
 
 fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
   int fd = file.h[0];
-  String8 result = {};
+  String8 result = {0};
   if(!fd) { return result; }
 
   u8 *buffer = New(arena, u8, size);
@@ -1019,7 +1087,7 @@ fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
   int fd = file.h[0];
-  String8 result = {};
+  String8 result = {0};
   if(!fd) { return result; }
 
   struct stat file_stat;
@@ -1057,7 +1125,7 @@ fn String8 fs_pathFromHandle(Arena *arena, OS_Handle fd) {
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
-  String8 res = {};
+  String8 res = {0};
   res.str = New(arena, u8, PATH_MAX);
   res.size = readlink((char *)path.str, (char *)res.str, PATH_MAX);
   if (res.size <= 0) {
@@ -1072,7 +1140,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // =============================================================================
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
-  File file = {};
+  File file = {0};
   i32 flags = fcntl(fd.h[0], F_GETFL);
   if (flags < 0) { return file; }
   flags &= O_ACCMODE;
@@ -1099,7 +1167,7 @@ fn File fs_fopenTmp(Arena *arena) {
   String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
   memCopy(pathstr.str, path, Arrsize(path));
 
-  File file = {};
+  File file = {0};
   file.file_handle.h[0] = fd;
   file.path = pathstr;
   file.prop = fs_getProp(file.file_handle);
@@ -1191,7 +1259,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
-  String8 str = {};
+  String8 str = {0};
   LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 

@@ -1,5 +1,6 @@
 fn void os_print(OS_LogLevel level, const char *caller, const char *file,
                  i32 line, const char *fmt, ...) {
+  va_list args;
   switch (level) {
     case OS_LogLevel_Info: {
       printf(ANSI_COLOR_CYAN "[INFO ");
@@ -14,8 +15,7 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
   }
   printf("%s:%s@L%d] " ANSI_COLOR_RESET, file, caller, line);
 
- print_str:
-  va_list args;
+ print_str: ;
   Scratch scratch = ScratchBegin(0, 0);
   va_start(args, fmt);
   String8 msg = _str8_format(scratch.arena, fmt, args);
