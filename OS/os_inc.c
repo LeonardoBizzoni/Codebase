@@ -9,12 +9,6 @@
 #  include "core/Win32/os_core_win32.c"
 #endif
 
-// =============================================================================
-// Gui
-#ifndef OS_GUI
-#  define OS_GUI 0
-#endif
-
 #if OS_GUI
 #  if OS_LINUX
 #    include "gfx/Linux/linux_gfx.c"
@@ -23,5 +17,18 @@
 #    include "gfx/Win32/os_gfx_win32.c"
 #  else
 #    error os graphical layer is not supported for this platform
+#  endif
+#endif
+
+#if OS_SOUND
+#  include "sound/os_sound.c"
+#  if OS_LINUX
+#    include "sound/Linux/os_sound_linux.c"
+#  elif OS_BSD
+#    include "sound/BSD/os_sound_bsd.c"
+#  elif OS_WINDOWS
+#    include "sound/Win32/os_sound_win32.c"
+#  else
+#    error os sound layer is not supported for this platform
 #  endif
 #endif

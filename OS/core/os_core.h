@@ -389,6 +389,8 @@ inline fn bool fs_rename(String8 filepath, String8 to);
 inline fn bool fs_mkdir(String8 path);
 inline fn bool fs_rmdir(String8 path);
 
+fn String8 fs_filename_from_path(Arena *arena, String8 path);
+
 // =============================================================================
 // File iteration
 fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path);

@@ -9,6 +9,10 @@
 #include <sys/socket.h>
 #include <sys/mman.h>
 
+#if OS_SOUND
+#  include <pulse/pulseaudio.h>
+#endif
+
 typedef u64 LNX_PrimitiveType;
 enum {
   LNX_Primitive_Process,
@@ -19,6 +23,7 @@ enum {
   LNX_Primitive_Thread,
   LNX_Primitive_Semaphore,
   LNX_Primitive_Socket,
+  LNX_Primitive_Sound,
 };
 
 typedef struct LNX_Primitive {
@@ -50,6 +55,17 @@ typedef struct LNX_Primitive {
       socklen_t size;
       struct sockaddr addr;
     } socket;
+#if OS_SOUND
+    struct {
+      File file;
+      bool paused, should_exit;
+      pa_stream *stream;
+      pa_sample_spec sample_info;
+      OS_Handle pause_condvar;
+      OS_Handle pause_mutex;
+      OS_Handle player;
+    } sound;
+#endif
   };
 } LNX_Primitive;
 

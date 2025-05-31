@@ -96,6 +96,13 @@
 #  define ARCH_AVR 0
 #endif
 
+#if !defined(OS_GUI)
+#  define OS_GUI 0
+#endif
+#if !defined(OS_SOUND)
+#  define OS_SOUND 0
+#endif
+
 #if defined(DEBUG)
 #  undef DEBUG
 #  define DEBUG 1
@@ -103,6 +110,10 @@
 #else
 #  define DEBUG 0
 #  define NDEBUG 1
+#endif
+
+#if !defined(APPLICATION_NAME)
+  #define APPLICATION_NAME "codebase"
 #endif
 
 #define TLS_CTX_SIZE MB(64)

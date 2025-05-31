@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <semaphore.h>
+#include <libgen.h>
 #include <sched.h>
 #include <linux/sched.h>
 #include <sys/wait.h>
@@ -25,6 +26,7 @@ fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
   LNX_Primitive *res = lnx_state.primitive_freelist;
   if (res) {
     StackPop(lnx_state.primitive_freelist);
+    memZero(res, sizeof(LNX_Primitive));
   } else {
     res = New(lnx_state.arena, LNX_Primitive);
   }
@@ -1175,8 +1177,8 @@ fn File fs_fopenTmp(Arena *arena) {
 }
 
 inline fn bool fs_fclose(File *file) {
-  return munmap((void *)file->mmap_handle.h[0], file->prop.size) == 0 &&
-         close(file->file_handle.h[0]) >= 0;
+  return !munmap((void *)file->mmap_handle.h[0], file->prop.size) &&
+         fs_close(file->file_handle);
 }
 
 inline fn bool fs_fresize(File *file, usize size) {
@@ -1227,6 +1229,18 @@ inline fn bool fs_mkdir(String8 path) {
 inline fn bool fs_rmdir(String8 path) {
   Assert(path.size != 0);
   return rmdir((char *)path.str) >= 0;
+}
+
+fn String8 fs_filename_from_path(Arena *arena, String8 path) {
+  Scratch scratch = ScratchBegin(&arena, 1);
+  char *fullname = basename(cstr_from_str8(scratch.arena, path));
+  ScratchEnd(scratch);
+
+  usize last_dot = 0, size = 0;
+  for (; fullname[size]; ++size) {
+    if (fullname[size] == '.') { last_dot = size; }
+  }
+  return str8((u8*)fullname, size - (size - last_dot));
 }
 
 fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
@@ -1343,6 +1357,13 @@ i32 main(i32 argc, char **argv) {
 #if OS_GUI
   lnx_gfx_init();
 #endif
+#if OS_SOUND
+  lnx_snd_init();
+#endif
 
   start(&cli);
+
+#if OS_SOUND
+  lnx_snd_deinit();
+#endif
 }
