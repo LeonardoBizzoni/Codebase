@@ -16,14 +16,20 @@ fn void _lnx_pulse_stream_write(pa_stream *stream, usize success, void *userdata
 fn void _lnx_snd_player(void *args) {
   LNX_Primitive *prim = (LNX_Primitive *)args;
   Assert(prim->sound.file.prop.size > 0);
-  for (usize offset = 0; offset < prim->sound.file.prop.size;) {
-    os_mutex_lock(prim->sound.pause_mutex);
-    DeferLoop(os_mutex_unlock(prim->sound.pause_mutex)) {
+  for (usize offset = 0;;) {
+    os_mutex_lock(prim->sound.pausexit_mutex);
+    DeferLoop(os_mutex_unlock(prim->sound.pausexit_mutex)) {
       if (prim->sound.should_exit) { return; }
       while (prim->sound.paused) {
-        os_cond_wait(prim->sound.pause_condvar, prim->sound.pause_mutex, 0);
+        os_cond_wait(prim->sound.pausexit_condvar, prim->sound.pausexit_mutex, 0);
       }
     }
+
+    os_mutex_lock(prim->sound.player_mutex);
+    DeferLoop(os_mutex_unlock(prim->sound.player_mutex)) {
+      offset = prim->sound.player_offset;
+    }
+    if (offset >= prim->sound.file.prop.size) {return;}
 
     pa_threaded_mainloop_lock(lnx_snd_state.m);
     DeferLoop(pa_threaded_mainloop_unlock(lnx_snd_state.m)) {
@@ -34,7 +40,10 @@ fn void _lnx_snd_player(void *args) {
                          : writable;
         pa_stream_write(prim->sound.stream, &prim->sound.file.content[offset],
                         to_write, 0, 0, PA_SEEK_RELATIVE);
-        offset += to_write;
+        os_mutex_lock(prim->sound.player_mutex);
+        DeferLoop(os_mutex_unlock(prim->sound.player_mutex)) {
+          prim->sound.player_offset += to_write;
+        }
       }
       pa_threaded_mainloop_wait(lnx_snd_state.m);
     }
@@ -66,8 +75,9 @@ fn void lnx_snd_deinit(void) {
 
 fn OS_Handle os_snd_load(String8 path, char *name) {
   LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Sound);
-  prim->sound.pause_mutex = os_mutex_alloc();
-  prim->sound.pause_condvar = os_cond_alloc();
+  prim->sound.player_mutex = os_mutex_alloc();
+  prim->sound.pausexit_mutex = os_mutex_alloc();
+  prim->sound.pausexit_condvar = os_cond_alloc();
 
   if (str8_ends_with_str8(path, Strlit(".raw"))) {
     prim->sound.sample_info.format = PA_SAMPLE_S16NE;
@@ -120,12 +130,34 @@ fn void os_snd_start(OS_Handle handle) {
 fn void os_snd_stop(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   Assert(prim->type == LNX_Primitive_Sound);
-  os_mutex_lock(prim->sound.pause_mutex);
-  DeferLoop(os_mutex_unlock(prim->sound.pause_mutex)) {
+  os_mutex_lock(prim->sound.pausexit_mutex);
+  DeferLoop(os_mutex_unlock(prim->sound.pausexit_mutex)) {
     prim->sound.should_exit = true;
   }
 
   os_snd_until_end(handle);
+}
+
+fn void os_snd_skip(OS_Handle handle, i64 ms) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  Assert(prim->type == LNX_Primitive_Sound);
+  i64 byte_inc = 0;
+  TrackByteOffset_from_ms(prim->sound, ms, byte_inc);
+
+  os_mutex_lock(prim->sound.player_mutex);
+  DeferLoop(os_mutex_unlock(prim->sound.player_mutex)) {
+    prim->sound.player_offset += byte_inc;
+  }
+}
+
+fn void os_snd_goto(OS_Handle handle, u64 ms) {
+  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  Assert(prim->type == LNX_Primitive_Sound);
+
+  os_mutex_lock(prim->sound.player_mutex);
+  DeferLoop(os_mutex_unlock(prim->sound.player_mutex)) {
+    TrackByteOffset_from_ms(prim->sound, ms, prim->sound.player_offset);
+  }
 }
 
 fn void os_snd_until_end(OS_Handle handle) {
@@ -137,16 +169,16 @@ fn void os_snd_until_end(OS_Handle handle) {
   pa_stream_unref(prim->sound.stream);
 
   fs_fclose(&prim->sound.file);
-  os_mutex_free(prim->sound.pause_mutex);
-  os_cond_free(prim->sound.pause_condvar);
+  os_mutex_free(prim->sound.pausexit_mutex);
+  os_cond_free(prim->sound.pausexit_condvar);
   lnx_primitiveFree(prim);
 }
 
 fn void os_snd_pause(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   Assert(prim->type == LNX_Primitive_Sound);
-  os_mutex_lock(prim->sound.pause_mutex);
-  DeferLoop(os_mutex_unlock(prim->sound.pause_mutex)) {
+  os_mutex_lock(prim->sound.pausexit_mutex);
+  DeferLoop(os_mutex_unlock(prim->sound.pausexit_mutex)) {
     prim->sound.paused = true;
   }
 }
@@ -154,9 +186,9 @@ fn void os_snd_pause(OS_Handle handle) {
 fn void os_snd_resume(OS_Handle handle) {
   LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
   Assert(prim->type == LNX_Primitive_Sound);
-  os_mutex_lock(prim->sound.pause_mutex);
-  DeferLoop(os_mutex_unlock(prim->sound.pause_mutex)) {
+  os_mutex_lock(prim->sound.pausexit_mutex);
+  DeferLoop(os_mutex_unlock(prim->sound.pausexit_mutex)) {
     prim->sound.paused = false;
-    os_cond_signal(prim->sound.pause_condvar);
+    os_cond_signal(prim->sound.pausexit_condvar);
   }
 }

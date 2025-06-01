@@ -3,6 +3,28 @@
 
 #include <pulse/pulseaudio.h>
 
+#define TrackByteOffset_from_ms(SND_PRIM, MS, RES)                 \
+_stmt(                                                             \
+  u8 _bytesXsample = 0;                                            \
+  switch((SND_PRIM).sample_info.format) {                          \
+  case PA_SAMPLE_U8:                                               \
+  case PA_SAMPLE_ALAW:                                             \
+  case PA_SAMPLE_ULAW: {                                           \
+    _bytesXsample = 1;                                             \
+  } break;                                                         \
+  case PA_SAMPLE_S16LE:                                            \
+  case PA_SAMPLE_S16BE: {                                          \
+    _bytesXsample = 2;                                             \
+  } break;                                                         \
+  default: {                                                       \
+    _bytesXsample = 3;                                             \
+  } break;                                                         \
+  }                                                                \
+  (RES) = (usize)((MS) / 1e3 * _bytesXsample *                     \
+                  (SND_PRIM).sample_info.channels *                \
+                  (SND_PRIM).sample_info.rate);                    \
+)
+
 typedef struct {
   pa_threaded_mainloop *m;
   pa_mainloop_api *m_api;

@@ -58,12 +58,16 @@ typedef struct LNX_Primitive {
 #if OS_SOUND
     struct {
       File file;
-      bool paused, should_exit;
       pa_stream *stream;
       pa_sample_spec sample_info;
-      OS_Handle pause_condvar;
-      OS_Handle pause_mutex;
+
+      OS_Handle pausexit_condvar;
+      OS_Handle pausexit_mutex;
+      bool paused, should_exit;
+
       OS_Handle player;
+      usize player_offset;
+      OS_Handle player_mutex;
     } sound;
 #endif
   };
