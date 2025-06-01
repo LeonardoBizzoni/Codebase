@@ -138,6 +138,32 @@ fn OS_Event os_window_get_event(OS_Handle handle) {
   return res;
 }
 
+fn OS_Event os_window_wait_event(OS_Handle handle) {
+  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+  OS_Event res = {0};
+
+  XEvent xevent;
+  XIfEvent(lnx11_state.xdisplay, &xevent,
+           lnx_window_event_for_xwindow, (XPointer)&window->xwindow);
+  switch (xevent.type) {
+  case Expose: {
+    XWindowAttributes gwa;
+    XGetWindowAttributes(lnx11_state.xdisplay, window->xwindow, &gwa);
+
+    res.type = OS_EventType_Expose;
+    res.expose.width = gwa.width;
+    res.expose.height = gwa.height;
+  } break;
+  case ClientMessage: {
+    if ((Atom)xevent.xclient.data.l[0] == lnx11_state.xatom_close) {
+      res.type = OS_EventType_Kill;
+    }
+  } break;
+  }
+
+  return res;
+}
+
 // TODO(lb): move this somewhere else
 fn void gl_make_current(OS_Handle handle) {
 #if USING_OPENGL

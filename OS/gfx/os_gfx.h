@@ -25,6 +25,8 @@ fn void os_window_hide(OS_Handle handle);
 fn void os_window_close(OS_Handle handle);
 
 fn void os_window_swapBuffers(OS_Handle handle);
+
 fn OS_Event os_window_get_event(OS_Handle handle);
+fn OS_Event os_window_wait_event(OS_Handle handle);
 
 #endif

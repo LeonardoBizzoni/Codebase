@@ -1,6 +1,4 @@
 #include <aclapi.h>
-#pragma comment(lib, "Advapi32.lib")
-#pragma comment(lib, "ws2_32.lib")
 
 fn OS_SystemInfo*
 os_getSystemInfo(void) {
