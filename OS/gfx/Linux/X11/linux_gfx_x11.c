@@ -28,18 +28,9 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
                                KeyPressMask | KeymapStateMask;
   window->xattrib.background_pixel = 0;
 
-  // TODO(lb): these #if will be moved to opaque functions that depend on the
-  //           target graphics API. I don't know how vulkan is initialized nor
-  //           how to initialize software rendering in X11 so for now it
-  //           stays like this.
-#if USING_OPENGL
-  local i32 att[] = { GLX_RGBA, GLX_DEPTH_SIZE, LNX_SCREEN_DEPTH, GLX_DOUBLEBUFFER, None };
-  window->xvisual = *glXChooseVisual(lnx11_state.xdisplay, 0, att);
-#else
   Assert(XMatchVisualInfo(lnx11_state.xdisplay, window->xscreen,
                           LNX_SCREEN_DEPTH, TrueColor, &window->xvisual));
   window->xgc = XDefaultGC(lnx11_state.xdisplay, window->xscreen);
-#endif
 
   window->xattrib.colormap = XCreateColormap(lnx11_state.xdisplay,
                                              XDefaultRootWindow(lnx11_state.xdisplay),
@@ -54,12 +45,6 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   Scratch scratch = ScratchBegin(&lnx11_state.arena, 1);
   XStoreName(lnx11_state.xdisplay, window->xwindow, cstr_from_str8(scratch.arena, name));
   ScratchEnd(scratch);
-
-#if USING_OPENGL
-  window->context = glXCreateContext(lnx11_state.xdisplay, &window->xvisual, 0, true);
-  glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context);
-  glEnable(GL_DEPTH_TEST);
-#endif
 
   XAutoRepeatOn(lnx11_state.xdisplay);
   XFlush(lnx11_state.xdisplay);
@@ -85,9 +70,7 @@ fn void os_window_close(OS_Handle handle) {
   XUnmapWindow(lnx11_state.xdisplay, window->xwindow);
 
 #if USING_OPENGL
-  glXMakeCurrent(lnx11_state.xdisplay, None, 0);
-  glXDestroyContext(lnx11_state.xdisplay, window->context);
-  XFreeColormap(lnx11_state.xdisplay, window->xattrib.colormap);
+  opengl_deinit(handle);
 #endif
 
   XDestroyWindow(lnx11_state.xdisplay, window->xwindow);
@@ -164,10 +147,29 @@ fn OS_Event os_window_wait_event(OS_Handle handle) {
   return res;
 }
 
-// TODO(lb): move this somewhere else
-fn void gl_make_current(OS_Handle handle) {
 #if USING_OPENGL
+fn void opengl_init(OS_Handle handle) {
+  LNX11_Window *window = (LNX11_Window *)handle.h[0];
+
+  local i32 attr[] = { GLX_RGBA, GLX_DEPTH_SIZE, LNX_SCREEN_DEPTH, GLX_DOUBLEBUFFER, None };
+  XVisualInfo *info = glXChooseVisual(lnx11_state.xdisplay, window->xscreen, attr);
+  Assert(info);
+
+  window->xvisual = *info;
+  window->context = glXCreateContext(lnx11_state.xdisplay, info, 0, true);
+  glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context);
+  glEnable(GL_DEPTH_TEST);
+}
+
+fn void opengl_deinit(OS_Handle handle) {
+  LNX11_Window *window = (LNX11_Window *)handle.h[0];
+  glXMakeCurrent(lnx11_state.xdisplay, None, 0);
+  glXDestroyContext(lnx11_state.xdisplay, window->context);
+  XFreeColormap(lnx11_state.xdisplay, window->xattrib.colormap);
+}
+
+fn void opengl_make_current(OS_Handle handle) {
   LNX11_Window *window = (LNX11_Window*)handle.h[0];
   glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context);
-#endif
 }
+#endif

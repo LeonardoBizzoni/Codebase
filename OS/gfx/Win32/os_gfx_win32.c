@@ -81,6 +81,7 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   window->task = os_thread_start(w32_window_task, window);
 
   while (window->winhandle == 0);
+  window->dc = GetDC(window->winhandle);
   OS_Handle res = {{(u64)window}};
   return res;
 }
@@ -98,7 +99,9 @@ fn void os_window_close(OS_Handle handle) {
 }
 
 fn void os_window_swapBuffers(OS_Handle handle) {
-
+#if USING_OPENGL
+  SwapBuffers(((W32_Window *)handle.h[0])->dc);
+#endif
 }
 
 fn OS_Event os_window_get_event(OS_Handle handle) {
@@ -141,3 +144,42 @@ fn OS_Event os_window_wait_event(OS_Handle handle) {
   }
   return res;
 }
+
+#if USING_OPENGL
+fn void opengl_init(OS_Handle handle) {
+  W32_Window *window = (W32_Window *)handle.h[0];
+
+  PIXELFORMATDESCRIPTOR pfd = {0};
+  PIXELFORMATDESCRIPTOR desired_pfd = {
+    .nSize = sizeof(PIXELFORMATDESCRIPTOR),
+    .nVersion = 1,
+    .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+    .iPixelType = PFD_TYPE_RGBA,
+    // NOTE(lb): docs says without alpha but returned pfd has .cColorBits=32
+    //           so im not sure if 24 or 32 is the right value
+    .cColorBits = 32,
+    .cAlphaBits = 8,
+    .iLayerType = PFD_MAIN_PLANE,
+  };
+  i32 pixel_format = ChoosePixelFormat(window->dc, &desired_pfd);
+  Assert(pixel_format);
+  DescribePixelFormat(window->dc, pixel_format,
+                      sizeof(PIXELFORMATDESCRIPTOR), &pfd);
+  SetPixelFormat(window->dc, pixel_format, &pfd);
+
+  window->gl_context = wglCreateContext(window->dc);
+  Assert(window->gl_context);
+  wglMakeCurrent(window->dc, window->gl_context);
+}
+
+fn void opengl_deinit(OS_Handle handle) {
+  W32_Window *window = (W32_Window *)handle.h[0];
+  wglMakeCurrent(0, 0);
+  wglDeleteContext(window->gl_context);
+}
+
+fn void opengl_make_current(OS_Handle handle) {
+  W32_Window *window = (W32_Window *)handle.h[0];
+  wglMakeCurrent(window->dc, window->gl_context);
+}
+#endif

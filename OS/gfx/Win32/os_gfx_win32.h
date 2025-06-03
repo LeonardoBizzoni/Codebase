@@ -1,3 +1,7 @@
+#if USING_OPENGL
+#  include <gl/gl.h>
+#endif
+
 typedef struct W32_WindowEvent {
   OS_Event value;
   struct W32_WindowEvent *next;
@@ -11,8 +15,13 @@ typedef struct {
 typedef struct W32_Window {
   String8 name;
   u32 x, y, width, height;
-  HWND winhandle;
   OS_Handle task;
+
+  HWND winhandle;
+  HDC dc;
+#if USING_OPENGL
+  HGLRC gl_context;
+#endif
 
   struct {
     OS_Handle mutex, condvar;

@@ -29,4 +29,11 @@ fn void os_window_swapBuffers(OS_Handle handle);
 fn OS_Event os_window_get_event(OS_Handle handle);
 fn OS_Event os_window_wait_event(OS_Handle handle);
 
+#if USING_OPENGL
+fn void opengl_init(OS_Handle handle);
+fn void opengl_deinit(OS_Handle handle);
+
+fn void opengl_make_current(OS_Handle handle);
+#endif
+
 #endif

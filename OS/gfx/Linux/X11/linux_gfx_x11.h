@@ -21,6 +21,7 @@ typedef struct LNX11_Window {
   Window xwindow;
   XVisualInfo xvisual;
   XSetWindowAttributes xattrib;
+  GC xgc;
 
   struct {
     OS_Event *first;
@@ -31,8 +32,6 @@ typedef struct LNX11_Window {
 
 #if USING_OPENGL
   GLXContext context;
-#else
-  GC xgc;
 #endif
 
   struct LNX11_Window *next;
