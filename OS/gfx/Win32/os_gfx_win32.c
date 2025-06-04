@@ -3,15 +3,68 @@ global W32_GfxState w32_gfxstate = {0};
 fn void w32_gfx_init(HINSTANCE instance) {
   w32_gfxstate.arena = ArenaBuild();
   w32_gfxstate.instance = instance;
+fn W32_Window* w32_window_from_handle(HWND target) {
+  for (W32_Window *window = w32_gfxstate.first_window;
+       window;
+       window = window->next) {
+    if (window->winhandle == target) { return window; }
+  }
+  return 0;
 }
 
 fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
                                         WPARAM wparam, LPARAM lparam) {
-  switch (msg_code) {
-  case WM_CLOSE: {
-    PostQuitMessage(0);
-    return 0;
-  } break;
+  W32_Window *window = w32_window_from_handle(winhandle);
+  if (!window) {
+    return DefWindowProc(winhandle, msg_code, wparam, lparam);
+  }
+
+  W32_WindowEvent *event = 0;
+  os_mutex_lock(window->event.mutex);
+  DeferLoop(os_mutex_unlock(window->event.mutex)) {
+    event = window->event.freelist.first;
+    if (event) {
+      memZero(event, sizeof(W32_WindowEvent));
+      QueuePop(window->event.freelist.first);
+    } else {
+      event = New(w32_gfxstate.arena, W32_WindowEvent);
+    }
+    QueuePush(window->event.queue.first, window->event.queue.last, event);
+
+    switch (msg_code) {
+    case WM_QUIT:
+    case WM_CLOSE: {
+      event->value.type = OS_EventType_Kill;
+    } break;
+    case WM_SIZE:
+    case WM_PAINT: {
+      RECT rect;
+      GetClientRect(window->winhandle, &rect);
+      event->value.expose.width = rect.right - rect.left;
+      event->value.expose.height = rect.bottom - rect.top;
+      event->value.type = OS_EventType_Expose;
+    } break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN: {
+      event->value.type = lparam >> 29 ? OS_EventType_KeyUp
+                                       : OS_EventType_KeyDown;
+      event->value.key.keycode = wparam;
+      event->value.key.scancode = (lparam >> 16) & 0xFF;
+      if (lparam >> 24 & 0b1) {
+        event->value.key.scancode |= 0xE000;
+      } else if (event->value.key.scancode == 0x45) {
+        event->value.key.scancode = 0xE11D45;
+      } else if (event->value.key.scancode == 0x54) {
+        event->value.key.scancode = 0xE037;
+      }
+    } break;
+    case WM_INPUTLANGCHANGE: {
+      ActivateKeyboardLayout((HKL)lparam, KLF_SETFORPROCESS);
+    } break;
+    }
+    os_cond_signal(window->event.condvar);
   }
 
   return DefWindowProc(winhandle, msg_code, wparam, lparam);
@@ -30,33 +83,11 @@ fn void w32_window_task(void *args) {
   Assert(window->winhandle);
 
   while (1) {
-    MSG msg = {0};
-    GetMessage(&msg, 0, 0, 0);
-    TranslateMessage(&msg);
-    DispatchMessage(&msg);
-
-    W32_WindowEvent *event = 0;
-    os_mutex_lock(window->event.mutex);
-    DeferLoop(os_mutex_unlock(window->event.mutex)) {
-      event = window->event.freelist.first;
-      if (event) {
-        memZero(event, sizeof(W32_WindowEvent));
-        QueuePop(window->event.freelist.first);
-      } else {
-        event = New(w32_gfxstate.arena, W32_WindowEvent);
+    for (MSG msg = {0}; PeekMessage(&msg, 0, 0, 0, PM_REMOVE);) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
       }
-      QueuePush(window->event.queue.first, window->event.queue.last, event);
-
-      switch (msg.message) {
-      case WM_QUIT: {
-        event->value.type = OS_EventType_Kill;
-      } break;
-      case WM_SIZE:
-      case WM_PAINT: {
-        event->value.type = OS_EventType_Expose;
-      } break;
-      }
-      os_cond_signal(window->event.condvar);
     }
   }
 }
@@ -142,6 +173,30 @@ fn OS_Event os_window_wait_event(OS_Handle handle) {
       QueuePush(window->event.freelist.first, window->event.freelist.last, event);
     }
   }
+  return res;
+}
+
+fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
+  u32 lparam = 0, extended = event.key.scancode & 0xFFFF00;
+  if (extended == 0xE11D00) {
+    lparam = 0x45 << 16;
+  } else if (extended) {
+    lparam = (0x100 | (event.key.scancode & 0xFF)) << 16;
+  } else {
+    lparam = event.key.scancode << 16;
+    if (event.key.scancode == 0x45) {
+      lparam |= 0x1 << 24;
+    }
+  }
+
+  local isize max_keyname_size = 50;
+  String8 res = {
+    .str = New(arena, u8, 50),
+    .size = max_keyname_size,
+  };
+  GetKeyNameText(lparam, res.str, res.size);
+  res.size = str8_len(res.str);
+  arenaPop(arena, max_keyname_size - res.size);
   return res;
 }
 

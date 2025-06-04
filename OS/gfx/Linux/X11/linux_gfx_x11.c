@@ -3,7 +3,6 @@ global LNX11_State lnx11_state = {0};
 fn void lnx_gfx_init(void) {
   lnx11_state.arena = ArenaBuild();
   lnx11_state.xdisplay = XOpenDisplay(0);
-
   lnx11_state.xatom_close = XInternAtom(lnx11_state.xdisplay, "WM_DELETE_WINDOW", False);
 }
 
@@ -94,41 +93,9 @@ fn Bool lnx_window_event_for_xwindow(Display *_display, XEvent *event, XPointer 
   return event->xany.window == *(Window*)arg;
 }
 
-fn OS_Event os_window_get_event(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn OS_Event lnx_handle_xevent(LNX11_Window *window, XEvent *xevent) {
   OS_Event res = {0};
-
-  XEvent xevent;
-  if (XCheckIfEvent(lnx11_state.xdisplay, &xevent,
-                    lnx_window_event_for_xwindow, (XPointer)&window->xwindow)) {
-    switch (xevent.type) {
-    case Expose: {
-      XWindowAttributes gwa;
-      XGetWindowAttributes(lnx11_state.xdisplay, window->xwindow, &gwa);
-
-      res.type = OS_EventType_Expose;
-      res.expose.width = gwa.width;
-      res.expose.height = gwa.height;
-    } break;
-    case ClientMessage: {
-      if ((Atom)xevent.xclient.data.l[0] == lnx11_state.xatom_close) {
-        res.type = OS_EventType_Kill;
-      }
-    } break;
-    }
-  }
-
-  return res;
-}
-
-fn OS_Event os_window_wait_event(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
-  OS_Event res = {0};
-
-  XEvent xevent;
-  XIfEvent(lnx11_state.xdisplay, &xevent,
-           lnx_window_event_for_xwindow, (XPointer)&window->xwindow);
-  switch (xevent.type) {
+  switch (xevent->type) {
   case Expose: {
     XWindowAttributes gwa;
     XGetWindowAttributes(lnx11_state.xdisplay, window->xwindow, &gwa);
@@ -137,13 +104,50 @@ fn OS_Event os_window_wait_event(OS_Handle handle) {
     res.expose.width = gwa.width;
     res.expose.height = gwa.height;
   } break;
+  case KeyRelease:
+  case KeyPress: {
+    XKeyEvent *xkey = &xevent->xkey;
+    res.type = xevent->type == KeyPress ? OS_EventType_KeyDown
+                                        : OS_EventType_KeyUp;
+    res.key.scancode = xkey->keycode;
+    res.key.keycode = XkbKeycodeToKeysym(lnx11_state.xdisplay, xkey->keycode, 0,
+                                         xkey->state & ShiftMask ? 1 : 0);
+  } break;
   case ClientMessage: {
-    if ((Atom)xevent.xclient.data.l[0] == lnx11_state.xatom_close) {
+    if ((Atom)xevent->xclient.data.l[0] == lnx11_state.xatom_close) {
       res.type = OS_EventType_Kill;
     }
   } break;
   }
+  return res;
+}
 
+fn OS_Event os_window_get_event(OS_Handle handle) {
+  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+  OS_Event res = {0};
+
+  XEvent xevent;
+  if (XCheckIfEvent(lnx11_state.xdisplay, &xevent,
+                    lnx_window_event_for_xwindow, (XPointer)&window->xwindow)) {
+    res = lnx_handle_xevent(window, &xevent);
+  }
+
+  return res;
+}
+
+fn OS_Event os_window_wait_event(OS_Handle handle) {
+  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+
+  XEvent xevent;
+  XIfEvent(lnx11_state.xdisplay, &xevent,
+           lnx_window_event_for_xwindow, (XPointer)&window->xwindow);
+  return lnx_handle_xevent(window, &xevent);
+}
+
+fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
+  String8 res = {0};
+  res.str = (u8*)XKeysymToString(event.key.keycode);
+  if (res.str) { res.size = str8_len((char*)res.str); }
   return res;
 }
 

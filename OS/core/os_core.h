@@ -397,4 +397,8 @@ fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path);
 fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out);
 fn void fs_iter_end(OS_FileIter *iter);
 
+// =============================================================================
+// Debugger communication func
+fn void dbg_print(char *fmt, ...);
+
 #endif

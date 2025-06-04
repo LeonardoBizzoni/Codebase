@@ -6,6 +6,8 @@ enum {
   OS_EventType_None,
   OS_EventType_Kill,
   OS_EventType_Expose,
+  OS_EventType_KeyDown,
+  OS_EventType_KeyUp,
 };
 
 typedef struct {
@@ -16,6 +18,10 @@ typedef struct {
       i32 width;
       i32 height;
     } expose;
+    struct {
+      u32 keycode;  // keyboard layout dependent
+      u32 scancode; // keyboard layout independent
+    } key;
   };
 } OS_Event;
 
@@ -28,6 +34,8 @@ fn void os_window_swapBuffers(OS_Handle handle);
 
 fn OS_Event os_window_get_event(OS_Handle handle);
 fn OS_Event os_window_wait_event(OS_Handle handle);
+
+fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
 
 #if USING_OPENGL
 fn void opengl_init(OS_Handle handle);

@@ -1291,6 +1291,19 @@ fs_iter_end(OS_FileIter *iter)
   FindClose(w32_iter->handle);
 }
 
+// =============================================================================
+// Debugger communication func
+fn void dbg_print(char *fmt, ...) {
+  va_list args;
+  Scratch scratch = ScratchBegin(0, 0);
+  va_start(args, fmt);
+  String8 msg = _str8_format(scratch.arena, fmt, args);
+  OutputDebugStringA(cstr_from_str8(scratch.arena, msg));
+  OutputDebugStringA("\n");
+  va_end(args);
+  ScratchEnd(scratch);
+}
+
 ////////////////////////////////
 //- km: Entry point
 
