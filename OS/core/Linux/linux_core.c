@@ -312,6 +312,13 @@ fn void os_thread_kill(OS_Handle thd_handle) {
   lnx_primitiveFree(prim);
 }
 
+fn void os_thread_cancel(OS_Handle thd_handle) {
+  LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != LNX_Primitive_Thread) { return; }
+  (void)pthread_cancel(prim->thread.handle);
+  lnx_primitiveFree(prim);
+}
+
 fn bool os_thread_join(OS_Handle thd_handle) {
   LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
   if (!prim || prim->type != LNX_Primitive_Thread) { return false; }

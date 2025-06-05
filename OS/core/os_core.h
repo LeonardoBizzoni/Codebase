@@ -217,6 +217,7 @@ fn void os_decommit(void *base, usize size);
 // Threads & Processes stuff
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
+fn void os_thread_cancel(OS_Handle thd_handle);
 fn bool os_thread_join(OS_Handle thd);
 fn void os_thread_cancelpoint(void);
 
