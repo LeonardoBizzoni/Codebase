@@ -400,6 +400,6 @@ fn void fs_iter_end(OS_FileIter *iter);
 
 // =============================================================================
 // Debugger communication func
-fn void dbg_print(char *fmt, ...);
+fn void dbg_print(const char *fmt, ...);
 
 #endif
