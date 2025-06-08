@@ -832,7 +832,7 @@ fn void os_socket_connect(OS_Socket *server) {
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
   u8 *res = New(arena, u8, buffer_size);
   OS_W32_Primitive *prim = (OS_W32_Primitive*)client->handle.h[0];
-  recv(prim->socket.handle, res, buffer_size, MSG_WAITALL);
+  recv(prim->socket.handle, (char*)res, buffer_size, MSG_WAITALL);
   return res;
 }
 
@@ -1293,7 +1293,7 @@ fs_iter_end(OS_FileIter *iter)
 
 // =============================================================================
 // Debugger communication func
-fn void dbg_print(char *fmt, ...) {
+fn void dbg_print(const char *fmt, ...) {
   va_list args;
   Scratch scratch = ScratchBegin(0, 0);
   va_start(args, fmt);

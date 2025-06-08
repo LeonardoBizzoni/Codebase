@@ -73,12 +73,13 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
 fn void w32_window_task(void *args) {
   W32_Window *window = (W32_Window *)args;
   WNDCLASS winclass = {0};
-  winclass.lpszClassName = window->name.str;
+  winclass.lpszClassName = (LPCSTR)window->name.str;
   winclass.hInstance = w32_gfxstate.instance;
   winclass.lpfnWndProc = w32_message_handler;
   RegisterClass(&winclass);
-  window->winhandle = CreateWindow(window->name.str, window->name.str, WS_OVERLAPPEDWINDOW,
-                                   window->x, window->y, window->width, window->height, 0, 0,
+  window->winhandle = CreateWindow((LPCSTR)window->name.str, (LPCSTR)window->name.str,
+                                   WS_OVERLAPPEDWINDOW, window->x, window->y,
+                                   window->width, window->height, 0, 0,
                                    w32_gfxstate.instance, 0);
   Assert(window->winhandle);
 
@@ -190,12 +191,9 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   }
 
   local isize max_keyname_size = 50;
-  String8 res = {
-    .str = New(arena, u8, 50),
-    .size = max_keyname_size,
-  };
-  GetKeyNameText(lparam, res.str, res.size);
-  res.size = str8_len(res.str);
+  String8 res = str8(New(arena, u8, 50), max_keyname_size);
+  GetKeyNameText(lparam, (char*)res.str, res.size);
+  res.size = str8_len((char*)res.str);
   arenaPop(arena, max_keyname_size - res.size);
   return res;
 }

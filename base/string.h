@@ -30,11 +30,6 @@ typedef struct String8 {
   isize size;
 
 #if CPP
-  template<usize N>
-  String8(const char (&cstr)[N]) : str{(u8 *)cstr}, size{N-1} {}
-  String8(u8 *chars, isize len) : str(chars), size(len) {}
-  String8() : str(0), size(0) {}
-
   inline char operator[](usize idx) {
     return (char)str[idx];
   }
