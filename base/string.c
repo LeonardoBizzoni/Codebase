@@ -365,34 +365,28 @@ fn String8 str8_to_capitalized(Arena *arena, String8 s) {
 }
 
 fn String8 str8_trim(String8 s) {
-  isize start = 0;
-  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
-                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
-
-  isize end = s.size - 1;
-  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
-                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
-
-  String8 res = str8(s.str + start, end - start + 1);
-  return res;
+  u8 *ptr = s.str;
+  u8 *opl = s.str+s.size;
+  for(;ptr < opl && char_is_space(*ptr); ptr += 1);
+  for(;opl > ptr && char_is_space(*(opl-1)); opl -= 1);
+  String8 result = str8_range(ptr, opl);
+  return result;
 }
 
 fn String8 str8_trim_left(String8 s) {
-  isize start = 0;
-  for (; start < s.size && (s.str[start] == ' ' || s.str[start] == '\t' ||
-                            s.str[start] == '\n' || s.str[start] == '\r'); ++start);
-
-  String8 res = str8(s.str + start, s.size - start + 1);
-  return res;
+  u8 *ptr = s.str;
+  u8 *opl = s.str+s.size;
+  for(;ptr < opl && char_is_space(*ptr); ptr += 1);
+  String8 result = str8_range(ptr, opl);
+  return result;
 }
 
 fn String8 str8_trim_right(String8 s) {
-  isize end = s.size - 1;
-  for (; end >= 0 && (s.str[end] == ' ' || s.str[end] == '\t' ||
-                      s.str[end] == '\n' || s.str[end] == '\r'); --end);
-
-  String8 res = str8(s.str, end + 1);
-  return res;
+  u8 *first = s.str;
+  u8 *opl = s.str+s.size;
+  for(;opl > first && char_is_space(*(opl-1)); opl -= 1);
+  String8 result = str8_range(first, opl);
+  return result;
 }
 
 fn String8 str8_format(Arena *arena, const char *fmt, ...) {
