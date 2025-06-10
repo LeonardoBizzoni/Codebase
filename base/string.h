@@ -108,6 +108,7 @@ fn i64 i64_from_str8(String8 s);
 fn u64 u64_from_str8(String8 s);
 fn f64 f64_from_str8(String8 s);
 
+fn bool char_is_whitespace(u8 ch);
 fn bool char_is_space(u8 ch);
 fn bool char_is_slash(u8 ch);
 fn bool char_is_upper(u8 ch);
