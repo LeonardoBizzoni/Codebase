@@ -367,8 +367,8 @@ fn String8 str8_to_capitalized(Arena *arena, String8 s) {
 fn String8 str8_trim(String8 s) {
   u8 *ptr = s.str;
   u8 *opl = s.str+s.size;
-  for(;ptr < opl && char_is_space(*ptr); ptr += 1);
-  for(;opl > ptr && char_is_space(*(opl-1)); opl -= 1);
+  for(;ptr < opl && char_is_whitespace(*ptr); ptr += 1);
+  for(;opl > ptr && char_is_whitespace(*(opl-1)); opl -= 1);
   String8 result = str8_range(ptr, opl);
   return result;
 }
@@ -376,7 +376,7 @@ fn String8 str8_trim(String8 s) {
 fn String8 str8_trim_left(String8 s) {
   u8 *ptr = s.str;
   u8 *opl = s.str+s.size;
-  for(;ptr < opl && char_is_space(*ptr); ptr += 1);
+  for(;ptr < opl && char_is_whitespace(*ptr); ptr += 1);
   String8 result = str8_range(ptr, opl);
   return result;
 }
@@ -384,7 +384,7 @@ fn String8 str8_trim_left(String8 s) {
 fn String8 str8_trim_right(String8 s) {
   u8 *first = s.str;
   u8 *opl = s.str+s.size;
-  for(;opl > first && char_is_space(*(opl-1)); opl -= 1);
+  for(;opl > first && char_is_whitespace(*(opl-1)); opl -= 1);
   String8 result = str8_range(first, opl);
   return result;
 }
@@ -641,6 +641,8 @@ fn f64 f64_from_str8(String8 s) {
   return res;
 }
 
+fn bool char_is_whitespace(u8 ch) { return ch == ' ' || ch == '\t' ||
+                                           ch == '\n' || ch == '\r'; }
 fn bool char_is_space(u8 ch) { return ch == ' '; }
 fn bool char_is_slash(u8 ch) { return ch == '/'; }
 fn bool char_is_upper(u8 ch) { return ch >= 'A' && ch <= 'Z'; }
