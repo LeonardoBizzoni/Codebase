@@ -63,25 +63,26 @@ inline fn Codepoint decodeUTF32(u32 *glyph_start) {
 
 fn u8 encodeUTF8(u8 *res, Codepoint cp) {
   if (cp.codepoint <= 0x7F) {
-    res[0] = cp.codepoint;
+    res[0] = (u8)cp.codepoint;
     return 1;
   } else if (cp.codepoint <= 0x7FF) {
-    res[0] = 0xC0 | (cp.codepoint >> 6);
+    res[0] = (u8)(0xC0 | (cp.codepoint >> 6));
     res[1] = 0x80 | (cp.codepoint & 0x3F);
     return 2;
   } else if (cp.codepoint <= 0xFFFF) {
-    res[0] = 0xE0 | (cp.codepoint >> 12);
+    res[0] = (u8)(0xE0 | (cp.codepoint >> 12));
     res[1] = 0x80 | ((cp.codepoint >> 6) & 0x3F);
     res[2] = 0x80 | (cp.codepoint & 0x3F);
     return 3;
   } else if (cp.codepoint <= 0x10FFFF) {
-    res[0] = 0xF0 | (cp.codepoint >> 18);
+    res[0] = (u8)(0xF0 | (cp.codepoint >> 18));
     res[1] = 0x80 | ((cp.codepoint >> 12) & 0x3F);
     res[2] = 0x80 | ((cp.codepoint >> 6) & 0x3F);
     res[3] = 0x80 | (cp.codepoint & 0x3F);
     return 4;
   } else {
     Assert(false);
+    // NOTE(km): return type is unsigned
     return -1;
   }
 }
@@ -89,14 +90,15 @@ fn u8 encodeUTF8(u8 *res, Codepoint cp) {
 fn u8 encodeUTF16(u16 *res, Codepoint cp) {
   if (cp.codepoint <= 0xD7FF ||
       (cp.codepoint >= 0xE000 && cp.codepoint <= 0xFFFF)) {
-    res[0] = cp.codepoint;
+    res[0] = (u16)cp.codepoint;
     return 1;
   } else if (cp.codepoint >= 0x10000 && cp.codepoint <= 0x10FFFF) {
-    res[0] = ((cp.codepoint - 0x10000) >> 10) + 0xD800;
+    res[0] = (u16)(((cp.codepoint - 0x10000) >> 10) + 0xD800);
     res[1] = ((cp.codepoint - 0x10000) & 0x3FF) + 0xDC00;
     return 2;
   } else {
     Assert(false);
+    // NOTE(km): same thing here
     return -1;
   }
 }
@@ -116,11 +118,9 @@ fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other)
   DLLPushBack(strlist->first, strlist->last, str);
 }
 
-fn void strstream_append_stream(Arena *arena, StringStream *strlist, StringStream other) {
+fn void strstream_append_stream(StringStream *strlist, StringStream other) {
   if (!other.first) { return; }
-  for (StringNode *curr = other.first; curr; curr = curr->next) {
-    strlist->node_count += curr->value.size;
-  }
+  strlist->total_size += other.total_size;
   strlist->node_count += other.node_count;
   DLLPushBack(strlist->first, strlist->last, other.first);
 }
