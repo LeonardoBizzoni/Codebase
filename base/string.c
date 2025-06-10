@@ -266,15 +266,19 @@ inline fn String8 str8_prefix(String8 s, isize end) {
 }
 
 inline fn String8 str8_postfix(String8 s, isize start) {
-  return str8(s.str + start, s.size >= start ? s.size - start : 0);
+  start = ClampTop(start, s.size);
+  return str8(s.str + start, s.size - start);
 }
 
-fn String8 str8_substr(String8 s, isize end) {
-  return str8(s.str, ClampTop(s.size,end));
+fn String8 str8_substr(String8 s, isize first, isize opl) {
+  opl = ClampTop(opl, s.size);
+  String8 result = str8_range(s.str+first, s.str+opl);
+  return result;
 }
 
-inline fn String8 str8_range(String8 s, isize start, isize end) {
-  return str8(s.str + start, ClampTop(end, s.size) - start);
+fn String8 str8_range(u8 *first, u8 *opl) {
+  String8 result = {first, (isize)(opl - first)};
+  return result;
 }
 
 fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
@@ -421,7 +425,7 @@ fn StringStream str8_split(Arena *arena, String8 s, char ch) {
   for (isize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
-        strstream_append_str(arena, &res, str8_range(s, prev, i));
+        strstream_append_str(arena, &res, str8_substr(s, prev, i));
       }
 
       do {
@@ -433,7 +437,7 @@ fn StringStream str8_split(Arena *arena, String8 s, char ch) {
   }
 
   if (prev != s.size) {
-    strstream_append_str(arena, &res, str8_range(s, prev, s.size));
+    strstream_append_str(arena, &res, str8_substr(s, prev, s.size));
   }
 
   return res;
