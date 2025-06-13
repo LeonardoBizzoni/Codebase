@@ -6,13 +6,15 @@
 #define New2(arenaptr, type) (type*)arenaPush(arenaptr, sizeof(type), AlignOf(type))
 #define New3(arenaptr, type, count) (type*)arenaPush(arenaptr, (count) * sizeof(type), AlignOf(type))
 
+#define AlignFoward(p, a) (((p) + (a) - 1)&~((a) - 1))
+
 #define ArenaDefaultReserveSize MB(4)
 #define ArenaDefaultCommitSize KiB(4)
 
 typedef u64 ArenaFlags;
 enum {
-  Arena_Growable = 1 << 0,
-  Arena_UseHugePage = 1 << 1,
+  ArenaFlag_Growable = 1 << 0,
+  ArenaFlag_UseHugePage = 1 << 1,
 };
 
 typedef struct {
@@ -23,13 +25,11 @@ typedef struct {
 
 typedef struct Arena {
   void *base;
-  usize head;
-
-  u64 flags;
-  usize commits;
-  usize commit_size;
-  usize reserve_size;
-
+  u64 pos;
+  u64 cmt_pos;
+  u64 commit_size;
+  u64 reserve_size;
+  ArenaFlags flags;
   struct Arena *next;
   struct Arena *prev;
 } Arena;
@@ -42,9 +42,10 @@ typedef struct {
 inline fn usize forwardAlign(usize ptr, usize align);
 inline fn bool isPowerOfTwo(usize value);
 
-inline fn void arenaPop(Arena *arena, usize bytes);
-inline fn void arenaFree(Arena *arena);
-       fn void *arenaPush(Arena *arena, usize size, usize align);
+fn void arena_pop_to(Arena *arean, u64 pos);
+fn void arenaPop(Arena *arena, usize bytes);
+fn void arenaFree(Arena *arena);
+fn void *arenaPush(Arena *arena, usize size, usize align);
 
 fn Arena *_arenaBuild(ArenaArgs args);
 #if CPP
@@ -55,7 +56,7 @@ fn Arena *_arenaBuild(ArenaArgs args);
                                                    __VA_ARGS__})
 #endif
 
-inline fn Scratch tmpBegin(Arena *arena);
-inline fn void tmpEnd(Scratch tmp);
+fn Scratch tmpBegin(Arena *arena);
+fn void tmpEnd(Scratch tmp);
 
 #endif
