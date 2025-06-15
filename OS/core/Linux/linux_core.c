@@ -26,7 +26,7 @@ fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
   LNX_Primitive *res = lnx_state.primitive_freelist;
   if (res) {
     StackPop(lnx_state.primitive_freelist);
-    memZero(res, sizeof(LNX_Primitive));
+    memzero(res, sizeof(LNX_Primitive));
   } else {
     res = New(lnx_state.arena, LNX_Primitive);
   }
@@ -783,7 +783,7 @@ fn String8 os_currentDir(Arena *arena) {
   char *wd = getcwd(0, 0);
   isize size = str8_len(wd);
   u8 *copy = New(arena, u8, size);
-  memCopy(copy, wd, size);
+  memcopy(copy, wd, size);
   free(wd);
   String8 res = str8(copy, size);
   return res;
@@ -807,7 +807,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
     String8 interface = str8_from_cstr(ifa->ifa_name);
     inter->name.str = New(arena, u8, interface.size);
     inter->name.size = interface.size;
-    memCopy(inter->name.str, interface.str, interface.size);
+    memcopy(inter->name.str, interface.str, interface.size);
 
     if (ifa->ifa_addr->sa_family == AF_INET) {
       inter->version = OS_Net_Network_IPv4;
@@ -822,7 +822,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
       String8 strip = str8_from_cstr(cstrip);
       inter->strip.str = New(arena, u8, strip.size);
       inter->strip.size = strip.size;
-      memCopy(inter->strip.str, strip.str, strip.size);
+      memcopy(inter->strip.str, strip.str, strip.size);
     } else if (ifa->ifa_addr->sa_family == AF_INET6) {
       inter->version = OS_Net_Network_IPv6;
 
@@ -836,7 +836,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
       String8 strip = str8_from_cstr(cstrip);
       inter->strip.str = New(arena, u8, strip.size);
       inter->strip.size = strip.size;
-      memCopy(inter->strip.str, strip.str, strip.size);
+      memcopy(inter->strip.str, strip.str, strip.size);
     }
 
     DLLPushBack(res.first, res.last, inter);
@@ -853,7 +853,7 @@ fn NetInterface os_net_interface_from_str8(String8 strip) {
   NetInterfaceList inters = os_net_interfaces(scratch.arena);
   for (NetInterface *curr = inters.first; curr; curr = curr->next) {
     if (str8_eq(curr->strip, strip)) {
-      memCopy(&res, curr, sizeof(NetInterface));
+      memcopy(&res, curr, sizeof(NetInterface));
       break;
     }
   }
@@ -885,12 +885,12 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   if (!info) { return res; }
   if (info->ai_family == AF_INET) {
     res.version = OS_Net_Network_IPv4;
-    memCopy(res.v4.bytes,
+    memcopy(res.v4.bytes,
             &((struct sockaddr_in*)info->ai_addr)->sin_addr,
             4 * sizeof(u8));
   } else if (info->ai_family == AF_INET6) {
     res.version = OS_Net_Network_IPv6;
-    memCopy(res.v6.words,
+    memcopy(res.v6.words,
             &((struct sockaddr_in6*)info->ai_addr)->sin6_addr,
             8 * sizeof(u16));
   }
@@ -911,7 +911,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       struct sockaddr_in *addr = (struct sockaddr_in*)&prim->socket.addr;
       addr->sin_family = cdomain;
       addr->sin_port = htons(port);
-      memCopy(&addr->sin_addr, server.v4.bytes, 4 * sizeof(u8));
+      memcopy(&addr->sin_addr, server.v4.bytes, 4 * sizeof(u8));
       prim->socket.size = sizeof(struct sockaddr_in);
     } break;
     case OS_Net_Network_IPv6: {
@@ -919,7 +919,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       struct sockaddr_in6 *addr = (struct sockaddr_in6*)&prim->socket.addr;
       addr->sin6_family = cdomain;
       addr->sin6_port = htons(port);
-      memCopy(&addr->sin6_addr, server.v4.bytes, 8 * sizeof(u16));
+      memcopy(&addr->sin6_addr, server.v4.bytes, 8 * sizeof(u16));
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
@@ -977,18 +977,18 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
     return res;
   }
 
-  memCopy(&res, socket, sizeof(OS_Socket));
+  memcopy(&res, socket, sizeof(OS_Socket));
   res.handle.h[0] = (u64)client_prim;
   switch (client_prim->socket.addr.sa_family) {
   case AF_INET: {
     struct sockaddr_in *client = (struct sockaddr_in *)&client_prim->socket.addr;
-    memCopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
+    memcopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
     res.client.port = client->sin_port;
     res.client.addr.version = OS_Net_Network_IPv4;
   } break;
   case AF_INET6: {
     struct sockaddr_in6 *client = (struct sockaddr_in6 *)&client_prim->socket.addr;
-    memCopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
+    memcopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
     res.client.port = client->sin6_port;
     res.client.addr.version = OS_Net_Network_IPv6;
   } break;
@@ -1020,13 +1020,13 @@ fn void os_socket_connect(OS_Socket *server) {
   switch (client.sa_family) {
   case AF_INET: {
     struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
-    memCopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
+    memcopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
     server->client.port = clientv4->sin_port;
     server->client.addr.version = OS_Net_Network_IPv4;
   } break;
   case AF_INET6: {
     struct sockaddr_in6 *clientv6 = (struct sockaddr_in6 *)&client;
-    memCopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
+    memcopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
     server->client.port = clientv6->sin6_port;
     server->client.addr.version = OS_Net_Network_IPv6;
   } break;
@@ -1171,7 +1171,7 @@ fn File fs_fopenTmp(Arena *arena) {
   i32 fd = mkstemp(path);
 
   String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
-  memCopy(pathstr.str, path, Arrsize(path));
+  memcopy(pathstr.str, path, Arrsize(path));
 
   File file = {0};
   file.file_handle.h[0] = fd;
@@ -1302,7 +1302,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
 
   info_out->name.size = str.size;
   info_out->name.str = New(arena, u8, str.size);
-  memCopy(info_out->name.str, str.str, str.size);
+  memcopy(info_out->name.str, str.str, str.size);
   ScratchEnd(scratch);
   return true;
 }

@@ -35,7 +35,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   DeferLoop(os_mutex_unlock(window->event.mutex)) {
     event = window->event.freelist.first;
     if (event) {
-      memZero(event, sizeof(W32_WindowEvent));
+      memzero(event, sizeof(W32_WindowEvent));
       QueuePop(window->event.freelist.first);
     } else {
       event = New(w32_gfxstate.arena, W32_WindowEvent);
@@ -122,7 +122,7 @@ fn void w32_window_task(void *args) {
 fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   W32_Window *window = w32_gfxstate.freelist_window;
   if (window) {
-    memZero(window, sizeof(W32_Window));
+    memzero(window, sizeof(W32_Window));
     StackPop(w32_gfxstate.freelist_window);
   } else {
     window = New(w32_gfxstate.arena, W32_Window);
@@ -173,7 +173,7 @@ fn OS_Event os_window_get_event(OS_Handle handle) {
 
     if (event) {
       if (event->value.type) {
-        memCopy(&res, &event->value, sizeof(OS_Event));
+        memcopy(&res, &event->value, sizeof(OS_Event));
       }
       QueuePush(window->event.freelist.first, window->event.freelist.last, event);
     }
@@ -195,7 +195,7 @@ fn OS_Event os_window_wait_event(OS_Handle handle) {
 
     if (event) {
       if (event->value.type) {
-        memCopy(&res, &event->value, sizeof(OS_Event));
+        memcopy(&res, &event->value, sizeof(OS_Event));
       }
       QueuePush(window->event.freelist.first, window->event.freelist.last, event);
     }

@@ -28,9 +28,9 @@ inline fn void fs_fwrite(File *file, String8 content) {
   if (file->prop.size < (usize)content.size) {
     fs_fresize(file, content.size);
   }
-  memZero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
+  memzero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
                                                     (isize)content.size));
-  (void)memCopy(file->content, content.str, content.size);
+  (void)memcopy(file->content, content.str, content.size);
 }
 
 fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {

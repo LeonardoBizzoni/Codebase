@@ -47,11 +47,12 @@ fn Arena *_arenaBuild(ArenaArgs args) {
 
 inline fn void arenaPop(Arena *arena, usize bytes) {
   arena->head = ClampBot((isize)arena->head - (isize)bytes, 0);
-  if (arena->head < (arena->commits - 1) * arena->commit_size) {
-    arena->commits -= 1;
+  usize pages2decommit = ceil((f64)bytes / (f64)arena->commit_size);
+  if (pages2decommit) {
+    arena->commits = ClampBot((isize)arena->commits - (isize)pages2decommit, 0);
     os_decommit((void *)forwardAlign((usize)arena->base + arena->head,
                                      arena->commit_size),
-                arena->commit_size);
+                pages2decommit * arena->commit_size);
   }
 }
 
@@ -93,7 +94,7 @@ fn void *arenaPush(Arena *arena, usize size, usize align) {
   }
 
   arena->head = new_head - sizeof(Arena);
-  memZero((void*)res, size);
+  memzero((void*)res, size);
   return (void*)res;
 }
 

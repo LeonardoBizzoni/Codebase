@@ -131,11 +131,11 @@ fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
 
   usize i = 0;
   for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
-    memCopy(&res.str[i], curr->value.str, curr->value.size);
+    memcopy(&res.str[i], curr->value.str, curr->value.size);
     i += curr->value.size;
     res.str[i++] = ch;
   }
-  memCopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+  memcopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
 
   return res;
 }
@@ -147,12 +147,12 @@ fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
 
   usize i = 0;
   for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
-    memCopy(&res.str[i], curr->value.str, curr->value.size);
+    memcopy(&res.str[i], curr->value.str, curr->value.size);
     i += curr->value.size;
-    memCopy(&res.str[i], str.str, str.size);
+    memcopy(&res.str[i], str.str, str.size);
     i += str.size;
   }
-  memCopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+  memcopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
 
   return res;
 }
@@ -172,7 +172,7 @@ fn String8 str8_from_stream(Arena *arena, StringStream stream) {
   u8 *str = New(arena, u8, stream.total_size);
   u8 *ptr = str;
   for (StringNode *curr = stream.first; curr; curr = curr->next) {
-    memCopy(ptr, curr->value.str, curr->value.size);
+    memcopy(ptr, curr->value.str, curr->value.size);
     ptr += curr->value.size;
   }
 
@@ -584,7 +584,7 @@ fn bool str8_is_numerical(String8 s) {
 
 fn char* cstr_from_str8(Arena *arena, String8 str) {
   char *res = New(arena, char, str.size + 1);
-  memCopy(res, str.str, str.size);
+  memcopy(res, str.str, str.size);
   res[str.size] = 0;
   return res;
 }

@@ -52,7 +52,7 @@ os_w32_system_time_from_time64(time64 in) {
   SYSTEMTIME res = {0};
   i16 year = (i16)((in >> 36) & ~(1 << 27)  * (in >> 63 ? 1 : -1));
   if (year < 1601 || year > 30827) { return res; }
-  
+
   res.wYear         = year;
   res.wMonth        = (WORD)((in >> 32) & bitmask4);
   res.wDay          = (WORD)((in >> 27) & bitmask5);
@@ -695,12 +695,12 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
   Assert(!err);
   if (info->ai_family == AF_INET) {
     res.version = OS_Net_Network_IPv4;
-    memCopy(res.v4.bytes,
+    memcopy(res.v4.bytes,
             &((struct sockaddr_in*)info->ai_addr)->sin_addr,
             4 * sizeof(u8));
   } else if (info->ai_family == AF_INET6) {
     res.version = OS_Net_Network_IPv6;
-    memCopy(res.v6.words,
+    memcopy(res.v6.words,
             &((struct sockaddr_in6*)info->ai_addr)->sin6_addr,
             8 * sizeof(u16));
   }
@@ -718,7 +718,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       struct sockaddr_in *addr = (struct sockaddr_in*)&prim->socket.addr;
       addr->sin_family = (ADDRESS_FAMILY)cdomain;
       addr->sin_port = htons(port);
-      memCopy(&addr->sin_addr, ip.v4.bytes, 4 * sizeof(u8));
+      memcopy(&addr->sin_addr, ip.v4.bytes, 4 * sizeof(u8));
       prim->socket.size = sizeof(struct sockaddr_in);
     } break;
     case OS_Net_Network_IPv6: {
@@ -726,7 +726,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       struct sockaddr_in6 *addr = (struct sockaddr_in6*)&prim->socket.addr;
       addr->sin6_family = (ADDRESS_FAMILY)cdomain;
       addr->sin6_port = htons(port);
-      memCopy(&addr->sin6_addr, ip.v4.bytes, 8 * sizeof(u16));
+      memcopy(&addr->sin6_addr, ip.v4.bytes, 8 * sizeof(u16));
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
@@ -783,18 +783,18 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
     return res;
   }
 
-  memCopy(&res, socket, sizeof(OS_Socket));
+  memcopy(&res, socket, sizeof(OS_Socket));
   res.handle.h[0] = (u64)client_prim;
   switch (client_prim->socket.addr.sa_family) {
   case AF_INET: {
     struct sockaddr_in *client = (struct sockaddr_in *)&client_prim->socket.addr;
-    memCopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
+    memcopy(res.client.addr.v4.bytes, &client->sin_addr, 4 * sizeof(u8));
     res.client.port = client->sin_port;
     res.client.addr.version = OS_Net_Network_IPv4;
   } break;
   case AF_INET6: {
     struct sockaddr_in6 *client = (struct sockaddr_in6 *)&client_prim->socket.addr;
-    memCopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
+    memcopy(res.client.addr.v6.words, &client->sin6_addr, 8 * sizeof(u16));
     res.client.port = client->sin6_port;
     res.client.addr.version = OS_Net_Network_IPv6;
   } break;
@@ -815,13 +815,13 @@ fn void os_socket_connect(OS_Socket *server) {
   switch (client.sa_family) {
   case AF_INET: {
     struct sockaddr_in *clientv4 = (struct sockaddr_in *)&client;
-    memCopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
+    memcopy(server->client.addr.v4.bytes, &clientv4->sin_addr, 4 * sizeof(u8));
     server->client.port = clientv4->sin_port;
     server->client.addr.version = OS_Net_Network_IPv4;
   } break;
   case AF_INET6: {
     struct sockaddr_in6 *clientv6 = (struct sockaddr_in6 *)&client;
-    memCopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
+    memcopy(server->client.addr.v6.words, &clientv6->sin6_addr, 8 * sizeof(u16));
     server->client.port = clientv6->sin6_port;
     server->client.addr.version = OS_Net_Network_IPv6;
   } break;
@@ -1071,7 +1071,7 @@ fn File fs_fopen(Arena *arena, OS_Handle file) {
   result.path.size = GetFinalPathNameByHandleA((HANDLE)prim->file.handle, path,
                                                MAX_PATH, FILE_NAME_NORMALIZED);
   result.path.str = New(arena, u8, result.path.size);
-  memCopy(result.path.str, path, result.path.size);
+  memcopy(result.path.str, path, result.path.size);
   if (result.path.str[0] == '\\') {
     result.path.str += 4;
     result.path.size -= 4;

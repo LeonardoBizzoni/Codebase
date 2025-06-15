@@ -241,7 +241,7 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
 
     res->label.str = New(arena, u8, most_frequent.size);
     res->label.size = most_frequent.size;
-    memCopy(res->label.str, most_frequent.str, most_frequent.size);
+    memcopy(res->label.str, most_frequent.str, most_frequent.size);
   } else {
     Info("Split by: `%.*s` (gini: %.3lf)",
          Strexpand((*header)[res->cond.split_idx]), res->cond.gini);
@@ -283,7 +283,7 @@ fn DTree* ai_dtree_makeNode(Arena *arena, StringStream *header, File dataset,
       if (i == res->cond.split_idx) { continue; }
       copies[j].value.str = New(arena, u8, curr->value.size);
       copies[j].value.size = curr->value.size;
-      memCopy(copies[j].value.str, curr->value.str, curr->value.size);
+      memcopy(copies[j].value.str, curr->value.str, curr->value.size);
       DLLPushBack(subheader.first, subheader.last, (&copies[j]));
       j += 1;
     }

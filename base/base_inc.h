@@ -3,7 +3,6 @@
 
 #include "base.h"
 #include "list.h"
-#include "memory.h"
 #include "arena.h"
 #include "thread_ctx.h"
 #include "time.h"

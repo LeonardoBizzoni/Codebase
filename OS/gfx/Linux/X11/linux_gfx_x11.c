@@ -9,7 +9,7 @@ fn void lnx_gfx_init(void) {
 fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   LNX11_Window *window = lnx11_state.freelist_window;
   if (window) {
-    memZero(window, sizeof(LNX11_Window));
+    memzero(window, sizeof(LNX11_Window));
     StackPop(lnx11_state.freelist_window);
   } else {
     window = New(lnx11_state.arena, LNX11_Window);
