@@ -2,6 +2,17 @@
 #  include <gl/gl.h>
 #endif
 
+#include <xinput.h>
+typedef DWORD WINAPI xinput_get_state(DWORD controller_idx, XINPUT_STATE *state);
+DWORD WINAPI XInputGetState_stub(DWORD controller_idx, XINPUT_STATE *state) {return 0;}
+global xinput_get_state *_XInputGetState = XInputGetState_stub;
+#define XInputGetState _XInputGetState
+
+typedef DWORD WINAPI xinput_set_state(DWORD controller_idx, XINPUT_VIBRATION *vibration);
+DWORD WINAPI XInputSetState_stub(DWORD controller_idx, XINPUT_VIBRATION *vibration) {return 0;}
+global xinput_set_state *_XInputSetState = XInputSetState_stub;
+#define XInputSetState _XInputSetState
+
 typedef struct W32_WindowEvent {
   OS_Event value;
   struct W32_WindowEvent *next;
@@ -45,6 +56,7 @@ typedef struct {
 fn void w32_gfx_init(HINSTANCE instance);
 
 fn void w32_window_task(void *args);
+fn void w32_xinput_load(void);
 
 fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
                                         WPARAM wparam, LPARAM lparam);

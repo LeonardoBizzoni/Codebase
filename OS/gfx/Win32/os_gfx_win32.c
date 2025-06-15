@@ -3,6 +3,17 @@ global W32_GfxState w32_gfxstate = {0};
 fn void w32_gfx_init(HINSTANCE instance) {
   w32_gfxstate.arena = ArenaBuild();
   w32_gfxstate.instance = instance;
+  w32_xinput_load();
+}
+
+fn void w32_xinput_load(void) {
+  OS_Handle xinput = os_lib_open(Strlit("xinput1_4.dll"));
+  if (xinput.h[0]) {
+    XInputGetState = (xinput_get_state*)os_lib_lookup(xinput, Strlit("XInputGetState"));
+    XInputSetState = (xinput_set_state*)os_lib_lookup(xinput, Strlit("XInputSetState"));
+  }
+}
+
 fn W32_Window* w32_window_from_handle(HWND target) {
   for (W32_Window *window = w32_gfxstate.first_window;
        window;
@@ -48,6 +59,9 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
     case WM_SYSKEYUP:
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
+      // TODO(lb): would it be better to have a global keyboard state
+      //           instead of key events? same thing for a mouse i think
+      //           mouse move events would just flood the event queue
       event->value.type = lparam >> 29 ? OS_EventType_KeyUp
                                        : OS_EventType_KeyDown;
       event->value.key.keycode = wparam;
@@ -88,7 +102,19 @@ fn void w32_window_task(void *args) {
       TranslateMessage(&msg);
       DispatchMessage(&msg);
     }
+
+    for (usize controller_idx = 0;
+         controller_idx < XUSER_MAX_COUNT;
+         ++controller_idx) {
+      XINPUT_STATE controller_state = {0};
+      if (XInputGetState(controller_idx, &controller_state) != ERROR_SUCCESS) {
+        // TODO(lb): keep track of connected controllers instead
+        //           of skipping them or something
+        continue;
       }
+
+      // TODO(lb): update a global array of gamepads or generate events?
+      XINPUT_GAMEPAD *pad = &controller_state.Gamepad;
     }
   }
 }
