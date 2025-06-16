@@ -84,18 +84,18 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   return DefWindowProc(winhandle, msg_code, wparam, lparam);
 }
 
-fn void w32_window_task(void *args) {
-  W32_Window *window = (W32_Window *)args;
+fn void w32_window_task(void *args_) {
+  W32_WindowArgs *args = (W32_WindowArgs *)args_;
   WNDCLASS winclass = {0};
-  winclass.lpszClassName = (LPCSTR)window->name.str;
+  winclass.lpszClassName = (LPCSTR)args->name.str;
   winclass.hInstance = w32_gfxstate.instance;
   winclass.lpfnWndProc = w32_message_handler;
   RegisterClass(&winclass);
-  window->winhandle = CreateWindow((LPCSTR)window->name.str, (LPCSTR)window->name.str,
-                                   WS_OVERLAPPEDWINDOW, window->x, window->y,
-                                   window->width, window->height, 0, 0,
+  *args->winhandle = CreateWindow((LPCSTR)args->name.str, (LPCSTR)args->name.str,
+                                   WS_OVERLAPPEDWINDOW, args->x, args->y,
+                                   args->width, args->height, 0, 0,
                                    w32_gfxstate.instance, 0);
-  Assert(window->winhandle);
+  Assert(*args->winhandle);
 
   while (1) {
     for (MSG msg = {0}; PeekMessage(&msg, 0, 0, 0, PM_REMOVE);) {
@@ -119,7 +119,7 @@ fn void w32_window_task(void *args) {
   }
 }
 
-fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
+fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   W32_Window *window = w32_gfxstate.freelist_window;
   if (window) {
     memzero(window, sizeof(W32_Window));
@@ -129,41 +129,51 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   }
   DLLPushBack(w32_gfxstate.first_window, w32_gfxstate.last_window, window);
 
-  window->name = name;
-  window->x = x;
-  window->y = y;
-  window->width = width;
-  window->height = height;
+  W32_WindowArgs args = {
+    .name = name,
+    .x = x,
+    .y = y,
+    .width = width,
+    .height = height,
+    .winhandle = &window->winhandle,
+  };
   window->event.mutex = os_mutex_alloc();
   window->event.condvar = os_cond_alloc();
-  window->task = os_thread_start(w32_window_task, window);
+  window->task = os_thread_start(w32_window_task, &args);
 
   while (window->winhandle == 0);
   window->dc = GetDC(window->winhandle);
-  OS_Handle res = {{(u64)window}};
+
+  RECT rect = {0};
+  (void)GetWindowRect(window->winhandle, &rect);
+  OS_Window res = {
+    .width = rect.right - rect.left,
+    .height = rect.bottom - rect.top,
+    .handle = {(u64)window}
+  };
   return res;
 }
 
-fn void os_window_show(OS_Handle handle) {
-  ShowWindow(((W32_Window *)handle.h[0])->winhandle, SW_SHOWDEFAULT);
+fn void os_window_show(OS_Window window) {
+  ShowWindow(((W32_Window *)window.handle.h[0])->winhandle, SW_SHOWDEFAULT);
 }
 
-fn void os_window_hide(OS_Handle handle) {
-  ShowWindow(((W32_Window *)handle.h[0])->winhandle, SW_HIDE);
+fn void os_window_hide(OS_Window window) {
+  ShowWindow(((W32_Window *)window.handle.h[0])->winhandle, SW_HIDE);
 }
 
-fn void os_window_close(OS_Handle handle) {
-  CloseWindow(((W32_Window *)handle.h[0])->winhandle);
+fn void os_window_close(OS_Window window) {
+  CloseWindow(((W32_Window *)window.handle.h[0])->winhandle);
 }
 
-fn void os_window_swapBuffers(OS_Handle handle) {
+fn void os_window_swapBuffers(OS_Window window) {
 #if USING_OPENGL
-  SwapBuffers(((W32_Window *)handle.h[0])->dc);
+  SwapBuffers(((W32_Window *)window.handle.h[0])->dc);
 #endif
 }
 
-fn OS_Event os_window_get_event(OS_Handle handle) {
-  W32_Window *window = (W32_Window *)handle.h[0];
+fn OS_Event os_window_get_event(OS_Window window_) {
+  W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
   os_mutex_lock(window->event.mutex);
@@ -181,8 +191,8 @@ fn OS_Event os_window_get_event(OS_Handle handle) {
   return res;
 }
 
-fn OS_Event os_window_wait_event(OS_Handle handle) {
-  W32_Window *window = (W32_Window *)handle.h[0];
+fn OS_Event os_window_wait_event(OS_Window window_) {
+  W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
   os_mutex_lock(window->event.mutex);
@@ -222,6 +232,23 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   res.size = str8_len((char*)res.str);
   arenaPop(arena, max_keyname_size - res.size);
   return res;
+}
+
+// From top to bottom of the window
+fn void os_window_render(OS_Window window_, void *mem) {
+  W32_Window *window = (W32_Window *)window_.handle.h[0];
+  BITMAPINFO bitmap_info = {0};
+  bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bitmap_info.bmiHeader.biWidth = window_.width;
+  bitmap_info.bmiHeader.biHeight = -(i32)window_.height;
+  bitmap_info.bmiHeader.biPlanes = 1;
+  bitmap_info.bmiHeader.biBitCount = 32;
+  bitmap_info.bmiHeader.biCompression = BI_RGB;
+  StretchDIBits(window->dc,
+                0, 0, window_.width, window_.height,
+                0, 0, window_.width, window_.height,
+                mem, &bitmap_info,
+                DIB_RGB_COLORS, SRCCOPY);
 }
 
 #if USING_OPENGL

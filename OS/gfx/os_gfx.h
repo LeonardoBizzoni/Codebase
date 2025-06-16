@@ -25,23 +25,28 @@ typedef struct {
   };
 } OS_Event;
 
-fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height);
-fn void os_window_show(OS_Handle handle);
-fn void os_window_hide(OS_Handle handle);
-fn void os_window_close(OS_Handle handle);
+typedef struct {
+  u32 width, height;
+  OS_Handle handle;
+} OS_Window;
 
-fn void os_window_swapBuffers(OS_Handle handle);
+fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height);
+fn void os_window_show(OS_Window handle);
+fn void os_window_hide(OS_Window handle);
+fn void os_window_close(OS_Window handle);
 
-fn OS_Event os_window_get_event(OS_Handle handle);
-fn OS_Event os_window_wait_event(OS_Handle handle);
+fn void os_window_swapBuffers(OS_Window handle);
+
+fn OS_Event os_window_get_event(OS_Window handle);
+fn OS_Event os_window_wait_event(OS_Window handle);
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
 
 #if USING_OPENGL
-fn void opengl_init(OS_Handle handle);
-fn void opengl_deinit(OS_Handle handle);
+fn void opengl_init(OS_Window handle);
+fn void opengl_deinit(OS_Window handle);
 
-fn void opengl_make_current(OS_Handle handle);
+fn void opengl_make_current(OS_Window handle);
 #endif
 
 #endif

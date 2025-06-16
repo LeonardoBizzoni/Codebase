@@ -24,10 +24,7 @@ typedef struct {
 } W32_WindowEventList;
 
 typedef struct W32_Window {
-  String8 name;
-  u32 x, y, width, height;
   OS_Handle task;
-
   HWND winhandle;
   HDC dc;
 #if USING_OPENGL
@@ -43,6 +40,12 @@ typedef struct W32_Window {
   struct W32_Window *next;
   struct W32_Window *prev;
 } W32_Window;
+
+typedef struct {
+  String8 name;
+  u32 x, y, width, height;
+  HWND *winhandle;
+} W32_WindowArgs;
 
 typedef struct {
   Arena *arena;
