@@ -128,6 +128,14 @@
 #  define AlignOf(TYPE) 1
 #endif
 
+#if COMPILER_GCC | COMPILER_CLANG
+#  define rdtsc() __builtin_ia32_rdtsc()
+#elif COMPILER_CL
+#  define rdtsc() __rdtsc()
+#else
+#  define rdtsc() 0
+#endif
+
 #define atomic _Atomic
 
 #if COMPILER_CL
