@@ -253,7 +253,7 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
   return res;
 }
 
-fn void os_timer_free(os_handle handle) {
+fn void os_timer_free(OS_Handle handle) {
   lnx_primitiveFree((LNX_Primitive*)handle.h[0]);
 }
 
@@ -775,7 +775,7 @@ fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
 fn i32 os_lib_close(OS_Handle lib) {
 #ifndef PLATFORM_CODERBOT
   void *handle = (void*)lib.h[0];
-  return dlclose(handle);
+  return (handle ? dlclose(handle) : 0);
 #else
   return 0;
 #endif

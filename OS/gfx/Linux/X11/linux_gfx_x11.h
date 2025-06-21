@@ -5,8 +5,6 @@
 #include <X11/Xutil.h>
 #include <X11/XKBlib.h>
 
-#define LNX_SCREEN_DEPTH 24
-
 #if USING_OPENGL
 #  include<GL/gl.h>
 #  include<GL/glx.h>
@@ -14,10 +12,6 @@
 #endif
 
 typedef struct LNX11_Window {
-  String8 name;
-  u32 width;
-  u32 height;
-
   i32 xscreen;
   Window xwindow;
   XVisualInfo xvisual;

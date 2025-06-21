@@ -13,7 +13,7 @@
 #  include <pulse/pulseaudio.h>
 #endif
 
-#define dbg_print(fmt, ...) printf(fmt "\n", __VA_ARGS__)
+#define dbg_print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 
 typedef u64 LNX_PrimitiveType;
 enum {

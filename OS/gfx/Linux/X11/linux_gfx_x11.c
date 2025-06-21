@@ -3,10 +3,11 @@ global LNX11_State lnx11_state = {0};
 fn void lnx_gfx_init(void) {
   lnx11_state.arena = ArenaBuild();
   lnx11_state.xdisplay = XOpenDisplay(0);
+  XSynchronize(lnx11_state.xdisplay, True);
   lnx11_state.xatom_close = XInternAtom(lnx11_state.xdisplay, "WM_DELETE_WINDOW", False);
 }
 
-fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
+fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   LNX11_Window *window = lnx11_state.freelist_window;
   if (window) {
     memzero(window, sizeof(LNX11_Window));
@@ -16,30 +17,27 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   }
   DLLPushBack(lnx11_state.first_window, lnx11_state.last_window, window);
 
-  window->name = name;
-  window->width = width;
-  window->height = height;
-
   window->xscreen = DefaultScreen(lnx11_state.xdisplay);
   window->xattrib.event_mask = ExposureMask | FocusChangeMask |
                                EnterWindowMask | LeaveWindowMask |
                                ButtonPressMask | PointerMotionMask |
                                KeyPressMask | KeymapStateMask;
-  window->xattrib.background_pixel = 0;
 
-  Assert(XMatchVisualInfo(lnx11_state.xdisplay, window->xscreen,
-                          LNX_SCREEN_DEPTH, TrueColor, &window->xvisual));
-  window->xgc = XDefaultGC(lnx11_state.xdisplay, window->xscreen);
-
-  window->xattrib.colormap = XCreateColormap(lnx11_state.xdisplay,
-                                             XDefaultRootWindow(lnx11_state.xdisplay),
+  Assert(XMatchVisualInfo(lnx11_state.xdisplay, window->xscreen, 32, TrueColor, &window->xvisual) &&
+         window->xvisual.depth == 32 && window->xvisual.class == TrueColor);
+  Window xroot = RootWindow(lnx11_state.xdisplay, window->xscreen);
+  window->xattrib.colormap = XCreateColormap(lnx11_state.xdisplay, xroot,
                                              window->xvisual.visual, AllocNone);
-
-  window->xwindow = XCreateWindow(lnx11_state.xdisplay, XDefaultRootWindow(lnx11_state.xdisplay),
+  window->xattrib.background_pixel = 0;
+  window->xattrib.border_pixel = 0;
+  window->xwindow = XCreateWindow(lnx11_state.xdisplay, xroot,
                                   x, y, width, height, 0, window->xvisual.depth, InputOutput,
-                                  window->xvisual.visual, CWColormap | CWEventMask | CWBackPixel,
+                                  window->xvisual.visual, CWColormap | CWEventMask | CWBorderPixel,
                                   &window->xattrib);
   XSetWMProtocols(lnx11_state.xdisplay, window->xwindow, &lnx11_state.xatom_close, 1);
+
+  XGCValues gcv;
+  window->xgc = XCreateGC(lnx11_state.xdisplay, window->xwindow, 0, &gcv);
 
   Scratch scratch = ScratchBegin(&lnx11_state.arena, 1);
   XStoreName(lnx11_state.xdisplay, window->xwindow, cstr_from_str8(scratch.arena, name));
@@ -48,24 +46,27 @@ fn OS_Handle os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   XAutoRepeatOn(lnx11_state.xdisplay);
   XFlush(lnx11_state.xdisplay);
 
-  OS_Handle res = {(u64)window};
+  OS_Window res = {0};
+  res.width = width;
+  res.height = height;
+  res.handle.h[0] = (u64)window;
   return res;
 }
 
-fn void os_window_show(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn void os_window_show(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
   XMapWindow(lnx11_state.xdisplay, window->xwindow);
   XFlush(lnx11_state.xdisplay);
 }
 
-fn void os_window_hide(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn void os_window_hide(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
   XUnmapWindow(lnx11_state.xdisplay, window->xwindow);
   XFlush(lnx11_state.xdisplay);
 }
 
-fn void os_window_close(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn void os_window_close(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
   XUnmapWindow(lnx11_state.xdisplay, window->xwindow);
 
 #if USING_OPENGL
@@ -83,7 +84,7 @@ fn void os_window_close(OS_Handle handle) {
   }
 }
 
-fn void os_window_swapBuffers(OS_Handle handle) {
+fn void os_window_swapBuffers(OS_Window handle) {
 #if USING_OPENGL
   glXSwapBuffers(lnx11_state.xdisplay, ((LNX11_Window*)handle.h[0])->xwindow);
 #endif
@@ -122,8 +123,8 @@ fn OS_Event lnx_handle_xevent(LNX11_Window *window, XEvent *xevent) {
   return res;
 }
 
-fn OS_Event os_window_get_event(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn OS_Event os_window_get_event(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
   OS_Event res = {0};
 
   XEvent xevent;
@@ -135,8 +136,8 @@ fn OS_Event os_window_get_event(OS_Handle handle) {
   return res;
 }
 
-fn OS_Event os_window_wait_event(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn OS_Event os_window_wait_event(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
 
   XEvent xevent;
   XIfEvent(lnx11_state.xdisplay, &xevent,
@@ -149,6 +150,28 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   res.str = (u8*)XKeysymToString(event.key.keycode);
   if (res.str) { res.size = str8_len((char*)res.str); }
   return res;
+}
+
+fn void os_window_render(OS_Window window_, void *mem) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
+
+  // NOTE(lb): apperantly alpha=0 means transparent?
+  u32 *pixels = mem;
+  for (usize i = 0; i < window_.height * window_.width; ++i) {
+    u32 pixel = pixels[i];
+    u8 alpha = 255 - (pixel >> 24);
+    pixels[i] = ((u32)alpha << 24) | (pixel & 0x00FFFFFF);
+  }
+
+  XImage *img = XCreateImage(lnx11_state.xdisplay, window->xvisual.visual,
+                             window->xvisual.depth, ZPixmap, 0, (char*)mem,
+                             window_.width, window_.height, 32, 0);
+  Assert(img);
+  XPutImage(lnx11_state.xdisplay, window->xwindow, window->xgc, img, 0, 0, 0, 0,
+            window_.width, window_.height);
+  XFlush(lnx11_state.xdisplay);
+  img->data = 0; // XDestroyImage tries to free mem
+  XDestroyImage(img);
 }
 
 #if USING_OPENGL
