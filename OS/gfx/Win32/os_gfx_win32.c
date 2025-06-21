@@ -33,8 +33,8 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   }
 
   W32_WindowEvent *event = 0;
-  os_mutex_lock(window->event.mutex);
-  DeferLoop(os_mutex_unlock(window->event.mutex)) {
+  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  {
     event = window->event.freelist.first;
     if (event) {
       memzero(event, sizeof(W32_WindowEvent));
@@ -85,8 +85,8 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
 
 fn void w32_event_add(W32_Window *window, OS_EventType type) {
   W32_WindowEvent *event = 0;
-  os_mutex_lock(window->event.mutex);
-  DeferLoop(os_mutex_unlock(window->event.mutex)) {
+  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  {
     event = window->event.freelist.first;
     if (event) {
       memzero(event, sizeof(W32_WindowEvent));
@@ -262,14 +262,16 @@ fn OS_Event os_window_get_event(OS_Window window_) {
   W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
-  os_mutex_lock(window->event.mutex);
-  DeferLoop(os_mutex_unlock(window->event.mutex)) {
-  W32_WindowEvent *event = window->event.queue.first;
-  QueuePop(window->event.queue.first);
 
-  if (event) {
-    if (event->value.type) {
-      memcopy(&res, &event->value, sizeof(OS_Event));
+  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  {
+    W32_WindowEvent *event = window->event.queue.first;
+    QueuePop(window->event.queue.first);
+    if (event) {
+      if (event->value.type) {
+        memcopy(&res, &event->value, sizeof(OS_Event));
+      }
+      QueuePush(window->event.freelist.first, window->event.freelist.last, event);
     }
     QueuePush(window->event.freelist.first, window->event.freelist.last, event);
   }
@@ -281,17 +283,19 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
   W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
-  os_mutex_lock(window->event.mutex);
-  DeferLoop(os_mutex_unlock(window->event.mutex)) {
-  W32_WindowEvent *event = window->event.queue.first;
-  for (; !event; event = window->event.queue.first) {
-    os_cond_wait(window->event.condvar, window->event.mutex, 0);
-  }
-  QueuePop(window->event.queue.first);
 
-  if (event) {
-    if (event->value.type) {
-      memcopy(&res, &event->value, sizeof(OS_Event));
+  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  {
+    W32_WindowEvent *event = window->event.queue.first;
+    for (; !event; event = window->event.queue.first) {
+      os_cond_wait(window->event.condvar, window->event.mutex, 0);
+    }
+    QueuePop(window->event.queue.first);
+    if (event) {
+      if (event->value.type) {
+        memcopy(&res, &event->value, sizeof(OS_Event));
+      }
+      QueuePush(window->event.freelist.first, window->event.freelist.last, event);
     }
     QueuePush(window->event.freelist.first, window->event.freelist.last, event);
   }
