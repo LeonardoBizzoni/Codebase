@@ -203,6 +203,7 @@ fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer, u64 how
     OS_Handle: os_timer_elapsed_start2end,                          \
     default: os_timer_elapsed_time                                  \
   )(UNIT, TIMER_START, TIMER_END_OR_WAIT_TIME)
+fn void os_timer_free(OS_Handle handle);
 
 // =============================================================================
 // Memory allocation

@@ -1,13 +1,19 @@
 #ifndef OS_GFX_H
 #define OS_GFX_H
 
+#define MAX_SUPPORTED_GAMEPAD 4
+
 typedef u32 OS_EventType;
 enum {
   OS_EventType_None,
   OS_EventType_Kill,
   OS_EventType_Expose,
+
   OS_EventType_KeyDown,
   OS_EventType_KeyUp,
+
+  OS_EventType_GamepadConnected,
+  OS_EventType_GamepadDisconnected,
 };
 
 typedef struct {
@@ -24,6 +30,49 @@ typedef struct {
     } key;
   };
 } OS_Event;
+
+typedef struct {
+  i32 half_transitions; // from pressed to release or viceversa discarding the transition back
+  bool ended_down;
+} OS_BtnState;
+
+typedef struct {
+  f32 x; // negative values left, positive right
+  f32 y; // negative values down, positivie up
+} OS_GamepadStick;
+
+typedef struct {
+  bool active;
+
+  OS_GamepadStick stick_left;
+  OS_GamepadStick stick_right;
+
+  f32 r2;
+  f32 l2;
+
+  union {
+    OS_BtnState buttons[14];
+    struct {
+      OS_BtnState dpad_up;
+      OS_BtnState dpad_down;
+      OS_BtnState dpad_left;
+      OS_BtnState dpad_right;
+
+      OS_BtnState start;
+      OS_BtnState select;
+
+      OS_BtnState l3;
+      OS_BtnState r3;
+      OS_BtnState l1;
+      OS_BtnState r1;
+
+      OS_BtnState a;
+      OS_BtnState b;
+      OS_BtnState x;
+      OS_BtnState y;
+    };
+  };
+} OS_Gamepad;
 
 typedef struct {
   u32 width, height;

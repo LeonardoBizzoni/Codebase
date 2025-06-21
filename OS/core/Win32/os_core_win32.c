@@ -215,10 +215,8 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
   OS_W32_Primitive *start_prim = (OS_W32_Primitive*)start.h[0];
   OS_W32_Primitive *end_prim = (OS_W32_Primitive*)end.h[0];
 
-  u64 micros = (end_prim->timer.QuadPart - start_prim->timer.QuadPart)
-    * Million(1) / w32_state.perf_freq.QuadPart;
-  os_w32_primitive_release(start_prim);
-  os_w32_primitive_release(end_prim);
+  u64 micros = (end_prim->timer.QuadPart - start_prim->timer.QuadPart) * Million(1)
+               / w32_state.perf_freq.QuadPart;
 
   switch (unit) {
     case OS_TimerGranularity_min: {
@@ -235,6 +233,10 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
     } break;
   }
   return 0;
+}
+
+fn void os_timer_free(OS_Handle handle) {
+  os_w32_primitive_release((OS_W32_Primitive*)handle.h[0]);
 }
 
 ////////////////////////////////

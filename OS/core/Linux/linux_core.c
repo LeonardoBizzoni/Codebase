@@ -253,6 +253,10 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
   return res;
 }
 
+fn void os_timer_free(os_handle handle) {
+  lnx_primitiveFree((LNX_Primitive*)handle.h[0]);
+}
+
 // =============================================================================
 // Memory allocation
 fn void* os_reserve(usize size) {

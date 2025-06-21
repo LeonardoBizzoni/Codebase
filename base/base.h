@@ -220,14 +220,20 @@
 #define local static
 #define fn static
 
-#define CExport extern "C"
-#define CExportBegin extern "C" {
-#define CExportEnd }
+#if CPP
+#  define CExport extern "C"
+#  define CExportBegin extern "C" {
+#  define CExportEnd }
+#else
+#  define CExport
+#  define CExportBegin
+#  define CExportEnd
+#endif
 
 #if COMPILER_GCC || COMPILER_CLANG
-#  define DLLExport export_c __attribute__((visibility("default")))
+#  define DLLExport CExport __attribute__((visibility("default")))
 #elif COMPILER_CL
-#  define DLLExport export_c __declspec(dllexport)
+#  define DLLExport CExport __declspec(dllexport)
 #endif
 
 #include <stdint.h>

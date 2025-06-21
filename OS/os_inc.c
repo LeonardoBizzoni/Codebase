@@ -10,6 +10,7 @@
 #endif
 
 #if OS_GUI
+#  include "gfx/os_gfx.c"
 #  if OS_LINUX
 #    include "gfx/Linux/linux_gfx.c"
 #  elif OS_BSD

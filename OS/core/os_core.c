@@ -45,5 +45,7 @@ fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
 inline fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
                                      u64 how_much) {
   OS_Handle now = os_timer_start();
-  return os_timer_elapsed_start2end(unit, timer, now) >= how_much;
+  u64 elapsed = os_timer_elapsed_start2end(unit, timer, now);
+  os_timer_free(now);
+  return elapsed >= how_much;
 }
