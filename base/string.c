@@ -81,9 +81,8 @@ fn u8 encodeUTF8(u8 *res, Codepoint cp) {
     res[3] = 0x80 | (cp.codepoint & 0x3F);
     return 4;
   } else {
-    Assert(false);
-    // NOTE(km): return type is unsigned
-    return -1;
+    res[0] = '?';
+    return 1;
   }
 }
 
@@ -97,9 +96,8 @@ fn u8 encodeUTF16(u16 *res, Codepoint cp) {
     res[1] = ((cp.codepoint - 0x10000) & 0x3FF) + 0xDC00;
     return 2;
   } else {
-    Assert(false);
-    // NOTE(km): same thing here
-    return -1;
+    res[0] = (u16)'?';
+    return 1;
   }
 }
 

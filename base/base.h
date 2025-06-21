@@ -193,7 +193,7 @@
 #define Abs(a) ((a) >= 0 ? (a) : (-(a)))
 #define Random(low, high) ((rand() % (high + 1 - low)) + low)
 
-#define DeferLoop(...) for(u8 __i_ = 1; __i_; --__i_, __VA_ARGS__)
+#define DeferLoop(begin, end) for(u8 _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 
 #define Not(A) (~(A))
 #define And(A, B) ((A) & (B))
