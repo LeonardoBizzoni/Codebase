@@ -244,6 +244,8 @@ fn bool os_rwlock_write_trylock(OS_Handle handle);
 fn void os_rwlock_write_unlock(OS_Handle handle);
 fn void os_rwlock_free(OS_Handle handle);
 
+#define OS_MutexScope(mutex) DeferLoop(os_mutex_lock(mutex), os_mutex_unlock(mutex))
+
 fn OS_Handle os_cond_alloc(void);
 fn void os_cond_signal(OS_Handle handle);
 fn void os_cond_broadcast(OS_Handle handle);

@@ -33,7 +33,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   }
 
   W32_WindowEvent *event = 0;
-  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  OS_MutexScope(window->event.mutex)
   {
     event = window->event.freelist.first;
     if (event) {
@@ -85,7 +85,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
 
 fn void w32_event_add(W32_Window *window, OS_EventType type) {
   W32_WindowEvent *event = 0;
-  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  OS_MutexScope(window->event.mutex)
   {
     event = window->event.freelist.first;
     if (event) {
@@ -263,7 +263,7 @@ fn OS_Event os_window_get_event(OS_Window window_) {
   OS_Event res = {0};
 
 
-  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  OS_MutexScope(window->event.mutex)
   {
     W32_WindowEvent *event = window->event.queue.first;
     QueuePop(window->event.queue.first);
@@ -284,7 +284,7 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
   OS_Event res = {0};
 
 
-  DeferLoop(os_mutex_lock(window->event.mutex), os_mutex_unlock(window->event.mutex)) 
+  OS_MutexScope(window->event.mutex)
   {
     W32_WindowEvent *event = window->event.queue.first;
     for (; !event; event = window->event.queue.first) {
