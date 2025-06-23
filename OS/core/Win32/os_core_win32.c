@@ -10,8 +10,8 @@ os_w32_date_time_from_system_time(SYSTEMTIME* in)
 {
   DateTime result = {0};
   result.year = in->wYear;
-  result.month  = (u8)in->wMonth - 1;
-  result.day    = (u8)in->wDay - 1;
+  result.month  = (u8)in->wMonth;
+  result.day    = (u8)in->wDay;
   result.hour = (u8)in->wHour;
   result.minute = (u8)in->wMinute;
   result.second = (u8)in->wSecond;
@@ -19,27 +19,13 @@ os_w32_date_time_from_system_time(SYSTEMTIME* in)
   return result;
 }
 
-fn time64
-os_w32_time64_from_system_time(SYSTEMTIME* in) {
-  i16 year = in->wYear;
-  time64 res = (year >= 0 ? 1ULL << 63 : 0);
-  res |= (u64)((year >= 0 ? year : -year) & ~(1 << 27)) << 36;
-  res |= (u64)(in->wMonth) << 32;
-  res |= (u64)(in->wDay) << 27;
-  res |= (u64)(in->wHour) << 22;
-  res |= (u64)(in->wMinute) << 16;
-  res |= (u64)(in->wSecond) << 10;
-  res |= (u64)in->wMilliseconds;
-  return res;
-}
-
 fn SYSTEMTIME
 os_w32_system_time_from_date_time(DateTime *in)
 {
   SYSTEMTIME result = {0};
   result.wYear = (WORD)in->year;
-  result.wMonth = in->month + 1;
-  result.wDay = in->day + 1;
+  result.wMonth = in->month;
+  result.wDay = in->day;
   result.wHour = in->hour;
   result.wMinute = in->minute;
   result.wSecond = in->second;
@@ -47,44 +33,42 @@ os_w32_system_time_from_date_time(DateTime *in)
   return result;
 }
 
-fn SYSTEMTIME
-os_w32_system_time_from_time64(time64 in) {
-  SYSTEMTIME res = {0};
-  i16 year = (i16)((in >> 36) & ~(1 << 27)  * (in >> 63 ? 1 : -1));
-  if (year < 1601 || year > 30827) { return res; }
-
-  res.wYear         = year;
-  res.wMonth        = (WORD)((in >> 32) & bitmask4);
-  res.wDay          = (WORD)((in >> 27) & bitmask5);
-  res.wHour         = (WORD)((in >> 22) & bitmask5);
-  res.wMinute       = (WORD)((in >> 16) & bitmask6);
-  res.wSecond       = (WORD)((in >> 10) & bitmask6);
-  res.wMilliseconds = (WORD)(in & bitmask10);
-  return res;
+fn time64
+os_w32_time64_from_system_time(SYSTEMTIME *in){
+  DateTime date_time = os_w32_date_time_from_system_time(in);
+  time64 r = time64_from_datetime(&date_time);
+  return r;
 }
 
-fn time64 os_local_now() {
-  SYSTEMTIME systime;
-  GetLocalTime(&systime);
-  return os_w32_time64_from_system_time(&systime);
-}
 
-fn DateTime os_local_dateTimeNow() {
+fn DateTime
+os_utc_now(){
   SYSTEMTIME system_time;
-  GetLocalTime(&system_time);
-  DateTime result = os_w32_date_time_from_system_time(&system_time);
-  return result;
+  GetSystemTime(&system_time);
+  return os_w32_date_time_from_system_time(&system_time);
 }
 
-fn time64 os_local_fromUTCTime64(time64 in) {
-  SYSTEMTIME utc = {0};
-  SYSTEMTIME local_time = os_w32_system_time_from_time64(in);
-  SystemTimeToTzSpecificLocalTime(0, &local_time, &utc);
-  return os_w32_time64_from_system_time(&utc);
+
+fn u64
+os_unix_now(){
+  FILETIME file_time;
+  GetSystemTimeAsFileTime(&file_time);
+  u64 w32_time = ((u64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
+  u64 unix_time = (w32_time / 10000000) - 0x2B6109100;
+  return unix_time;
 }
 
 fn DateTime
-os_local_fromUTCDateTime(DateTime *in)
+os_utc_from_local_time(DateTime *local_time){
+  SYSTEMTIME system_local_time = os_w32_system_time_from_date_time(local_time);
+  SYSTEMTIME system_utc_time;
+  TzSpecificLocalTimeToSystemTime(0, &system_local_time, &system_utc_time);
+  DateTime r = os_w32_date_time_from_system_time(&system_utc_time);
+  return r;
+}
+
+fn DateTime
+os_local_from_utc_time(DateTime *in)
 {
   SYSTEMTIME systime = os_w32_system_time_from_date_time(in);
   FILETIME ftime;
@@ -96,109 +80,6 @@ os_local_fromUTCDateTime(DateTime *in)
   return result;
 }
 
-
-fn time64
-os_utc_now() {
-  SYSTEMTIME system_time;
-  GetSystemTime(&system_time);
-  return os_w32_time64_from_system_time(&system_time);
-}
-
-fn DateTime
-os_utc_dateTimeNow()
-{
-  SYSTEMTIME system_time;
-  GetSystemTime(&system_time);
-  DateTime result = os_w32_date_time_from_system_time(&system_time);
-  return result;
-}
-
-fn time64
-os_utc_localizedTime64(i8 utc_offset) {
-  time64 now = os_utc_now();
-  i32 year = ((now >> 36) & ~(1 << 27));
-
-  i8 month = (i8)((now >> 32) & bitmask4);
-  i8 day = (i8)((now >> 27) & bitmask5);
-  i8 hour = (i8)(((now >> 22) & bitmask5) + utc_offset);
-  if (hour < 0) {
-    day -= 1;
-    hour += 24;
-  } else if (hour > 23) {
-    day += 1;
-    hour -= 24;
-  }
-
-  if (day < 1) {
-    month -= 1;
-    day = daysXmonth[month - 1];
-  } else if (day > daysXmonth[month - 1]) {
-    month += 1;
-    day = 1;
-  }
-
-  if (month < 1) {
-    year -= 1;
-    month = 12;
-  } else if (month > 12) {
-    year += 1;
-    month = 1;
-  }
-
-  time64 res = now;
-  res = (res & (~((u64)bitmask27 << 36))) | ((u64)year << 36);
-  res = (res & (~((u64)bitmask4 << 32)))  | ((u64)month << 32);
-  res = (res & (~((u64)bitmask5 << 27)))  | ((u64)day << 27);
-  res = (res & (~((u64)bitmask5 << 22)))  | ((u64)hour << 22);
-  return res;
-}
-
-fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
-  DateTime res = os_utc_dateTimeNow();
-  res.hour += utc_offset;
-  if (res.hour < 0) {
-    res.day -= 1;
-    res.hour += 24;
-  } else if (res.hour > 23) {
-    res.day += 1;
-    res.hour -= 24;
-  }
-
-  if (res.day < 1) {
-    res.month -= 1;
-    res.day = daysXmonth[res.month - 1];
-  } else if (res.day > daysXmonth[res.month - 1]) {
-    res.month += 1;
-    res.day = 1;
-  }
-
-  if (res.month < 1) {
-    res.year -= 1;
-    res.month = 12;
-  } else if (res.month > 12) {
-    res.year += 1;
-    res.month = 1;
-  }
-
-  return res;
-}
-
-fn time64
-os_utc_fromLocalTime64(time64 in) {
-  SYSTEMTIME utctime = {0};
-  SYSTEMTIME localtime = os_w32_system_time_from_time64(in);
-  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
-  return os_w32_time64_from_system_time(&utctime);
-}
-
-fn DateTime
-os_utc_fromLocalDateTime(DateTime *in) {
-  SYSTEMTIME utctime = {0};
-  SYSTEMTIME localtime = os_w32_system_time_from_date_time(in);
-  TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
-  return os_w32_date_time_from_system_time(&utctime);
-}
-
 fn void os_sleep_milliseconds(u32 ms) {
   Sleep(ms);
 }
@@ -206,7 +87,7 @@ fn void os_sleep_milliseconds(u32 ms) {
 fn OS_Handle os_timer_start(void) {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Timer);
   QueryPerformanceCounter(&primitive->timer);
-
+  
   OS_Handle res = {{(u64)primitive}};
   return res;
 }

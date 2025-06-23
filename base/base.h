@@ -215,6 +215,7 @@
 
 #define Thousand(x) ((x)*1000)
 #define Million(x)  ((x)*1000000ull)
+#define Billion(x)  ((x)*1000000000ull)
 
 #define global static
 #define local static
