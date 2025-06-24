@@ -118,8 +118,9 @@ fn void lnx_parseMeminfo(void) {
   }
 }
 
-fn DateTime lnx_date_time_from_tm(struct tm *tm){
+fn DateTime lnx_date_time_from_tm(struct tm *tm, long msec){
   DateTime r = {0};
+  r.ms = msec;
   r.second = tm->tm_sec;
   r.minute = tm->tm_min;
   r.hour = tm->tm_hour;
@@ -150,13 +151,13 @@ fn OS_SystemInfo *os_getSystemInfo(void) {
 // DateTime
 
 fn DateTime os_utc_now(void) {
-  time_t t = 0;
-  
-  time(&t);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  time_t t = ts.tv_sec;
   struct tm tm;
   gmtime_r(&t, &tm);
   // NOTE(km): find a way to retrieve milliseconds
-  DateTime r = lnx_date_time_from_tm(&tm);
+  DateTime r = lnx_date_time_from_tm(&tm, ts.tv_nsec / Million(1));
   return r;
 }
 
@@ -172,7 +173,7 @@ fn DateTime os_utc_from_local_time(DateTime *dt){
   time_t t = mktime(&tm_local);
   struct tm tm_utc;
   gmtime_r(&t, &tm_utc);
-  DateTime r = lnx_date_time_from_tm(&tm_utc);
+  DateTime r = lnx_date_time_from_tm(&tm_utc, dt->ms);
   return r;
 }
 
@@ -182,7 +183,7 @@ fn DateTime os_local_from_utc_time(DateTime *dt) {
   time_t t = timegm(&tm_utc);
   struct tm tm_local;
   localtime_r(&t, &tm_local);
-  DateTime r = lnx_date_time_from_tm(&tm_local);
+  DateTime r = lnx_date_time_from_tm(&tm_local, dt->ms);
   return r;
 }
 
