@@ -120,4 +120,6 @@ fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
                                SignalFunc *deadline_miss_handler);
 fn void lnx_sched_yield(void);
 
+fn DateTime lnx_date_time_from_tm(struct tm *tm, long msec);
+fn struct tm lnx_tm_from_date_time(DateTime *in);
 #endif

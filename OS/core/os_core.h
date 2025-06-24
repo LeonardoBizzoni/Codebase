@@ -181,17 +181,19 @@ fn OS_SystemInfo *os_getSystemInfo(void);
 
 // =============================================================================
 // DateTime
-fn time64 os_local_now(void);
-fn DateTime os_local_dateTimeNow(void);
-fn time64 os_local_fromUTCTime64(time64 t);
-fn DateTime os_local_fromUTCDateTime(DateTime *dt);
 
-fn time64 os_utc_now(void);
-fn DateTime os_utc_dateTimeNow(void);
-fn time64 os_utc_localizedTime64(i8 utc_offset);
-fn DateTime os_utc_localizedDateTime(i8 utc_offset);
-fn time64 os_utc_fromLocalTime64(time64 t);
-fn DateTime os_utc_fromLocalDateTime(DateTime *dt);
+fn DateTime os_utc_now();
+fn time64 os_utc_time64_now();
+fn u64 os_unix_now();
+fn DateTime os_utc_from_local_time(DateTime *local_time);
+fn DateTime os_local_from_utc_time(DateTime *utc_time);
+
+fn time64 os_local_now();
+fn DateTime os_local_date_time_now();
+fn time64 os_local_from_utc_time64(time64 t);
+fn DateTime os_utc_localized_date_time(i8 utc_offset);
+fn time64 os_utc_localized_time64(i8 utc_offset);
+fn time64 os_utc_from_local_time64(time64 t);
 
 fn void os_sleep_milliseconds(u32 ms);
 

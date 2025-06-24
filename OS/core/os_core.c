@@ -49,3 +49,72 @@ inline fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
   os_timer_free(now);
   return elapsed >= how_much;
 }
+
+fn time64 os_local_now(){
+  DateTime now = os_utc_now();
+  DateTime local_time = os_local_from_utc_time(&now);
+  time64 result = time64_from_datetime(&local_time);
+  return result;
+}
+
+fn DateTime os_local_date_time_now(){
+  DateTime now = os_utc_now();
+  DateTime local_time = os_local_from_utc_time(&now);
+  return local_time;
+}
+
+fn time64 os_local_from_utc_time64(time64 t){
+  DateTime date_time = datetime_from_time64(t);
+  DateTime local_time = os_local_from_utc_time(&date_time);
+  time64 result = time64_from_datetime(&local_time);
+  return result;
+}
+
+fn time64 os_utc_time64_now(){
+  DateTime date_time = os_utc_now();
+  time64 result = time64_from_datetime(&date_time);
+  return result;
+}
+
+fn DateTime os_utc_localized_date_time(i8 utc_offset) {
+  DateTime res = os_utc_now();
+  res.hour += utc_offset;
+  if (res.hour < 0) {
+    res.day -= 1;
+    res.hour += 24;
+  } else if (res.hour > 23) {
+    res.day += 1;
+    res.hour -= 24;
+  }
+  
+  if (res.day < 1) {
+    res.month -= 1;
+    res.day = days_per_month[res.month - 1];
+  } else if (res.day > days_per_month[res.month - 1]) {
+    res.month += 1;
+    res.day = 1;
+  }
+  
+  if (res.month < 1) {
+    res.year -= 1;
+    res.month = 12;
+  } else if (res.month > 12) {
+    res.year += 1;
+    res.month = 1;
+  }
+  
+  return res;
+}
+
+fn time64 os_utc_localized_time64(i8 utc_offset){
+  DateTime date_time = os_utc_localized_date_time(utc_offset);
+  time64 result = time64_from_datetime(&date_time);
+  return result;
+}
+
+fn time64 os_utc_from_local_time64(time64 t){
+  DateTime date_time = datetime_from_time64(t);
+  DateTime local_time = os_local_from_utc_time(&date_time);
+  time64 result = time64_from_datetime(&local_time);
+  return result;
+}

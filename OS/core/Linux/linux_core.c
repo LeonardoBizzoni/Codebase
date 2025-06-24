@@ -118,6 +118,29 @@ fn void lnx_parseMeminfo(void) {
   }
 }
 
+fn DateTime lnx_date_time_from_tm(struct tm *tm, long msec){
+  DateTime r = {0};
+  r.ms = msec;
+  r.second = tm->tm_sec;
+  r.minute = tm->tm_min;
+  r.hour = tm->tm_hour;
+  r.day = tm->tm_mday;
+  r.month = tm->tm_mon+1;
+  r.year = tm->tm_year+1900;
+  return r;
+}
+
+fn struct tm lnx_tm_from_date_time(DateTime *in){
+  struct tm r = {0};
+  r.tm_sec = in->second;
+  r.tm_min = in->minute;
+  r.tm_hour = in->hour;
+  r.tm_mday = in->day;
+  r.tm_mon = in->month-1;
+  r.tm_year = in->year-1900;
+  return r;
+}
+
 // =============================================================================
 // System information retrieval
 fn OS_SystemInfo *os_getSystemInfo(void) {
@@ -126,84 +149,42 @@ fn OS_SystemInfo *os_getSystemInfo(void) {
 
 // =============================================================================
 // DateTime
-fn time64 os_local_now(void) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
-  res |= (u64)(tms.tv_nsec / 1e6);
-  return res;
+fn DateTime os_utc_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  time_t t = ts.tv_sec;
+  struct tm tm;
+  gmtime_r(&t, &tm);
+  // NOTE(km): find a way to retrieve milliseconds
+  DateTime r = lnx_date_time_from_tm(&tm, ts.tv_nsec / Million(1));
+  return r;
 }
 
-fn DateTime os_local_dateTimeNow(void) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-
-  DateTime res = datetime_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
-  res.ms = tms.tv_nsec / 1e6;
-  return res;
+fn u64 os_unix_now(){
+  time_t t = time(0);
+  return (u64)t;
+  
 }
 
-fn time64 os_local_fromUTCTime64(time64 t) {
-  u64 utc_time = unix_from_time64(t);
-  time64 res = time64_from_unix(utc_time + lnx_state.unix_utc_offset);
-  return res | (t & bitmask10);
+fn DateTime os_utc_from_local_time(DateTime *dt){
+  struct tm tm_local = lnx_tm_from_date_time(dt);
+  tm_local.tm_isdst = -1;
+  time_t t = mktime(&tm_local);
+  struct tm tm_utc;
+  gmtime_r(&t, &tm_utc);
+  DateTime r = lnx_date_time_from_tm(&tm_utc, dt->ms);
+  return r;
 }
 
-fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
-  u64 utc_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(utc_time + lnx_state.unix_utc_offset);
-  res.ms = dt->ms;
-  return res;
-}
-
-fn time64 os_utc_now(void) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-
-  time64 res = time64_from_unix(tms.tv_sec);
-  res |= (u64)(tms.tv_nsec / 1e6);
-  return res;
-}
-
-fn DateTime os_utc_dateTimeNow(void) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-
-  DateTime res = datetime_from_unix(tms.tv_sec);
-  res.ms = tms.tv_nsec / 1e6;
-  return res;
-}
-
-fn time64 os_utc_localizedTime64(i8 utc_offset) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-
-  time64 res = time64_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
-  res |= (u64)(tms.tv_nsec / 1e6);
-  return res;
-}
-
-fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
-  struct timespec tms;
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-
-  DateTime res = datetime_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
-  res.ms = tms.tv_nsec / 1e6;
-  return res;
-}
-
-fn time64 os_utc_fromLocalTime64(time64 t) {
-  u64 local_time = unix_from_time64(t);
-  time64 res = time64_from_unix(local_time - lnx_state.unix_utc_offset);
-  return res | (t & bitmask10);
-}
-
-fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {
-  u64 local_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(local_time - lnx_state.unix_utc_offset);
-  res.ms = dt->ms;
-  return res;
+fn DateTime os_local_from_utc_time(DateTime *dt) {
+  struct tm tm_utc = lnx_tm_from_date_time(dt);
+  tm_utc.tm_isdst = -1;
+  time_t t = timegm(&tm_utc);
+  struct tm tm_local;
+  localtime_r(&t, &tm_local);
+  DateTime r = lnx_date_time_from_tm(&tm_local, dt->ms);
+  return r;
 }
 
 fn void os_sleep_milliseconds(u32 ms) {
