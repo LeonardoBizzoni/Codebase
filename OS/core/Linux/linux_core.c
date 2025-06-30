@@ -1341,6 +1341,20 @@ fn void lnx_sched_yield(void) {
   sched_yield();
 }
 
+// TODO(lb): are there signals on windows?
+fn void lnx_signal_send_private(i32 signal) {
+  kill(getpid(), signal);
+}
+
+fn void lnx_signal_wait(i32 signal) {
+  sigset_t signal_set;
+  sigemptyset(&signal_set);
+  sigaddset(&signal_set, signal);
+  for (i32 signum = 0; signum != signal; ) {
+    sigwait(&signal_set, &signum);
+  }
+}
+
 // =============================================================================
 i32 main(i32 argc, char **argv) {
   lnx_state.info.core_count = get_nprocs();
