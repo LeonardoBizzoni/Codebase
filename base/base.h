@@ -1,6 +1,8 @@
 #ifndef BASE_BASE
 #define BASE_BASE
 
+#include <string.h>
+
 #if defined(__GNUC__) && !defined(__llvm__) && !defined(__INTEL_COMPILER)
 #  define COMPILER_GCC 1
 #elif defined(__clang__) && !defined(_MSC_VER)
