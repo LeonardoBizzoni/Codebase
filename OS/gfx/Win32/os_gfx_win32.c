@@ -1,6 +1,7 @@
 global W32_GfxState w32_gfxstate = {0};
 
 fn void w32_gfx_init(HINSTANCE instance) {
+  timeBeginPeriod(1);
   w32_gfxstate.arena = ArenaBuild();
   w32_gfxstate.instance = instance;
   // TODO(lb): what about non-xinput gamepads like the dualshock

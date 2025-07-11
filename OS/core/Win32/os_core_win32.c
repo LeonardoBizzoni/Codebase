@@ -890,7 +890,12 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   return result;
 }
 
-fn bool fs_close(OS_Handle fd) { return false; }
+fn bool fs_close(OS_Handle fd) {
+  OS_W32_Primitive *prim = (OS_W32_Primitive*)fd.h[0];
+  if (!prim) { return false; }
+  BOOL res = CloseHandle(prim->file.handle);
+  return res;
+}
 
 // TODO(lb): i don't know if there are some location on the Windows
 //           FS that contain files with size=0.
@@ -966,8 +971,21 @@ fn bool fs_write(OS_Handle handle, String8 content) {
   return result;
 }
 
+fn bool fs_copy(String8 src, String8 dest) {
+  Scratch scratch = ScratchBegin(0, 0);
+  BOOL res = CopyFile(cstr_from_str8(scratch.arena, src),
+                      cstr_from_str8(scratch.arena, dest),
+                      FALSE);
+  if (!res) {
+    DWORD err = GetLastError();
+  }
+  ScratchEnd(scratch);
+  return res;
+}
+
 fn FS_Properties fs_getProp(OS_Handle file) {
   FS_Properties properties = {0};
+  if (!file.h[0]) { return properties; }
 
   SECURITY_DESCRIPTOR *security = 0;
   SID *owner = 0;
@@ -1326,6 +1344,7 @@ fn void w32_setup() {
 }
 
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
+  timeBeginPeriod(1);
   Arena *args_arena = ArenaBuild();
   CmdLine *cmdln = New(args_arena, CmdLine);
   cmdln->count = argc - 1;
@@ -1340,7 +1359,8 @@ fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
   DeleteCriticalSection(&w32_state.mutex);
 }
 
-#if OS_GUI
+#if !NO_MAIN
+#  if OS_GUI
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance,
                     PWSTR cmdln, int cmd_show) {
   w32_setup();
@@ -1348,10 +1368,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance,
   w32_call_entrypoint(__argc, (WCHAR **)__argv);
   return 0;
 }
-#else
+#  else
 int wmain(int argc, WCHAR **argv) {
   w32_setup();
   w32_call_entrypoint(argc, argv);
   return 0;
 }
+#  endif
 #endif

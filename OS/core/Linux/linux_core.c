@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/sendfile.h>
 
 #include <dirent.h>
 
@@ -1115,6 +1116,20 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
 inline fn bool fs_write(OS_Handle file, String8 content) {
   if(!file.h[0]) { return false; }
   return write(file.h[0], content.str, content.size) == (isize)content.size;
+}
+
+fn bool fs_copy(String8 source, String8 destination) {
+  Scratch scratch = ScratchBegin(0, 0);
+  i32 src = open(cstr_from_str8(scratch.arena, source), O_RDONLY, 0);
+  i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, 0644);
+  ScratchEnd(scratch);
+
+  struct stat stat_src = {0};
+  fstat(src, &stat_src);
+  isize res = sendfile(dest, src, 0, stat_src.st_size);
+  close(src);
+  close(dest);
+  return res != -1;
 }
 
 fn FS_Properties fs_getProp(OS_Handle file) {

@@ -70,7 +70,7 @@ fn void os_window_close(OS_Window window_) {
   XUnmapWindow(lnx11_state.xdisplay, window->xwindow);
 
 #if USING_OPENGL
-  opengl_deinit(handle);
+  opengl_deinit(window_);
 #endif
 
   XDestroyWindow(lnx11_state.xdisplay, window->xwindow);
@@ -84,9 +84,9 @@ fn void os_window_close(OS_Window window_) {
   }
 }
 
-fn void os_window_swapBuffers(OS_Window handle) {
+fn void os_window_swapBuffers(OS_Window window) {
 #if USING_OPENGL
-  glXSwapBuffers(lnx11_state.xdisplay, ((LNX11_Window*)handle.h[0])->xwindow);
+  glXSwapBuffers(lnx11_state.xdisplay, ((LNX11_Window*)window.handle.h[0])->xwindow);
 #endif
 }
 
@@ -175,10 +175,10 @@ fn void os_window_render(OS_Window window_, void *mem) {
 }
 
 #if USING_OPENGL
-fn void opengl_init(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window *)handle.h[0];
+fn void opengl_init(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window *)window_.handle.h[0];
 
-  local i32 attr[] = { GLX_RGBA, GLX_DEPTH_SIZE, LNX_SCREEN_DEPTH, GLX_DOUBLEBUFFER, None };
+  local i32 attr[] = { GLX_RGBA, GLX_DEPTH_SIZE, 32, GLX_DOUBLEBUFFER, None };
   XVisualInfo *info = glXChooseVisual(lnx11_state.xdisplay, window->xscreen, attr);
   Assert(info);
 
@@ -188,15 +188,15 @@ fn void opengl_init(OS_Handle handle) {
   glEnable(GL_DEPTH_TEST);
 }
 
-fn void opengl_deinit(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window *)handle.h[0];
+fn void opengl_deinit(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window *)window_.handle.h[0];
   glXMakeCurrent(lnx11_state.xdisplay, None, 0);
   glXDestroyContext(lnx11_state.xdisplay, window->context);
   XFreeColormap(lnx11_state.xdisplay, window->xattrib.colormap);
 }
 
-fn void opengl_make_current(OS_Handle handle) {
-  LNX11_Window *window = (LNX11_Window*)handle.h[0];
+fn void opengl_make_current(OS_Window window_) {
+  LNX11_Window *window = (LNX11_Window*)window_.handle.h[0];
   glXMakeCurrent(lnx11_state.xdisplay, window->xwindow, window->context);
 }
 #endif
