@@ -85,6 +85,7 @@ fn void os_window_hide(OS_Window handle);
 fn void os_window_close(OS_Window handle);
 
 fn void os_window_swapBuffers(OS_Window handle);
+fn void os_window_render(OS_Window window_, void *mem);
 
 fn OS_Event os_window_get_event(OS_Window handle);
 fn OS_Event os_window_wait_event(OS_Window handle);

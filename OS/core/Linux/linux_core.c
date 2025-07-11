@@ -752,9 +752,12 @@ fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
 #ifndef PLATFORM_CODERBOT
   Scratch scratch = ScratchBegin(0, 0);
-  void *handle = dlopen(cstr_from_str8(scratch.arena, path),
-                        RTLD_LAZY);
-  if (handle) { result.h[0] = (u64)handle; }
+  void *handle = dlopen(cstr_from_str8(scratch.arena, path), RTLD_NOW);
+  if (handle) {
+    result.h[0] = (u64)handle;
+  } else {
+    AssertMsg(false, str8_from_cstr(dlerror()));
+  }
   ScratchEnd(scratch);
 #endif
   return result;
@@ -1127,8 +1130,16 @@ fn bool fs_copy(String8 source, String8 destination) {
   struct stat stat_src = {0};
   fstat(src, &stat_src);
   isize res = sendfile(dest, src, 0, stat_src.st_size);
+  fchmod(dest, stat_src.st_mode & 0777);
+
+  fdatasync(dest);
   close(src);
   close(dest);
+
+  scratch = ScratchBegin(0, 0);
+  Assert(access(cstr_from_str8(scratch.arena, destination), F_OK) == 0);
+  ScratchEnd(scratch);
+
   return res != -1;
 }
 
@@ -1238,7 +1249,10 @@ inline fn bool fs_frename(File *file, String8 to) {
 // Misc operation on the filesystem
 inline fn bool fs_delete(String8 filepath) {
   Assert(filepath.size != 0);
-  return unlink((char *)filepath.str) >= 0;
+  Scratch scratch = ScratchBegin(0, 0);
+  i32 res = unlink(cstr_from_str8(scratch.arena, filepath));
+  ScratchEnd(scratch);
+  return res >= 0;
 }
 
 inline fn bool fs_rename(String8 filepath, String8 to) {
