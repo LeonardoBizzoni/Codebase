@@ -1,12 +1,6 @@
 #ifndef OS_CORE_H
 #define OS_CORE_H
 
-#include <stdio.h>
-
-#if OS_LINUX || OS_BSD
-#  include <pthread.h>
-#endif
-
 typedef struct {
   u64 h[1];
 } OS_Handle;
@@ -145,6 +139,70 @@ typedef struct{
   u8 memory[640];
 } OS_FileIter;
 
+typedef i32 OS_Net_Transport;
+enum {
+  OS_Net_Transport_Invalid,
+  OS_Net_Transport_TCP,
+  OS_Net_Transport_UDP,
+};
+
+typedef i32 OS_Net_Network;
+enum {
+  OS_Net_Network_Invalid,
+  OS_Net_Network_IPv4 = 4,
+  OS_Net_Network_IPv6 = 6,
+};
+
+typedef struct {
+  u8 bytes[4];
+} IPv4;
+
+typedef struct {
+  u16 words[8];
+} IPv6;
+
+typedef struct {
+  OS_Net_Network version;
+  union {
+    IPv4 v4;
+    IPv6 v6;
+  };
+} IP;
+
+typedef struct NetInterface {
+  String8 name;
+  String8 strip;
+
+  OS_Net_Network version;
+  union {
+    struct {
+      IPv4 addr;
+      IPv4 netmask;
+    } ipv4;
+    struct {
+      IPv6 addr;
+      IPv6 netmask;
+    } ipv6;
+  };
+
+  struct NetInterface *next;
+  struct NetInterface *prev;
+} NetInterface;
+
+typedef struct {
+  NetInterface *first;
+  NetInterface *last;
+} NetInterfaceList;
+
+typedef struct {
+  OS_Net_Transport protocol_transport;
+  OS_Handle handle;
+  struct {
+    IP addr;
+    u16 port;
+  } client, server;
+} OS_Socket;
+
 typedef void VoidFunc(void);
 typedef void ThreadFunc(void*);
 typedef void SignalFunc(i32);
@@ -208,7 +266,7 @@ fn void os_timer_free(OS_Handle handle);
 // =============================================================================
 // Memory allocation
 fn void* os_reserve(usize size);
-fn void* os_reserveHuge(usize size);
+fn void* os_reserve_huge(usize size);
 fn void os_release(void *base, usize size);
 
 fn void os_commit(void *base, usize size);
@@ -279,72 +337,8 @@ fn String8 os_currentDir(Arena *arena);
 
 // =============================================================================
 // Networking
-typedef i32 OS_Net_Transport;
-enum {
-  OS_Net_Transport_Invalid,
-  OS_Net_Transport_TCP,
-  OS_Net_Transport_UDP,
-};
-
-typedef i32 OS_Net_Network;
-enum {
-  OS_Net_Network_Invalid,
-  OS_Net_Network_IPv4 = 4,
-  OS_Net_Network_IPv6 = 6,
-};
-
-typedef struct {
-  u8 bytes[4];
-} IPv4;
-
-typedef struct {
-  u16 words[8];
-} IPv6;
-
-typedef struct {
-  OS_Net_Network version;
-  union {
-    IPv4 v4;
-    IPv6 v6;
-  };
-} IP;
-
-typedef struct NetInterface {
-  String8 name;
-  String8 strip;
-
-  OS_Net_Network version;
-  union {
-    struct {
-      IPv4 addr;
-      IPv4 netmask;
-    } ipv4;
-    struct {
-      IPv6 addr;
-      IPv6 netmask;
-    } ipv6;
-  };
-
-  struct NetInterface *next;
-  struct NetInterface *prev;
-} NetInterface;
-
-typedef struct {
-  NetInterface *first;
-  NetInterface *last;
-} NetInterfaceList;
-
-typedef struct {
-  OS_Net_Transport protocol_transport;
-  OS_Handle handle;
-  struct {
-    IP addr;
-    u16 port;
-  } client, server;
-} OS_Socket;
-
 fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint);
-fn NetInterface os_net_interface_from_str8(String8 strip);
+fn NetInterface os_net_interface_lookup(String8 interface);
 fn NetInterfaceList os_net_interfaces(Arena *arena);
 
 fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol);
@@ -365,13 +359,13 @@ fn void os_socket_close(OS_Socket *socket);
 // File reading and writing/appending
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags);
 fn bool fs_close(OS_Handle fd);
-fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size);
 fn String8 fs_read(Arena *arena, OS_Handle file);
+fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size);
 fn bool fs_write(OS_Handle file, String8 content);
 fn bool fs_copy(String8 src, String8 dest);
 
 fn FS_Properties fs_getProp(OS_Handle file);
-fn String8 fs_pathFromHandle(Arena *arena, OS_Handle file);
+fn String8 fs_path_from_handle(Arena *arena, OS_Handle file);
 fn String8 fs_readlink(Arena *arena, String8 path);
 
 // =============================================================================

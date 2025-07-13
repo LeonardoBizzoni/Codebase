@@ -3,10 +3,8 @@
 
 #include "core/os_core.h"
 
-#if OS_LINUX
-#  include "core/Linux/linux_core.h"
-#elif OS_BSD
-#  include "core/BSD/bsd_core.h"
+#if OS_UNIXLIKE
+#  include "core/Unix/unix_core.h"
 #elif OS_WINDOWS
 #  include "core/Win32/os_core_win32.h"
 #else

@@ -25,7 +25,7 @@ fn Arena *_arenaBuild(ArenaArgs args) {
   if (args.flags & Arena_UseHugePage) {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->hugepage_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->hugepage_size);
-    mem = os_reserveHuge(reserve);
+    mem = os_reserve_huge(reserve);
   } else {
     reserve = forwardAlign(args.reserve_size, os_getSystemInfo()->page_size);
     commit = forwardAlign(args.commit_size, os_getSystemInfo()->page_size);

@@ -1,58 +1,39 @@
-#include <dlfcn.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <semaphore.h>
-#include <libgen.h>
-#include <sched.h>
-#include <linux/sched.h>
-#include <sys/wait.h>
-#include <sys/sysinfo.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/syscall.h>
-#include <sys/sendfile.h>
+global UNX_State unx_state = {0};
 
-#include <dirent.h>
+fn OS_SystemInfo *os_getSystemInfo(void) {
+  return &unx_state.info;
+}
 
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-
-global LNX_State lnx_state = {0};
-
-fn LNX_Primitive* lnx_primitiveAlloc(LNX_PrimitiveType type) {
-  pthread_mutex_lock(&lnx_state.primitive_lock);
-  LNX_Primitive *res = lnx_state.primitive_freelist;
+fn UNX_Primitive* unx_primitive_alloc(UNX_PrimitiveType type) {
+  pthread_mutex_lock(&unx_state.primitive_lock);
+  UNX_Primitive *res = unx_state.primitive_freelist;
   if (res) {
-    StackPop(lnx_state.primitive_freelist);
-    memzero(res, sizeof(LNX_Primitive));
+    StackPop(unx_state.primitive_freelist);
+    memzero(res, sizeof(UNX_Primitive));
   } else {
-    res = New(lnx_state.arena, LNX_Primitive);
+    res = New(unx_state.arena, UNX_Primitive);
   }
-  pthread_mutex_unlock(&lnx_state.primitive_lock);
+  pthread_mutex_unlock(&unx_state.primitive_lock);
 
   res->type = type;
   return res;
 }
 
-fn void lnx_primitiveFree(LNX_Primitive *ptr) {
-  pthread_mutex_lock(&lnx_state.primitive_lock);
-  StackPush(lnx_state.primitive_freelist, ptr);
-  pthread_mutex_unlock(&lnx_state.primitive_lock);
+fn void unx_primitive_free(UNX_Primitive *ptr) {
+  pthread_mutex_lock(&unx_state.primitive_lock);
+  StackPush(unx_state.primitive_freelist, ptr);
+  pthread_mutex_unlock(&unx_state.primitive_lock);
 }
 
-fn void* lnx_threadEntry(void *args) {
-  LNX_Primitive *wrap_args = (LNX_Primitive *)args;
+fn void* unx_thread_entry(void *args) {
+  UNX_Primitive *wrap_args = (UNX_Primitive *)args;
   ThreadFunc *func = (ThreadFunc *)wrap_args->thread.func;
   func(wrap_args->thread.args);
   return 0;
 }
 
-fn FS_Properties lnx_propertiesFromStat(struct stat *stat) {
+fn FS_Properties unx_properties_from_stat(struct stat *stat) {
   FS_Properties result = {0};
-
   result.ownerID = stat->st_uid;
   result.groupID = stat->st_gid;
   result.size = (usize)stat->st_size;
@@ -88,7 +69,7 @@ fn FS_Properties lnx_propertiesFromStat(struct stat *stat) {
   return result;
 }
 
-fn String8 lnx_gethostname(void) {
+fn String8 unx_gethostname(void) {
   char name[HOST_NAME_MAX];
   (void)gethostname(name, HOST_NAME_MAX);
 
@@ -96,30 +77,7 @@ fn String8 lnx_gethostname(void) {
   return namestr;
 }
 
-fn void lnx_parseMeminfo(void) {
-  OS_Handle meminfo = fs_open(Strlit("/proc/meminfo"), OS_acfRead);
-  StringStream lines = str8_split(lnx_state.arena, fs_readVirtual(lnx_state.arena,
-                                                                  meminfo, 4096), '\n');
-  for (StringNode *curr_line = lines.first; curr_line; curr_line = curr_line->next) {
-    StringStream ss = str8_split(lnx_state.arena, curr_line->value, ':');
-    for (StringNode *curr = ss.first; curr; curr = curr->next) {
-      if (str8_eq(curr->value, Strlit("MemTotal"))) {
-        curr = curr->next;
-        lnx_state.info.total_memory = KiB(1) *
-                                      u64_from_str8(str8_split(lnx_state.arena, str8_trim(curr->value),
-                                                          ' ').first->value);
-      } else if (str8_eq(curr->value, Strlit("Hugepagesize"))) {
-        curr = curr->next;
-        lnx_state.info.hugepage_size = KiB(1) *
-                                       u64_from_str8(str8_split(lnx_state.arena, str8_trim(curr->value),
-                                                           ' ').first->value);
-        return;
-      }
-    }
-  }
-}
-
-fn i32 lnx_flags_from_acf(OS_AccessFlags acf) {
+fn i32 unx_flags_from_acf(OS_AccessFlags acf) {
   i32 res = 0;
   if ((acf & OS_acfRead) && (acf & OS_acfWrite)) {
     res |= O_RDWR;
@@ -134,18 +92,12 @@ fn i32 lnx_flags_from_acf(OS_AccessFlags acf) {
 }
 
 // =============================================================================
-// System information retrieval
-fn OS_SystemInfo *os_getSystemInfo(void) {
-  return &lnx_state.info;
-}
-
-// =============================================================================
 // DateTime
 fn time64 os_local_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
+  time64 res = time64_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
   res |= (u64)(tms.tv_nsec / 1e6);
   return res;
 }
@@ -154,20 +106,20 @@ fn DateTime os_local_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = datetime_from_unix(tms.tv_sec + lnx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
   res.ms = tms.tv_nsec / 1e6;
   return res;
 }
 
 fn time64 os_local_fromUTCTime64(time64 t) {
   u64 utc_time = unix_from_time64(t);
-  time64 res = time64_from_unix(utc_time + lnx_state.unix_utc_offset);
+  time64 res = time64_from_unix(utc_time + unx_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
   u64 utc_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(utc_time + lnx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(utc_time + unx_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
@@ -210,13 +162,13 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
 
 fn time64 os_utc_fromLocalTime64(time64 t) {
   u64 local_time = unix_from_time64(t);
-  time64 res = time64_from_unix(local_time - lnx_state.unix_utc_offset);
+  time64 res = time64_from_unix(local_time - unx_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {
   u64 local_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(local_time - lnx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(local_time - unx_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
@@ -225,7 +177,7 @@ fn void os_sleep_milliseconds(u32 ms) {
   usleep(ms * 1e3);
 }
 
-fn void lnx_sleep_nanoseconds(u32 ns) {
+fn void unx_sleep_nanoseconds(u32 ns) {
   struct timespec duration = {
     .tv_sec = ns / (u32)1e9,
     .tv_nsec = ns % (u32)1e9,
@@ -234,9 +186,9 @@ fn void lnx_sleep_nanoseconds(u32 ns) {
 }
 
 fn OS_Handle os_timer_start(void) {
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Timer);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Timer);
   if (clock_gettime(CLOCK_MONOTONIC, &prim->timer) != 0) {
-    lnx_primitiveFree(prim);
+    unx_primitive_free(prim);
     prim = 0;
   }
 
@@ -245,8 +197,8 @@ fn OS_Handle os_timer_start(void) {
 }
 
 fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
-  struct timespec tstart = ((LNX_Primitive *)start.h[0])->timer;
-  struct timespec tend = ((LNX_Primitive *)end.h[0])->timer;
+  struct timespec tstart = ((UNX_Primitive *)start.h[0])->timer;
+  struct timespec tend = ((UNX_Primitive *)end.h[0])->timer;
   u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * 1e9 +
                    (tend.tv_nsec - tstart.tv_nsec);
 
@@ -269,23 +221,13 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
 }
 
 fn void os_timer_free(OS_Handle handle) {
-  lnx_primitiveFree((LNX_Primitive*)handle.h[0]);
+  unx_primitive_free((UNX_Primitive*)handle.h[0]);
 }
 
 // =============================================================================
 // Memory allocation
 fn void* os_reserve(usize size) {
   void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (res == MAP_FAILED) {
-    res = 0;
-  }
-
-  return res;
-}
-
-fn void* os_reserveHuge(usize size) {
-  // TODO(lb): MAP_HUGETLB vs MAP_HUGE_2MB/MAP_HUGE_1GB?
-  void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
   if (res == MAP_FAILED) {
     res = 0;
   }
@@ -311,12 +253,12 @@ fn void os_decommit(void *base, usize size) {
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
   Assert(thread_main);
 
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Thread);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Thread);
   prim->thread.func = thread_main;
   prim->thread.args = args;
 
-  if (pthread_create(&prim->thread.handle, 0, lnx_threadEntry, prim) != 0) {
-    lnx_primitiveFree(prim);
+  if (pthread_create(&prim->thread.handle, 0, unx_thread_entry, prim) != 0) {
+    unx_primitive_free(prim);
     prim = 0;
   }
 
@@ -325,24 +267,24 @@ fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
 }
 
 fn void os_thread_kill(OS_Handle thd_handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != LNX_Primitive_Thread) { return; }
+  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != UNX_Primitive_Thread) { return; }
   (void)pthread_kill(prim->thread.handle, 0);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 }
 
 fn void os_thread_cancel(OS_Handle thd_handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != LNX_Primitive_Thread) { return; }
+  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != UNX_Primitive_Thread) { return; }
   (void)pthread_cancel(prim->thread.handle);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 }
 
 fn bool os_thread_join(OS_Handle thd_handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != LNX_Primitive_Thread) { return false; }
+  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != UNX_Primitive_Thread) { return false; }
   bool res = pthread_join(prim->thread.handle, 0) == 0;
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
   return res;
 }
 
@@ -351,7 +293,7 @@ fn void os_thread_cancelpoint(void) {
 }
 
 fn OS_ProcHandle os_proc_spawn(void) {
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Process);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Process);
   prim->proc = fork();
 
   OS_ProcHandle res = {prim->proc == 0, {{(u64)prim}}};
@@ -360,17 +302,17 @@ fn OS_ProcHandle os_proc_spawn(void) {
 
 fn void os_proc_kill(OS_ProcHandle proc) {
   Assert(!proc.is_child);
-  LNX_Primitive *prim = (LNX_Primitive *)proc.handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)proc.handle.h[0];
   (void)kill(prim->proc, SIGKILL);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 }
 
 fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc) {
   Assert(!proc.is_child);
-  LNX_Primitive *prim = (LNX_Primitive *)proc.handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)proc.handle.h[0];
   i32 child_res;
   (void)waitpid(prim->proc, &child_res, 0);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 
   OS_ProcStatus res = {0};
   if (WIFEXITED(child_res)) {
@@ -393,7 +335,7 @@ fn void os_atexit(VoidFunc *callback) {
 }
 
 fn OS_Handle os_mutex_alloc(void) {
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Mutex);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Mutex);
   pthread_mutexattr_t attr;
 #ifndef PLATFORM_CODERBOT
   if (pthread_mutexattr_init(&attr) != 0 ||
@@ -401,7 +343,7 @@ fn OS_Handle os_mutex_alloc(void) {
 #else
   if (pthread_mutexattr_init(&attr) != 0) {
 #endif
-    lnx_primitiveFree(prim);
+    unx_primitive_free(prim);
     prim = 0;
   } else {
     (void)pthread_mutex_init(&prim->mutex, &attr);
@@ -412,29 +354,29 @@ fn OS_Handle os_mutex_alloc(void) {
 }
 
 fn void os_mutex_lock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_mutex_lock(&prim->mutex);
 }
 
 fn bool os_mutex_trylock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   return pthread_mutex_trylock(&prim->mutex) == 0;
 }
 
 fn void os_mutex_unlock(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_mutex_unlock(&prim->mutex);
 }
 
 fn void os_mutex_free(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   pthread_mutex_destroy(&prim->mutex);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 }
 
 fn OS_Handle os_rwlock_alloc(void) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Rwlock);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Rwlock);
   pthread_rwlock_init(&prim->rwlock, 0);
 
   OS_Handle res = {{(u64)prim}};
@@ -447,14 +389,14 @@ fn OS_Handle os_rwlock_alloc(void) {
 
 fn void os_rwlock_read_lock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_rdlock(&prim->rwlock);
 #endif
 }
 
 fn bool os_rwlock_read_trylock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   return pthread_rwlock_tryrdlock(&prim->rwlock) == 0;
 #else
   return false;
@@ -463,21 +405,21 @@ fn bool os_rwlock_read_trylock(OS_Handle handle) {
 
 fn void os_rwlock_read_unlock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
 #endif
 }
 
 fn void os_rwlock_write_lock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_wrlock(&prim->rwlock);
 #endif
 }
 
 fn bool os_rwlock_write_trylock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   return pthread_rwlock_trywrlock(&prim->rwlock) == 0;
 #else
   return false;
@@ -486,24 +428,26 @@ fn bool os_rwlock_write_trylock(OS_Handle handle) {
 
 fn void os_rwlock_write_unlock(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
 #endif
 }
 
 fn void os_rwlock_free(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   pthread_rwlock_destroy(&prim->rwlock);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 #endif
 }
 
 fn OS_Handle os_cond_alloc(void) {
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_CondVar);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_CondVar);
   if (pthread_cond_init(&prim->condvar.cond, 0)) {
-    lnx_primitiveFree(prim);
+    unx_primitive_free(prim);
     prim = 0;
+  } else {
+    (void)pthread_mutex_init(&prim->condvar.mutex, 0);
   }
 
   OS_Handle res = {{(u64)prim}};
@@ -511,19 +455,19 @@ fn OS_Handle os_cond_alloc(void) {
 }
 
 fn void os_cond_signal(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_cond_signal(&prim->condvar.cond);
 }
 
 fn void os_cond_broadcast(OS_Handle handle) {
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   (void)pthread_cond_broadcast(&prim->condvar.cond);
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
                      u32 wait_at_most_microsec) {
-  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
-  LNX_Primitive *mutex_prim = (LNX_Primitive *)mutex_handle.h[0];
+  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
+  UNX_Primitive *mutex_prim = (UNX_Primitive *)mutex_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -545,8 +489,8 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
                             u32 wait_at_most_microsec) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
-  LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
+  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
+  UNX_Primitive *rwlock_prim = (UNX_Primitive *)rwlock_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -581,8 +525,8 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
                              u32 wait_at_most_microsec) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *cond_prim = (LNX_Primitive *)cond_handle.h[0];
-  LNX_Primitive *rwlock_prim = (LNX_Primitive *)rwlock_handle.h[0];
+  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
+  UNX_Primitive *rwlock_prim = (UNX_Primitive *)rwlock_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -616,9 +560,10 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
 fn bool os_cond_free(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
-  i32 res = pthread_cond_destroy(&prim->condvar.cond);
-  lnx_primitiveFree(prim);
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  i32 res = pthread_cond_destroy(&prim->condvar.cond) &
+            pthread_mutex_destroy(&prim->condvar.mutex);
+  unx_primitive_free(prim);
   return res == 0;
 #else
   return false;
@@ -628,7 +573,7 @@ fn bool os_cond_free(OS_Handle handle) {
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
                                 u32 max_count, String8 name) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Semaphore);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Semaphore);
   prim->semaphore.kind = kind;
   prim->semaphore.max_count = max_count;
   switch (kind) {
@@ -666,7 +611,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 
 fn bool os_semaphore_signal(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
       sem_post(prim->semaphore.sem)) {
     return false;
@@ -679,7 +624,7 @@ fn bool os_semaphore_signal(OS_Handle handle) {
 
 fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
@@ -701,7 +646,7 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   return sem_trywait(prim->semaphore.sem) == 0;
 #else
   return false;
@@ -710,7 +655,7 @@ fn bool os_semaphore_trywait(OS_Handle handle) {
 
 fn void os_semaphore_free(OS_Handle handle) {
 #ifndef PLATFORM_CODERBOT
-  LNX_Primitive *prim = (LNX_Primitive *)handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   switch (prim->semaphore.kind) {
     case OS_SemaphoreKind_Thread: {
       (void)sem_destroy(prim->semaphore.sem);
@@ -720,7 +665,7 @@ fn void os_semaphore_free(OS_Handle handle) {
       (void)sem_close(prim->semaphore.sem);
     } break;
   }
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 #endif
 }
 
@@ -728,7 +673,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   SharedMem res = {0};
   res.path = name;
 
-  i32 access_flags = lnx_flags_from_acf(flags);
+  i32 access_flags = unx_flags_from_acf(flags);
 
   Scratch scratch = ScratchBegin(0, 0);
   const char *cname = cstr_from_str8(scratch.arena, name);
@@ -863,13 +808,13 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
   return res;
 }
 
-fn NetInterface os_net_interface_from_str8(String8 strip) {
+fn NetInterface os_net_interface_lookup(String8 interface) {
   NetInterface res = {0};
 
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_interfaces(scratch.arena);
   for (NetInterface *curr = inters.first; curr; curr = curr->next) {
-    if (str8_eq(curr->strip, strip)) {
+    if (str8_eq(curr->strip, interface) || str8_eq(curr->name, interface)) {
       memcopy(&res, curr, sizeof(NetInterface));
       break;
     }
@@ -917,9 +862,9 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
 }
 
 fn OS_Socket os_socket_open(String8 name, u16 port,
-                                OS_Net_Transport protocol) {
+                            OS_Net_Transport protocol) {
   OS_Socket res = {0};
-  LNX_Primitive *prim = lnx_primitiveAlloc(LNX_Primitive_Socket);
+  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Socket);
   IP server = os_net_ip_from_str8(name, 0);
   i32 ctype, cdomain;
   switch (server.version) {
@@ -957,7 +902,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
 
   prim->socket.fd = socket(cdomain, ctype, 0);
   if (prim->socket.fd == -1) {
-    lnx_primitiveFree(prim);
+    unx_primitive_free(prim);
     perror("os_socket");
     return res;
   }
@@ -970,7 +915,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
 }
 
 fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
-  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
 
   i32 optval = 1;
   (void)setsockopt(prim->socket.fd, SOL_SOCKET,
@@ -983,8 +928,8 @@ fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
 fn OS_Socket os_socket_accept(OS_Socket *socket) {
   OS_Socket res = {0};
 
-  LNX_Primitive *server_prim = (LNX_Primitive*)socket->handle.h[0];
-  LNX_Primitive *client_prim = lnx_primitiveAlloc(LNX_Primitive_Socket);
+  UNX_Primitive *server_prim = (UNX_Primitive*)socket->handle.h[0];
+  UNX_Primitive *client_prim = unx_primitive_alloc(UNX_Primitive_Socket);
   client_prim->socket.size = sizeof(client_prim->socket.addr);
   client_prim->socket.fd = accept(server_prim->socket.fd,
                                   &client_prim->socket.addr,
@@ -1018,13 +963,13 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
 
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
   u8 *res = New(arena, u8, buffer_size);
-  LNX_Primitive *prim = (LNX_Primitive*)client->handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive*)client->handle.h[0];
   read(prim->socket.fd, res, buffer_size);
   return res;
 }
 
 fn void os_socket_connect(OS_Socket *server) {
-  LNX_Primitive *prim = (LNX_Primitive*)server->handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive*)server->handle.h[0];
   if (connect(prim->socket.fd, &prim->socket.addr,
               prim->socket.size) == -1) {
     perror("os_socket_connect");
@@ -1051,40 +996,22 @@ fn void os_socket_connect(OS_Socket *server) {
 }
 
 fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
-  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), msg.size, 0);
   ScratchEnd(scratch);
 }
 
 fn void os_socket_close(OS_Socket *socket) {
-  LNX_Primitive *prim = (LNX_Primitive*)socket->handle.h[0];
+  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
   shutdown(prim->socket.fd, SHUT_RDWR);
   close(prim->socket.fd);
-  lnx_primitiveFree(prim);
+  unx_primitive_free(prim);
 }
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
-  i32 access_flags = O_CREAT | lnx_flags_from_acf(flags);
-  Scratch scratch = ScratchBegin(0, 0);
-  i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  ScratchEnd(scratch);
-  if(fd < 0) {
-    fd = 0;
-  }
-
-  OS_Handle res = {{(u64)fd}};
-  return res;
-}
-
-fn bool fs_close(OS_Handle fd) {
-  return close(fd.h[0]) == 0;
-}
-
-fn String8 fs_readVirtual(Arena *arena, OS_Handle file, usize size) {
+fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
   int fd = file.h[0];
   String8 result = {0};
   if(!fd) { return result; }
@@ -1120,43 +1047,15 @@ inline fn bool fs_write(OS_Handle file, String8 content) {
   return write(file.h[0], content.str, content.size) == (isize)content.size;
 }
 
-fn bool fs_copy(String8 source, String8 destination) {
-  Scratch scratch = ScratchBegin(0, 0);
-  i32 src = open(cstr_from_str8(scratch.arena, source), O_RDONLY, 0);
-  i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, 0644);
-  ScratchEnd(scratch);
-
-  struct stat stat_src = {0};
-  fstat(src, &stat_src);
-  isize res = sendfile(dest, src, 0, stat_src.st_size);
-  fchmod(dest, stat_src.st_mode & 0777);
-
-  fdatasync(dest);
-  close(src);
-  close(dest);
-
-  scratch = ScratchBegin(0, 0);
-  Assert(access(cstr_from_str8(scratch.arena, destination), F_OK) == 0);
-  ScratchEnd(scratch);
-
-  return res != -1;
-}
-
-fn FS_Properties fs_getProp(OS_Handle file) {
+fn FS_Properties fs_get_properties(OS_Handle file) {
   FS_Properties result = {0};
   if(!file.h[0]) { return result; }
 
   struct stat file_stat;
   if (fstat((i32)file.h[0], &file_stat) == 0) {
-    result = lnx_propertiesFromStat(&file_stat);
+    result = unx_properties_from_stat(&file_stat);
   }
   return result;
-}
-
-fn String8 fs_pathFromHandle(Arena *arena, OS_Handle fd) {
-  char path[PATH_MAX];
-  isize len = snprintf(path, sizeof(path), "/proc/self/fd/%ld", fd.h[0]);
-  return fs_readlink(arena, str8((u8 *)path, len));
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
@@ -1186,8 +1085,8 @@ fn File fs_fopen(Arena *arena, OS_Handle fd) {
   }
 
   file.file_handle = fd;
-  file.path = fs_pathFromHandle(arena, fd);
-  file.prop = fs_getProp(file.file_handle);
+  file.path = fs_path_from_handle(arena, fd);
+  file.prop = fs_get_properties(file.file_handle);
   file.content = (u8 *)mmap(0, ClampBot(file.prop.size, 1),
                             flags, MAP_SHARED, fd.h[0], 0);
   file.mmap_handle.h[0] = (u64)file.content;
@@ -1195,7 +1094,7 @@ fn File fs_fopen(Arena *arena, OS_Handle fd) {
   return file;
 }
 
-fn File fs_fopenTmp(Arena *arena) {
+fn File fs_fopen_tmp(Arena *arena) {
   char path[] = "/tmp/base-XXXXXX";
   i32 fd = mkstemp(path);
 
@@ -1205,7 +1104,7 @@ fn File fs_fopenTmp(Arena *arena) {
   File file = {0};
   file.file_handle.h[0] = fd;
   file.path = pathstr;
-  file.prop = fs_getProp(file.file_handle);
+  file.prop = fs_get_properties(file.file_handle);
   file.content = (u8*)mmap(0, ClampBot(file.prop.size, 1),
                            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   file.mmap_handle.h[0] = (u64)file.content;
@@ -1229,8 +1128,8 @@ inline fn bool fs_fresize(File *file, usize size) {
   return (isize)file->content > 0;
 }
 
-inline fn bool fs_fileHasChanged(File *file) {
-  FS_Properties prop = fs_getProp(file->file_handle);
+inline fn bool fs_has_changed(File *file) {
+  FS_Properties prop = fs_get_properties(file->file_handle);
   return (file->prop.last_access_time != prop.last_access_time) ||
          (file->prop.last_modification_time != prop.last_modification_time) ||
          (file->prop.last_status_change_time != prop.last_status_change_time);
@@ -1284,7 +1183,7 @@ fn String8 fs_filename_from_path(Arena *arena, String8 path) {
 
 fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   OS_FileIter *os_iter = New(arena, OS_FileIter);
-  LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
+  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   iter->path = path;
   Scratch scratch = ScratchBegin(&arena, 1);
   iter->dir = opendir(cstr_from_str8(scratch.arena, path));
@@ -1293,9 +1192,9 @@ fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   return os_iter;
 }
 
-fn OS_FileIter* fs_iter_beginFiltered(Arena *arena, String8 path, OS_FileType allowed) {
+fn OS_FileIter* fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed) {
   OS_FileIter *os_iter = New(arena, OS_FileIter);
-  LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
+  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   iter->path = path;
   Scratch scratch = ScratchBegin(&arena, 1);
   iter->dir = opendir(cstr_from_str8(scratch.arena, path));
@@ -1310,7 +1209,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 parentdir = StrlitInit("..");
 
   String8 str = {0};
-  LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
+  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 
   if (!iter->dir) { return false; }
@@ -1329,7 +1228,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
       return false;
     }
 
-    info_out->properties = lnx_propertiesFromStat(&file_stat);
+    info_out->properties = unx_properties_from_stat(&file_stat);
   } while (os_iter->filter_allowed && !(info_out->properties.type & os_iter->filter_allowed));
 
   info_out->name.size = str.size;
@@ -1340,83 +1239,12 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
 }
 
 fn void fs_iter_end(OS_FileIter *os_iter) {
-  LNX_FileIter *iter = (LNX_FileIter *)os_iter->memory;
+  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   if (iter->dir) { closedir(iter->dir); }
 }
 
-// =============================================================================
-// Glibc missing wrappers
-fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
-  struct sched_attr attr = {
-    .size = sizeof(attr),
-    .sched_policy = policy,
-    .sched_flags = SCHED_FLAG_DL_OVERRUN,
-    .sched_runtime = runtime_ns,
-    .sched_deadline = deadline_ns,
-    .sched_period = period_ns
-  };
-  return syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
-}
-
-fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                               SignalFunc *deadline_miss_handler) {
-  Assert(!lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns));
-  //       \CPU time exceeded/
-  (void)signal(SIGXCPU, deadline_miss_handler);
-}
-
-fn void lnx_sched_yield(void) {
-  sched_yield();
-}
-
-// TODO(lb): are there signals on windows?
-fn void lnx_signal_send_private(i32 signal) {
-  kill(getpid(), signal);
-}
-
-fn void lnx_signal_wait(i32 signal) {
-  sigset_t signal_set;
-  sigemptyset(&signal_set);
-  sigaddset(&signal_set, signal);
-  for (i32 signum = 0; signum != signal; ) {
-    sigwait(&signal_set, &signum);
-  }
-}
-
-// =============================================================================
-i32 main(i32 argc, char **argv) {
-  lnx_state.info.core_count = get_nprocs();
-  lnx_state.info.page_size = getpagesize();
-  lnx_state.info.hostname = lnx_gethostname();
-
-  lnx_state.arena = ArenaBuild();
-  pthread_mutex_init(&lnx_state.primitive_lock, 0);
-  lnx_parseMeminfo();
-
-  CmdLine cli = {0};
-  cli.count = argc - 1;
-  cli.exe = str8_from_cstr(argv[0]);
-  cli.args = New(lnx_state.arena, String8, argc - 1);
-  for (isize i = 1; i < argc; ++i) {
-    cli.args[i - 1] = str8_from_cstr(argv[i]);
-  }
-
-  struct timespec tms;
-  struct tm lt = {0};
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-  (void)localtime_r(&tms.tv_sec, &lt);
-  lnx_state.unix_utc_offset = lt.tm_gmtoff;
-
-#if OS_GUI
-  lnx_gfx_init();
+#if OS_LINUX
+#  include "Linux/linux_core.c"
+#elif OS_BSD
+#  include "BSD/bsd_core.c"
 #endif
-#if OS_SOUND
-  lnx_snd_init();
-#endif
-
-  start(&cli);
-
-#if OS_SOUND
-  lnx_snd_deinit();
-#endif
-}

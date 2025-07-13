@@ -105,6 +105,12 @@
 #  define OS_SOUND 0
 #endif
 
+#if OS_LINUX || OS_BSD
+#  define OS_UNIXLIKE 1
+#else
+#  define OS_UNIXLIKE 0
+#endif
+
 #if defined(DEBUG)
 #  undef DEBUG
 #  define DEBUG 1
