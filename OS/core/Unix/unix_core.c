@@ -1242,9 +1242,3 @@ fn void fs_iter_end(OS_FileIter *os_iter) {
   UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   if (iter->dir) { closedir(iter->dir); }
 }
-
-#if OS_LINUX
-#  include "Linux/linux_core.c"
-#elif OS_BSD
-#  include "BSD/bsd_core.c"
-#endif

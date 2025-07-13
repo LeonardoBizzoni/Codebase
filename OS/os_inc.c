@@ -2,6 +2,11 @@
 
 #if OS_UNIXLIKE
 #  include "core/Unix/unix_core.c"
+#  if OS_LINUX
+#    include "core/Unix/Linux/linux_core.c"
+#  elif OS_BSD
+#    include "core/Unix/BSD/bsd_core.c"
+#  endif
 #elif OS_WINDOWS
 #  include "core/Win32/os_core_win32.c"
 #endif

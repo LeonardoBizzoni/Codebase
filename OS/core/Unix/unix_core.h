@@ -100,10 +100,4 @@ typedef struct {
   u64 unix_utc_offset;
 } UNX_State;
 
-#if OS_LINUX
-#  include "Linux/linux_core.h"
-#elif OS_BSD
-#  include "BSD/bsd_core.h"
-#endif
-
 #endif
