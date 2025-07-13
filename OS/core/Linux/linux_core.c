@@ -119,6 +119,20 @@ fn void lnx_parseMeminfo(void) {
   }
 }
 
+fn i32 lnx_flags_from_acf(OS_AccessFlags acf) {
+  i32 res = 0;
+  if ((acf & OS_acfRead) && (acf & OS_acfWrite)) {
+    res |= O_RDWR;
+  } else if(acf & OS_acfRead) {
+    res |= O_RDONLY;
+  } else if(acf & OS_acfWrite) {
+    res |= O_WRONLY | O_CREAT | O_TRUNC;
+  }
+  if (acf & OS_acfExecute) { res |= O_EXCL | O_CREAT; }
+  if (acf & OS_acfAppend) { res |= O_APPEND | O_CREAT; }
+  return res;
+}
+
 // =============================================================================
 // System information retrieval
 fn OS_SystemInfo *os_getSystemInfo(void) {
@@ -714,26 +728,21 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   SharedMem res = {0};
   res.path = name;
 
-  i32 access_flags = 0;
-  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
-    access_flags |= O_RDWR;
-  } else if(flags & OS_acfRead) {
-    access_flags |= O_RDONLY;
-  } else if(flags & OS_acfWrite) {
-    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
-  }
-  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
+  i32 access_flags = lnx_flags_from_acf(flags);
 
   Scratch scratch = ScratchBegin(0, 0);
-  res.file_handle.h[0] = shm_open(cstr_from_str8(scratch.arena, name),
-                                  access_flags,
+  const char *cname = cstr_from_str8(scratch.arena, name);
+  res.file_handle.h[0] = shm_open(cname, access_flags,
                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  AssertMsg(res.file_handle.h[0] >= 0, Strlit("shm_open failed"));
+  (void)shm_unlink(cname);
   ScratchEnd(scratch);
 
   (void)ftruncate(res.file_handle.h[0], size);
-  res.prop = fs_getProp(res.file_handle);
-  res.content = (u8*)mmap(0, ClampBot(res.prop.size, 1), PROT_READ | PROT_WRITE,
+  res.prop.size = size;
+  res.content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, res.file_handle.h[0], 0);
+  Assert(res.content != MAP_FAILED);
 
   return res;
 }
@@ -1058,17 +1067,7 @@ fn void os_socket_close(OS_Socket *socket) {
 // =============================================================================
 // File reading and writing/appending
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
-  i32 access_flags = O_CREAT;
-
-  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
-    access_flags |= O_RDWR;
-  } else if(flags & OS_acfRead) {
-    access_flags |= O_RDONLY;
-  } else if(flags & OS_acfWrite) {
-    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
-  }
-  if(flags & OS_acfAppend) { access_flags |= O_APPEND; }
-
+  i32 access_flags = O_CREAT | lnx_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
   i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
