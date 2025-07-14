@@ -5,7 +5,7 @@ global Wayland_State waystate = {0};
 
 // =============================================================================
 // Common Linux definitions
-fn void lnx_gfx_init(void) {
+fn void unx_gfx_init(void) {
   waystate.arena = ArenaBuild();
   waystate.display = wl_display_connect(0);
   Assert(waystate.display);

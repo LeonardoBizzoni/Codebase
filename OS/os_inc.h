@@ -18,9 +18,13 @@
 
 #if OS_GUI
 #  include "gfx/os_gfx.h"
-#  if OS_LINUX
-#    include "gfx/Linux/linux_gfx.h"
-#  elif OS_BSD
+#  if OS_UNIXLIKE
+#    include "gfx/Unix/unix_gfx.h"
+#    if OS_LINUX
+#      include "gfx/Unix/Linux/linux_gfx.h"
+#    elif OS_BSD
+#      include "gfx/Unix/BSD/bsd_gfx.h"
+#  endif
 #  elif OS_WINDOWS
 #    include "gfx/Win32/os_gfx_win32.h"
 #  else

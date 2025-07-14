@@ -364,7 +364,7 @@ fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size);
 fn bool fs_write(OS_Handle file, String8 content);
 fn bool fs_copy(String8 src, String8 dest);
 
-fn FS_Properties fs_getProp(OS_Handle file);
+fn FS_Properties fs_get_properties(OS_Handle file);
 fn String8 fs_path_from_handle(Arena *arena, OS_Handle file);
 fn String8 fs_readlink(Arena *arena, String8 path);
 

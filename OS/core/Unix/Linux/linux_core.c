@@ -149,7 +149,7 @@ i32 main(i32 argc, char **argv) {
   unx_state.unix_utc_offset = lt.tm_gmtoff;
 
 #if OS_GUI
-  lnx_gfx_init();
+  unx_gfx_init();
 #endif
 #if OS_SOUND
   lnx_snd_init();

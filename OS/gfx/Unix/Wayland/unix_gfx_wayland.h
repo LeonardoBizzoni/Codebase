@@ -1,5 +1,5 @@
-#ifndef OS_GFX_LINUX_WAYLAND_H
-#define OS_GFX_LINUX_WAYLAND_H
+#ifndef OS_GFX_UNIX_WAYLAND_H
+#define OS_GFX_UNIX_WAYLAND_H
 
 #undef global
 #include <wayland-client.h>

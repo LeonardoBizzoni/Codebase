@@ -11,7 +11,7 @@
 #  include<GL/glu.h>
 #endif
 
-typedef struct LNX11_Window {
+typedef struct X11_Window {
   i32 xscreen;
   Window xwindow;
   XVisualInfo xvisual;
@@ -29,18 +29,18 @@ typedef struct LNX11_Window {
   GLXContext context;
 #endif
 
-  struct LNX11_Window *next;
-  struct LNX11_Window *prev;
-} LNX11_Window;
+  struct X11_Window *next;
+  struct X11_Window *prev;
+} X11_Window;
 
 typedef struct {
   Arena *arena;
-  LNX11_Window *first_window;
-  LNX11_Window *last_window;
-  LNX11_Window *freelist_window;
+  X11_Window *first_window;
+  X11_Window *last_window;
+  X11_Window *freelist_window;
 
   Display *xdisplay;
   u64 xatom_close;
-} LNX11_State;
+} X11_State;
 
 #endif
