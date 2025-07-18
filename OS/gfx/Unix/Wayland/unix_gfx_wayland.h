@@ -8,6 +8,16 @@
 // wayland-scanner client-header /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-client-protocol.h
 #include "xdg-shell-client-protocol.h"
 
+typedef struct Way_WindowEvent {
+  OS_Event value;
+  struct Way_WindowEvent *next;
+} Way_WindowEvent;
+
+typedef struct {
+  Way_WindowEvent *first;
+  Way_WindowEvent *last;
+} Way_WindowEventList;
+
 typedef struct Wayland_Window {
   struct wl_surface *surface;
   struct wl_buffer *buffer;
@@ -17,13 +27,25 @@ typedef struct Wayland_Window {
   struct xdg_toplevel *xdg_toplevel;
   struct xdg_toplevel_listener xdg_toplevel_listener;
 
+  struct {
+    OS_Handle lock;
+    OS_Handle condvar;
+    Way_WindowEventList list;
+  } events;
   SharedMem shm;
+  u32 width, height;
   struct Wayland_Window *next;
   struct Wayland_Window *prev;
 } Wayland_Window;
 
 typedef struct {
   Arena *arena;
+  OS_Handle dispatcher;
+
+  struct {
+    OS_Handle lock;
+    Way_WindowEventList freelist;
+  } events;
 
   Wayland_Window *freelist_window;
   Wayland_Window *first_window;
@@ -48,5 +70,9 @@ fn void way_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
                                    i32 width, i32 height, struct wl_array *states);
 fn void way_xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel);
+
+fn void way_event_dispatcher(void *_);
+
+fn Way_WindowEvent* way_alloc_windowevent(void);
 
 #endif

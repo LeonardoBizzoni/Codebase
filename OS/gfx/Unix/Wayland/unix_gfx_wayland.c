@@ -22,6 +22,9 @@ fn void unx_gfx_init(void) {
   wl_registry_add_listener(waystate.registry, &waystate.reglistener, 0);
 
   wl_display_roundtrip(waystate.display);
+
+  waystate.events.lock = os_mutex_alloc();
+  waystate.dispatcher = os_thread_start(way_event_dispatcher, 0);
 }
 
 // =============================================================================
@@ -44,15 +47,65 @@ fn void way_xdg_base_ping(void *data, struct xdg_wm_base *xdg_base, u32 serial) 
   xdg_wm_base_pong(xdg_base, serial);
 }
 
+// TODO(lb): not sure what this event does
+// https://wayland.app/protocols/xdg-shell#xdg_surface:event:configure
 fn void way_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u32 serial) {
-   xdg_surface_ack_configure(xdg_surface, serial);
+  Wayland_Window *window = data;
+  wl_surface_attach(window->surface, window->buffer, 0, 0);
+  wl_surface_damage(window->surface, 0, 0, window->width, window->height);
+  wl_surface_commit(window->surface);
+  xdg_surface_ack_configure(xdg_surface, serial);
 }
 
+// https://wayland.app/protocols/xdg-shell#xdg_toplevel:event:configure
 fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
                                    i32 width, i32 height, struct wl_array *states) {
+  Wayland_Window *window = data;
+  Way_WindowEvent *event = way_alloc_windowevent();
+  event->value.type = OS_EventType_Expose;
+  event->value.expose.width = width;
+  event->value.expose.height = height;
+  OS_MutexScope(window->events.lock) {
+    QueuePush(window->events.list.first, window->events.list.last, event);
+    os_cond_signal(window->events.condvar);
+  }
+
+  // TODO(lb): docs says the client must send an `ack_configure` in response to
+  //           this event but i can't find any reference of how to do it
+  //           when dealing with `xdg_toplevel` instead of `xdg_surface`.
 }
 
+// https://wayland.app/protocols/xdg-shell#xdg_toplevel:event:close
 fn void way_xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel) {
+  Wayland_Window *window = data;
+  Way_WindowEvent *event = way_alloc_windowevent();
+  event->value.type = OS_EventType_Kill;
+  OS_MutexScope(window->events.lock) {
+    QueuePush(window->events.list.first, window->events.list.last, event);
+    os_cond_signal(window->events.condvar);
+  }
+}
+
+fn void way_event_dispatcher(void *_) {
+  while (1) {
+     wl_display_flush(waystate.display);
+     wl_display_dispatch(waystate.display);
+  }
+}
+
+fn Way_WindowEvent* way_alloc_windowevent(void) {
+  Way_WindowEvent *event = 0;
+  OS_MutexScope(waystate.events.lock) {
+    event = waystate.events.freelist.first;
+    if (event) {
+      memzero(event, sizeof(Way_WindowEvent));
+      QueuePop(waystate.events.freelist.first);
+    } else {
+      event = New(waystate.arena, Way_WindowEvent);
+    }
+  }
+  Assert(event);
+  return event;
 }
 
 // =============================================================================
@@ -66,6 +119,10 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
     window = New(waystate.arena, Wayland_Window);
   }
   DLLPushBack(waystate.first_window, waystate.last_window, window);
+  window->events.lock = os_mutex_alloc();
+  window->events.condvar = os_cond_alloc();
+  window->width = width;
+  window->height = height;
 
   u32 memsize = width * height * 4;
   window->surface = wl_compositor_create_surface(waystate.compositor);
@@ -78,12 +135,12 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   window->xdg_surface = xdg_wm_base_get_xdg_surface(waystate.xdg_base, window->surface);
   window->xdg_surface_listener.configure = way_xdg_surface_configure;
-  xdg_surface_add_listener(window->xdg_surface, &window->xdg_surface_listener, 0);
+  xdg_surface_add_listener(window->xdg_surface, &window->xdg_surface_listener, window);
 
   window->xdg_toplevel = xdg_surface_get_toplevel(window->xdg_surface);
   window->xdg_toplevel_listener.configure = way_xdg_toplevel_configure;
   window->xdg_toplevel_listener.close = way_xdg_toplevel_close;
-  xdg_toplevel_add_listener(window->xdg_toplevel, &window->xdg_toplevel_listener, 0);
+  xdg_toplevel_add_listener(window->xdg_toplevel, &window->xdg_toplevel_listener, window);
 
   Scratch scratch = ScratchBegin(0, 0);
   xdg_toplevel_set_title(window->xdg_toplevel, cstr_from_str8(scratch.arena, name));
@@ -94,16 +151,14 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   OS_Window res = {0};
   res.handle.h[0] = (u64)window;
+  res.width = width;
+  res.height = height;
   return res;
 }
 
 fn void os_window_show(OS_Window window_) {
   Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   wl_surface_commit(window->surface);
-
-  // TODO(lb): needs to stay running to enable events i think.
-  //           probably needs its own thread just like on Win32
-  while (wl_display_dispatch(waystate.display));
 }
 
 fn void os_window_hide(OS_Window handle) {}
@@ -120,15 +175,41 @@ fn void os_window_close(OS_Window window_) {
 fn void os_window_swapBuffers(OS_Window handle) {}
 
 fn void os_window_render(OS_Window window_, void *mem) {}
+fn OS_Event os_window_get_event(OS_Window window_) {
+  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
 
-fn OS_Event os_window_get_event(OS_Window handle) {
   OS_Event res = {0};
+  Way_WindowEvent *event = 0;
+  OS_MutexScope(window->events.lock) {
+    event = window->events.list.first;
+    QueuePop(window->events.list.first);
+  }
+  if (event && event->value.type) {
+    memcopy(&res, &event->value, sizeof(OS_Event));
+    OS_MutexScope(waystate.events.lock) {
+      QueuePush(waystate.events.freelist.first, waystate.events.freelist.last, event);
+    }
+  }
   return res;
 }
 
-fn OS_Event os_window_wait_event(OS_Window handle) {
+fn OS_Event os_window_wait_event(OS_Window window_) {
+  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   OS_Event res = {0};
-  wl_display_dispatch(waystate.display);
+  Way_WindowEvent *event = 0;
+  OS_MutexScope(window->events.lock) {
+    event = window->events.list.first;
+    for (; !event; event = window->events.list.first) {
+      os_cond_wait(window->events.condvar, window->events.lock, 0);
+    }
+    QueuePop(window->events.list.first);
+  }
+  if (event && event->value.type) {
+    memcopy(&res, &event->value, sizeof(OS_Event));
+    OS_MutexScope(waystate.events.lock) {
+      QueuePush(waystate.events.freelist.first, waystate.events.freelist.last, event);
+    }
+  }
   return res;
 }
 

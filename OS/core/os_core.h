@@ -292,6 +292,7 @@ fn void os_mutex_lock(OS_Handle handle);
 fn bool os_mutex_trylock(OS_Handle handle);
 fn void os_mutex_unlock(OS_Handle handle);
 fn void os_mutex_free(OS_Handle handle);
+#define OS_MutexScope(mutex) DeferLoop(os_mutex_lock(mutex), os_mutex_unlock(mutex))
 
 fn OS_Handle os_rwlock_alloc(void);
 fn void os_rwlock_read_lock(OS_Handle handle);
@@ -301,8 +302,6 @@ fn void os_rwlock_write_lock(OS_Handle handle);
 fn bool os_rwlock_write_trylock(OS_Handle handle);
 fn void os_rwlock_write_unlock(OS_Handle handle);
 fn void os_rwlock_free(OS_Handle handle);
-
-#define OS_MutexScope(mutex) DeferLoop(os_mutex_lock(mutex), os_mutex_unlock(mutex))
 
 fn OS_Handle os_cond_alloc(void);
 fn void os_cond_signal(OS_Handle handle);
