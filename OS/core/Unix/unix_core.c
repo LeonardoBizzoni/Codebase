@@ -689,6 +689,16 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   return res;
 }
 
+fn void os_sharedmem_resize(SharedMem *shm, usize size) {
+  if (size == 0) { return; }
+  munmap(shm->content, shm->prop.size);
+  Assert(!ftruncate(shm->file_handle.h[0], size));
+  shm->content = mmap(0, size, PROT_READ | PROT_WRITE,
+                     MAP_SHARED, shm->file_handle.h[0], 0);
+  AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
+  shm->prop.size = size;
+}
+
 fn bool os_sharedmem_close(SharedMem *shm) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = munmap(shm->content, shm->prop.size) == 0 &&

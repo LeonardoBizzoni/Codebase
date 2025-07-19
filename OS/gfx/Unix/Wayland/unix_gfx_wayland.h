@@ -21,6 +21,10 @@ typedef struct {
 typedef struct Wayland_Window {
   struct wl_surface *surface;
   struct wl_buffer *buffer;
+  struct wl_shm_pool *pool;
+
+  struct wl_callback *callback;
+  struct wl_callback_listener callback_listener;
 
   struct xdg_surface *xdg_surface;
   struct xdg_surface_listener xdg_surface_listener;

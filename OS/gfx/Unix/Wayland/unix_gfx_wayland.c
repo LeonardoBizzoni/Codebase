@@ -43,6 +43,17 @@ fn void way_registry_handle_global(void *data, struct wl_registry *registry,
 
 fn void way_registry_handle_global_remove(void *data, struct wl_registry *registry, u32 name) {}
 
+fn void way_callback_frame_new(void *data, struct wl_callback *callback, u32 callback_data) {
+  Wayland_Window *window = data;
+  wl_callback_destroy(callback);
+  window->callback = callback = wl_surface_frame(window->surface);
+  wl_callback_add_listener(window->callback, &window->callback_listener, window);
+
+  wl_surface_attach(window->surface, window->buffer, 0, 0);
+  wl_surface_damage(window->surface, 0, 0, window->width, window->height);
+  wl_surface_commit(window->surface);
+}
+
 fn void way_xdg_base_ping(void *data, struct xdg_wm_base *xdg_base, u32 serial) {
   xdg_wm_base_pong(xdg_base, serial);
 }
@@ -67,8 +78,8 @@ fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
   event->value.expose.height = height;
   OS_MutexScope(window->events.lock) {
     QueuePush(window->events.list.first, window->events.list.last, event);
-    os_cond_signal(window->events.condvar);
   }
+  os_cond_signal(window->events.condvar);
 
   // TODO(lb): docs says the client must send an `ack_configure` in response to
   //           this event but i can't find any reference of how to do it
@@ -82,8 +93,8 @@ fn void way_xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel) {
   event->value.type = OS_EventType_Kill;
   OS_MutexScope(window->events.lock) {
     QueuePush(window->events.list.first, window->events.list.last, event);
-    os_cond_signal(window->events.condvar);
   }
+  os_cond_signal(window->events.condvar);
 }
 
 fn void way_event_dispatcher(void *_) {
@@ -98,8 +109,8 @@ fn Way_WindowEvent* way_alloc_windowevent(void) {
   OS_MutexScope(waystate.events.lock) {
     event = waystate.events.freelist.first;
     if (event) {
-      memzero(event, sizeof(Way_WindowEvent));
       QueuePop(waystate.events.freelist.first);
+      memzero(event, sizeof(Way_WindowEvent));
     } else {
       event = New(waystate.arena, Way_WindowEvent);
     }
@@ -126,12 +137,14 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   u32 memsize = width * height * 4;
   window->surface = wl_compositor_create_surface(waystate.compositor);
+  window->callback = wl_surface_frame(window->surface);
+  window->callback_listener.done = way_callback_frame_new;
+  wl_callback_add_listener(window->callback, &window->callback_listener, window);
 
   window->shm = os_sharedmem_open(name, memsize,
                                   OS_acfRead | OS_acfWrite | OS_acfExecute);
-  struct wl_shm_pool *pool = wl_shm_create_pool(waystate.shm, window->shm.file_handle.h[0], memsize);
-  window->buffer = wl_shm_pool_create_buffer(pool, 0, width, height, width * 4, WL_SHM_FORMAT_ARGB8888);
-  wl_shm_pool_destroy(pool);
+  window->pool = wl_shm_create_pool(waystate.shm, window->shm.file_handle.h[0], memsize);
+  window->buffer = wl_shm_pool_create_buffer(window->pool, 0, width, height, width * 4, WL_SHM_FORMAT_ARGB8888);
 
   window->xdg_surface = xdg_wm_base_get_xdg_surface(waystate.xdg_base, window->surface);
   window->xdg_surface_listener.configure = way_xdg_surface_configure;
@@ -146,8 +159,10 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   xdg_toplevel_set_title(window->xdg_toplevel, cstr_from_str8(scratch.arena, name));
   ScratchEnd(scratch);
 
+  // TODO(lb): does this map the window?
   wl_surface_attach(window->surface, window->buffer, x, y);
   wl_surface_damage(window->surface, 0, 0, width, height);
+  wl_surface_commit(window->surface);
 
   OS_Window res = {0};
   res.handle.h[0] = (u64)window;
@@ -156,35 +171,52 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   return res;
 }
 
-fn void os_window_show(OS_Window window_) {
-  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
-  wl_surface_commit(window->surface);
-}
+fn void os_window_show(OS_Window window_) {}
 
 fn void os_window_hide(OS_Window handle) {}
 
 fn void os_window_close(OS_Window window_) {
   Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   wl_surface_destroy(window->surface);
+  wl_shm_pool_destroy(window->pool);
   // TODO(lb): figure out what else needs to be destroyed and how to do it
 
+  os_sharedmem_close(&window->shm);
   DLLDelete(waystate.first_window, waystate.last_window, window);
   StackPush(waystate.freelist_window, window);
 }
 
 fn void os_window_swapBuffers(OS_Window handle) {}
 
-fn void os_window_render(OS_Window window_, void *mem) {}
-fn OS_Event os_window_get_event(OS_Window window_) {
+fn void os_window_render(OS_Window window_, void *mem) {
   Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
 
+  // TODO(lb): i have no fucking idea what wayland wants me to do
+  //           to update the content of the shm when the window size has changed
+  if ((window_.width && window_.height) && (window_.width != window->width || window_.height != window->height)) {
+    window->width = window_.width;
+    window->height = window_.height;
+    u32 memsize = window->width * window->height * 4;
+    os_sharedmem_resize(&window->shm, window->width * window->height * 4);
+
+    struct wl_shm_pool *pool = wl_shm_create_pool(waystate.shm, window->shm.file_handle.h[0], memsize);
+    window->buffer = wl_shm_pool_create_buffer(pool, 0, window->width, window->height, window->width * 4, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+  }
+
+  memcopy(window->shm.content, mem, window->width * window->height * 4);
+}
+
+fn OS_Event os_window_get_event(OS_Window window_) {
   OS_Event res = {0};
   Way_WindowEvent *event = 0;
+  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   OS_MutexScope(window->events.lock) {
     event = window->events.list.first;
     QueuePop(window->events.list.first);
   }
-  if (event && event->value.type) {
+
+  if (event) {
     memcopy(&res, &event->value, sizeof(OS_Event));
     OS_MutexScope(waystate.events.lock) {
       QueuePush(waystate.events.freelist.first, waystate.events.freelist.last, event);
@@ -194,9 +226,9 @@ fn OS_Event os_window_get_event(OS_Window window_) {
 }
 
 fn OS_Event os_window_wait_event(OS_Window window_) {
-  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   OS_Event res = {0};
   Way_WindowEvent *event = 0;
+  Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
   OS_MutexScope(window->events.lock) {
     event = window->events.list.first;
     for (; !event; event = window->events.list.first) {
@@ -204,11 +236,10 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
     }
     QueuePop(window->events.list.first);
   }
-  if (event && event->value.type) {
-    memcopy(&res, &event->value, sizeof(OS_Event));
-    OS_MutexScope(waystate.events.lock) {
-      QueuePush(waystate.events.freelist.first, waystate.events.freelist.last, event);
-    }
+
+  memcopy(&res, &event->value, sizeof(OS_Event));
+  OS_MutexScope(waystate.events.lock) {
+    QueuePush(waystate.events.freelist.first, waystate.events.freelist.last, event);
   }
   return res;
 }
