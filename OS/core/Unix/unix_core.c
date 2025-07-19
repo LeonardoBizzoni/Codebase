@@ -587,7 +587,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
     } break;
     case OS_SemaphoreKind_Process: {
       AssertMsg(name.size > 0,
-                Strlit("Semaphores sharable between processes must be named."));
+                "Semaphores sharable between processes must be named.");
 
       Scratch scratch = ScratchBegin(0, 0);
       char *path = cstr_from_str8(scratch.arena, name);
@@ -674,13 +674,10 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   res.path = name;
 
   i32 access_flags = unx_flags_from_acf(flags);
-
   Scratch scratch = ScratchBegin(0, 0);
-  const char *cname = cstr_from_str8(scratch.arena, name);
-  res.file_handle.h[0] = shm_open(cname, access_flags,
+  res.file_handle.h[0] = shm_open(cstr_from_str8(scratch.arena, name), access_flags,
                                   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  AssertMsg(res.file_handle.h[0] >= 0, Strlit("shm_open failed"));
-  (void)shm_unlink(cname);
+  AssertMsg(res.file_handle.h[0] >= 0, "shm_open failed");
   ScratchEnd(scratch);
 
   (void)ftruncate(res.file_handle.h[0], size);
@@ -706,12 +703,8 @@ fn OS_Handle os_lib_open(String8 path) {
   OS_Handle result = {0};
 #ifndef PLATFORM_CODERBOT
   Scratch scratch = ScratchBegin(0, 0);
-  void *handle = dlopen(cstr_from_str8(scratch.arena, path), RTLD_NOW);
-  if (handle) {
-    result.h[0] = (u64)handle;
-  } else {
-    AssertMsg(false, str8_from_cstr(dlerror()));
-  }
+  void *handle = dlopen(cstr_from_str8(scratch.arena, path), RTLD_NOW | RTLD_GLOBAL);
+  AssertMsg(handle, dlerror());
   ScratchEnd(scratch);
 #endif
   return result;
@@ -719,10 +712,10 @@ fn OS_Handle os_lib_open(String8 path) {
 
 fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
 #ifndef PLATFORM_CODERBOT
-  Scratch scratch = ScratchBegin(0, 0);
   void *handle = (void*)lib.h[0];
-  char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
-  VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, symbol_cstr);
+  Scratch scratch = ScratchBegin(0, 0);
+  VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, cstr_from_str8(scratch.arena, symbol));
+  AssertMsg(result, dlerror());
   ScratchEnd(scratch);
   return result;
 #else
@@ -885,7 +878,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
-      AssertMsg(false, Strlit("Invalid server address."));
+      Panic("Invalid server address.");
     }
   }
   switch (protocol) {
@@ -896,7 +889,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       ctype = SOCK_DGRAM;
     } break;
     default: {
-      AssertMsg(false, Strlit("Invalid transport protocol."));
+      Panic("Invalid transport protocol.");
     }
   }
 

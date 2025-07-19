@@ -23,7 +23,11 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
-#define dbg_print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
+#if NDEBUG
+#  define dbg_print(fmt, ...)
+#else
+#  define dbg_print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
+#endif
 
 typedef u64 UNX_PrimitiveType;
 enum {

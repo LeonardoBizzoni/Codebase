@@ -90,11 +90,11 @@ fn void os_window_swapBuffers(OS_Window window) {
 #endif
 }
 
-fn Bool lnx_window_event_for_xwindow(Display *_display, XEvent *event, XPointer arg) {
+fn Bool unx_window_event_for_xwindow(Display *_display, XEvent *event, XPointer arg) {
   return event->xany.window == *(Window*)arg;
 }
 
-fn OS_Event lnx_handle_xevent(X11_Window *window, XEvent *xevent) {
+fn OS_Event unx_handle_xevent(X11_Window *window, XEvent *xevent) {
   OS_Event res = {0};
   switch (xevent->type) {
   case Expose: {
@@ -129,8 +129,8 @@ fn OS_Event os_window_get_event(OS_Window window_) {
 
   XEvent xevent;
   if (XCheckIfEvent(x11_state.xdisplay, &xevent,
-                    lnx_window_event_for_xwindow, (XPointer)&window->xwindow)) {
-    res = lnx_handle_xevent(window, &xevent);
+                    unx_window_event_for_xwindow, (XPointer)&window->xwindow)) {
+    res = unx_handle_xevent(window, &xevent);
   }
 
   return res;
@@ -141,8 +141,8 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
 
   XEvent xevent;
   XIfEvent(x11_state.xdisplay, &xevent,
-           lnx_window_event_for_xwindow, (XPointer)&window->xwindow);
-  return lnx_handle_xevent(window, &xevent);
+           unx_window_event_for_xwindow, (XPointer)&window->xwindow);
+  return unx_handle_xevent(window, &xevent);
 }
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {

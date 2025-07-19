@@ -1,4 +1,4 @@
-String8 bsd_filemap[MEMFILES_ALLOWED] = {0};
+global String8 bsd_filemap[MEMFILES_ALLOWED] = {0};
 
 // =============================================================================
 // Memory allocation
@@ -14,19 +14,11 @@ fn void* os_reserve_huge(usize size) {
 // =============================================================================
 // File reading and writing/appending
 fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
-  i32 access_flags = 0;
-
-  if((flags & OS_acfRead) && (flags & OS_acfWrite)) {
-    access_flags |= O_RDWR;
-  } else if(flags & OS_acfRead) {
-    access_flags |= O_RDONLY;
-  } else if(flags & OS_acfWrite) {
-    access_flags |= O_WRONLY | O_CREAT | O_TRUNC;
-  }
-  if(flags & OS_acfAppend) { access_flags |= O_APPEND | O_CREAT; }
-
-  i32 fd = open((char*)filepath.str, access_flags,
+  i32 access_flags = O_CREAT | unx_flags_from_acf(flags);
+  Scratch scratch = ScratchBegin(0, 0);
+  i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  ScratchEnd(scratch);
   if(fd < 0) {
     fd = 0;
   } else {
@@ -43,13 +35,9 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
 }
 
 fn bool fs_close(OS_Handle fd) {
-  if (close(fd.h[0]) == 0) {
-    bsd_filemap[fd.h[0]].str = 0;
-    bsd_filemap[fd.h[0]].size = 0;
-    return true;
-  } else {
-    return false;
-  }
+  bsd_filemap[fd.h[0]].str = 0;
+  bsd_filemap[fd.h[0]].size = 0;
+  return !close(fd.h[0]);
 }
 
 fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
@@ -57,7 +45,26 @@ fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
 }
 
 fn bool fs_copy(String8 source, String8 destination) {
-  return false;
+  Scratch scratch = ScratchBegin(0, 0);
+  i32 src = open(cstr_from_str8(scratch.arena, source), O_RDONLY, 0);
+  i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, 0644);
+  ScratchEnd(scratch);
+
+  struct stat stat_src = {0};
+  fstat(src, &stat_src);
+  off_t offset = 0;
+  isize bytes_copied = copy_file_range(src, &offset, dest, &offset, stat_src.st_size, 0);
+  fchmod(dest, stat_src.st_mode & 0777);
+
+  fdatasync(dest);
+  close(src);
+  close(dest);
+
+  scratch = ScratchBegin(0, 0);
+  Assert(access(cstr_from_str8(scratch.arena, destination), F_OK) == 0);
+  ScratchEnd(scratch);
+
+  return bytes_copied == stat_src.st_size;
 }
 
 // =============================================================================
