@@ -21,23 +21,17 @@ typedef struct {
 typedef struct Wayland_Window {
   struct wl_surface *surface;
   struct wl_buffer *buffer;
-  struct wl_shm_pool *pool;
-
-  struct wl_callback *callback;
-  struct wl_callback_listener callback_listener;
 
   struct xdg_surface *xdg_surface;
-  struct xdg_surface_listener xdg_surface_listener;
   struct xdg_toplevel *xdg_toplevel;
-  struct xdg_toplevel_listener xdg_toplevel_listener;
 
+  SharedMem shm;
+  u32 width, height;
   struct {
     OS_Handle lock;
     OS_Handle condvar;
     Way_WindowEventList list;
   } events;
-  SharedMem shm;
-  u32 width, height;
   struct Wayland_Window *next;
   struct Wayland_Window *prev;
 } Wayland_Window;
@@ -57,12 +51,17 @@ typedef struct {
 
   struct wl_display *display;
   struct wl_registry *registry;
-  struct wl_registry_listener reglistener;
   struct wl_compositor *compositor;
   struct wl_shm *shm;
 
+  struct wl_callback_listener callback_listener;
+  struct wl_registry_listener reglistener;
+
   struct xdg_wm_base *xdg_base;
+
   struct xdg_wm_base_listener xdg_base_listener;
+  struct xdg_surface_listener xdg_surface_listener;
+  struct xdg_toplevel_listener xdg_toplevel_listener;
 } Wayland_State;
 
 fn void way_registry_handle_global(void *data, struct wl_registry *registry,
@@ -74,6 +73,7 @@ fn void way_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u
 fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
                                    i32 width, i32 height, struct wl_array *states);
 fn void way_xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel);
+fn void way_callback_frame_new(void *data, struct wl_callback *callback, u32 callback_data);
 
 fn void way_event_dispatcher(void *_);
 

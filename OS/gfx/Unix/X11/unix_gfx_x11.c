@@ -154,15 +154,6 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
 
 fn void os_window_render(OS_Window window_, void *mem) {
   X11_Window *window = (X11_Window*)window_.handle.h[0];
-
-  // NOTE(lb): apperantly alpha=0 means transparent?
-  u32 *pixels = mem;
-  for (usize i = 0; i < window_.height * window_.width; ++i) {
-    u32 pixel = pixels[i];
-    u8 alpha = 255 - (pixel >> 24);
-    pixels[i] = ((u32)alpha << 24) | (pixel & 0x00FFFFFF);
-  }
-
   XImage *img = XCreateImage(x11_state.xdisplay, window->xvisual.visual,
                              window->xvisual.depth, ZPixmap, 0, (char*)mem,
                              window_.width, window_.height, 32, 0);

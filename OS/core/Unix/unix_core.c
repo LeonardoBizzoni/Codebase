@@ -694,17 +694,20 @@ fn void os_sharedmem_resize(SharedMem *shm, usize size) {
   munmap(shm->content, shm->prop.size);
   Assert(!ftruncate(shm->file_handle.h[0], size));
   shm->content = mmap(0, size, PROT_READ | PROT_WRITE,
-                     MAP_SHARED, shm->file_handle.h[0], 0);
+                      MAP_SHARED, shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
 }
 
-fn bool os_sharedmem_close(SharedMem *shm) {
+fn void os_sharedmem_unlink_name(SharedMem *shm) {
   Scratch scratch = ScratchBegin(0, 0);
-  bool res = munmap(shm->content, shm->prop.size) == 0 &&
-             shm_unlink(cstr_from_str8(scratch.arena, shm->path)) == 0;
+  shm_unlink(cstr_from_str8(scratch.arena, shm->path));
   ScratchEnd(scratch);
-  return res;
+}
+
+fn bool os_sharedmem_close(SharedMem *shm) {
+  os_sharedmem_unlink_name(shm);
+  return !munmap(shm->content, shm->prop.size);
 }
 
 // =============================================================================

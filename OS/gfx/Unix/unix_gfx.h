@@ -2,6 +2,7 @@
 #define OS_GFX_UNIX_H
 
 fn void unx_gfx_init(void);
+fn void unx_gfx_deinit(void);
 
 #if defined(LNX_X11) || defined(BSD_X11)
 #  define UNX_X11 1

@@ -72,7 +72,7 @@ fn bool fs_copy(String8 source, String8 destination) {
   isize res = sendfile(dest, src, 0, stat_src.st_size);
   fchmod(dest, stat_src.st_mode & 0777);
 
-  fdatasync(dest);
+  fsync(dest);
   close(src);
   close(dest);
 
@@ -157,6 +157,9 @@ i32 main(i32 argc, char **argv) {
 
   start(&cli);
 
+#if OS_GUI
+  unx_gfx_deinit();
+#endif
 #if OS_SOUND
   lnx_snd_deinit();
 #endif
