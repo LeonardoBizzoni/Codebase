@@ -86,7 +86,7 @@ fn bool fs_copy(String8 source, String8 destination) {
 // =============================================================================
 // Glibc missing wrappers
 fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
-  struct sched_attr attr = {
+  struct lnx_sched_attr attr = {
     .size = sizeof(attr),
     .sched_policy = policy,
     .sched_flags = SCHED_FLAG_DL_OVERRUN,

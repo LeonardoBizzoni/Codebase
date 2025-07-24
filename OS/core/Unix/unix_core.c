@@ -670,7 +670,7 @@ fn void os_semaphore_free(OS_Handle handle) {
 }
 
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
-  SharedMem res = {0};
+  SharedMem res = {};
   res.path = name;
 
   i32 access_flags = unx_flags_from_acf(flags);
@@ -693,8 +693,8 @@ fn void os_sharedmem_resize(SharedMem *shm, usize size) {
   if (size == 0) { return; }
   munmap(shm->content, shm->prop.size);
   Assert(!ftruncate(shm->file_handle.h[0], size));
-  shm->content = mmap(0, size, PROT_READ | PROT_WRITE,
-                      MAP_SHARED, shm->file_handle.h[0], 0);
+  shm->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
+                           MAP_SHARED, shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
 }
@@ -815,7 +815,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
 }
 
 fn NetInterface os_net_interface_lookup(String8 interface) {
-  NetInterface res = {0};
+  NetInterface res = {};
 
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_interfaces(scratch.arena);
@@ -1019,7 +1019,7 @@ fn void os_socket_close(OS_Socket *socket) {
 // File reading and writing/appending
 fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
   int fd = file.h[0];
-  String8 result = {0};
+  String8 result = {};
   if(!fd) { return result; }
 
   u8 *buffer = New(arena, u8, size);
@@ -1033,7 +1033,7 @@ fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
   int fd = file.h[0];
-  String8 result = {0};
+  String8 result = {};
   if(!fd) { return result; }
 
   struct stat file_stat;
@@ -1065,7 +1065,7 @@ fn FS_Properties fs_get_properties(OS_Handle file) {
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
-  String8 res = {0};
+  String8 res = {};
   res.str = New(arena, u8, PATH_MAX);
   res.size = readlink((char *)path.str, (char *)res.str, PATH_MAX);
   if (res.size <= 0) {
@@ -1080,7 +1080,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // =============================================================================
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
-  File file = {0};
+  File file = {};
   i32 flags = fcntl(fd.h[0], F_GETFL);
   if (flags < 0) { return file; }
   flags &= O_ACCMODE;
@@ -1107,7 +1107,7 @@ fn File fs_fopen_tmp(Arena *arena) {
   String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
   memcopy(pathstr.str, path, Arrsize(path));
 
-  File file = {0};
+  File file = {};
   file.file_handle.h[0] = fd;
   file.path = pathstr;
   file.prop = fs_get_properties(file.file_handle);
@@ -1214,7 +1214,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
-  String8 str = {0};
+  String8 str = {};
   UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 

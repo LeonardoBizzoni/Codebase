@@ -13,7 +13,7 @@
 #endif
 
 // Missing in glibc
-struct sched_attr {
+struct lnx_sched_attr {
   u32 size;              /* Size of this structure */
   u32 sched_policy;      /* Policy (SCHED_*) */
   u64 sched_flags;       /* Flags */
