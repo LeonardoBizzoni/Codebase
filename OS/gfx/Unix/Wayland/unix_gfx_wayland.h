@@ -25,13 +25,16 @@ typedef struct Wayland_Window {
   struct xdg_surface *xdg_surface;
   struct xdg_toplevel *xdg_toplevel;
 
+  OS_Handle shmlock;
   SharedMem shm;
-  u32 width, height;
+
   struct {
     OS_Handle lock;
     OS_Handle condvar;
     Way_WindowEventList list;
   } events;
+
+  u32 width, height;
   struct Wayland_Window *next;
   struct Wayland_Window *prev;
 } Wayland_Window;

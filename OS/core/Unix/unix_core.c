@@ -700,14 +700,16 @@ fn void os_sharedmem_resize(SharedMem *shm, usize size) {
 }
 
 fn void os_sharedmem_unlink_name(SharedMem *shm) {
+  if (!shm->path.size) { return; }
   Scratch scratch = ScratchBegin(0, 0);
   shm_unlink(cstr_from_str8(scratch.arena, shm->path));
   ScratchEnd(scratch);
+  shm->path.size = 0;
 }
 
 fn bool os_sharedmem_close(SharedMem *shm) {
   os_sharedmem_unlink_name(shm);
-  return !munmap(shm->content, shm->prop.size);
+  return shm->content ? !munmap(shm->content, shm->prop.size) : 0;
 }
 
 // =============================================================================

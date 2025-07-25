@@ -54,10 +54,6 @@ fn void way_callback_frame_new(void *data, struct wl_callback *callback, u32 cal
   wl_callback_destroy(callback);
   callback = wl_surface_frame(window->surface);
   wl_callback_add_listener(callback, &waystate.callback_listener, window);
-
-  wl_surface_attach(window->surface, window->buffer, 0, 0);
-  wl_surface_damage(window->surface, 0, 0, window->width, window->height);
-  wl_surface_commit(window->surface);
 }
 
 fn void way_xdg_base_ping(void *data, struct xdg_wm_base *xdg_base, u32 serial) {
@@ -66,11 +62,13 @@ fn void way_xdg_base_ping(void *data, struct xdg_wm_base *xdg_base, u32 serial) 
 
 fn void way_shm_create(Wayland_Window *window) {
   u32 memsize = window->width * window->height * 4;
-  {
-    Scratch scratch = ScratchBegin(0, 0);
-    StringStream ss = {0};
-    strstream_append_str(scratch.arena, &ss, Strlit("/"));
-    strstream_append_str(scratch.arena, &ss, str8_from_i64(scratch.arena, Random(10000, 99999)));
+
+  Scratch scratch = ScratchBegin(0, 0);
+  StringStream ss = {0};
+  strstream_append_str(scratch.arena, &ss, Strlit("/"));
+  strstream_append_str(scratch.arena, &ss, str8_from_i64(scratch.arena, Random(1000000, 9999999)));
+  OS_MutexScope(window->shmlock) {
+    os_sharedmem_close(&window->shm);
     window->shm = os_sharedmem_open(str8_from_stream(scratch.arena, ss), memsize,
                                     OS_acfRead | OS_acfWrite | OS_acfExecute);
     os_sharedmem_unlink_name(&window->shm);
@@ -78,12 +76,13 @@ fn void way_shm_create(Wayland_Window *window) {
     struct wl_shm_pool *pool = wl_shm_create_pool(waystate.shm, window->shm.file_handle.h[0], memsize);
     window->buffer = wl_shm_pool_create_buffer(pool, 0, window->width, window->height, window->width * 4, WL_SHM_FORMAT_ARGB8888);
     wl_shm_pool_destroy(pool);
-    ScratchEnd(scratch);
+
+    window->shm.content = mmap(0, memsize, PROT_READ | PROT_WRITE,
+                               MAP_SHARED, window->shm.file_handle.h[0], 0);
   }
-  window->shm.content = mmap(0, memsize, PROT_READ | PROT_WRITE,
-                             MAP_SHARED, window->shm.file_handle.h[0], 0);
   Assert(window->shm.content != MAP_FAILED);
   close(window->shm.file_handle.h[0]);
+  ScratchEnd(scratch);
 }
 
 // TODO(lb): not sure what this event does
@@ -105,7 +104,6 @@ fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel
   if (!(width && height) || (window->width == width &&
                              window->height == height)) { return; }
 
-  munmap(window->shm.content, window->shm.prop.size);
   window->width = width;
   window->height = height;
   way_shm_create(window);
@@ -165,6 +163,7 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
     window = New(waystate.arena, Wayland_Window);
   }
   DLLPushBack(waystate.first_window, waystate.last_window, window);
+  window->shmlock = os_mutex_alloc();
   window->events.lock = os_mutex_alloc();
   window->events.condvar = os_cond_alloc();
   window->width = width;
@@ -217,7 +216,15 @@ fn void os_window_swapBuffers(OS_Window handle) {}
 
 fn void os_window_render(OS_Window window_, void *mem) {
   Wayland_Window *window = (Wayland_Window*)window_.handle.h[0];
-  memcopy(window->shm.content, mem, window_.width * window_.height * 4);
+  u32 width = Min(window_.width, window->width);
+  u32 height = Min(window_.height, window->height);
+  OS_MutexScope(window->shmlock) {
+    memcopy(window->shm.content, mem, 4 * width * height);
+  }
+
+  wl_surface_attach(window->surface, window->buffer, 0, 0);
+  wl_surface_damage(window->surface, 0, 0, width, height);
+  wl_surface_commit(window->surface);
 }
 
 fn OS_Event os_window_get_event(OS_Window window_) {
