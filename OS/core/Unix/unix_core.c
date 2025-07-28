@@ -690,10 +690,10 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 }
 
 fn void os_sharedmem_resize(SharedMem *shm, usize size) {
-  if (size == 0) { return; }
-  munmap(shm->content, shm->prop.size);
+  Assert(size);
   Assert(!ftruncate(shm->file_handle.h[0], size));
-  shm->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
+  munmap(shm->content, shm->prop.size);
+  shm->content = (u8*)mmap(shm->content, size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
@@ -874,7 +874,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
   OS_Socket res = {0};
   UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Socket);
   IP server = os_net_ip_from_str8(name, 0);
-  i32 ctype, cdomain;
+  i32 ctype = 0, cdomain = 0;
   switch (server.version) {
     case OS_Net_Network_IPv4: {
       cdomain = AF_INET;

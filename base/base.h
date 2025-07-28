@@ -181,9 +181,9 @@
 #  define AssertMsg(COND, MSG, ...) AssertAlwaysWithMsg(COND, MSG, ##__VA_ARGS__)
 #else
 #  define Assert(COND) (void)(COND)
-#  define AssertMsg(COND, MSG) Assert(COND)
+#  define AssertMsg(COND, MSG, ...) Assert(COND)
 #endif
-#define Panic(FMT, ...) AssertMsg(false, FMT, ##__VA_ARGS__);
+#define Panic(FMT, ...) AssertMsg(false, FMT, ##__VA_ARGS__)
 
 #define Stringify_(S) (#S)
 #define Stringify(S) Stringify_(S)

@@ -126,6 +126,7 @@ fn void lnx_signal_wait(i32 signal) {
 
 // =============================================================================
 i32 main(i32 argc, char **argv) {
+  srand(time(0));
   unx_state.info.core_count = get_nprocs();
   unx_state.info.page_size = getpagesize();
   unx_state.info.hostname = unx_gethostname();

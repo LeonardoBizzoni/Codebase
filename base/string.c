@@ -478,6 +478,7 @@ fn usize str8_hash(String8 s) {
 }
 
 fn isize str8_len(char *chars) {
+  if (!chars) { return 0; }
   char *start = chars;
   for (; *start; ++start);
   return start - chars;

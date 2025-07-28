@@ -1,85 +1,104 @@
-#ifndef OS_GFX_UNIX_WAYLAND_H
-#define OS_GFX_UNIX_WAYLAND_H
+#ifndef OS_GFX_UNIX_WL_H
+#define OS_GFX_UNIX_WL_H
 
-#undef global
-#include <wayland-client.h>
-#define global static
+#include <sys/un.h>
+#include <poll.h>
 
-// wayland-scanner client-header /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml xdg-shell-client-protocol.h
-#include "xdg-shell-client-protocol.h"
-
-typedef struct Way_WindowEvent {
-  OS_Event value;
-  struct Way_WindowEvent *next;
-} Way_WindowEvent;
+// Wl protocol numeric values
+#define WL_DISPLAY_OBJECT_ID 1
+#define WL_REGISTRY_EVENT_GLOBAL 0
+#define WL_REGISTRY_EVENT_GLOBAL_REMOVE 1
+#define WL_SHM_POOL_EVENT_FORMAT 0
+#define WL_BUFFER_EVENT_RELEASE 0
+#define WL_XDG_WM_BASE_EVENT_PING 0
+#define WL_XDG_TOPLEVEL_EVENT_CONFIGURE 0
+#define WL_XDG_TOPLEVEL_EVENT_CLOSE 1
+#define WL_XDG_SURFACE_EVENT_CONFIGURE 0
+#define WL_DISPLAY_GET_REGISTRY_OPCODE 1
+#define WL_DISPLAY_EVENT_ERROR 0
+#define WL_REGISTRY_BIND_OPCODE 0
+#define WL_COMPOSITOR_CREATE_SURFACE_OPCODE 0
+#define WL_XDG_WM_BASE_PONG_OPCODE 3
+#define WL_XDG_SURFACE_ACK_CONFIGURE_OPCODE 4
+#define WL_SHM_CREATE_POOL_OPCODE 0
+#define WL_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE 2
+#define WL_SHM_POOL_CREATE_BUFFER_OPCODE 0
+#define WL_SURFACE_ATTACH_OPCODE 1
+#define WL_XDG_SURFACE_GET_TOPLEVEL_OPCODE 1
+#define WL_SURFACE_COMMIT_OPCODE 6
+#define WL_DISPLAY_ERROR_EVENT 0
+#define WL_FORMAT_XRGB8888 1
+#define WL_RINGBUFFER_SIZE 20
+#define WL_RINGBUFFER_BYTE_COUNT 256
+#define WL_RINGBUFFER_CAPACITY (WL_RINGBUFFER_SIZE * WL_RINGBUFFER_BYTE_COUNT)
 
 typedef struct {
-  Way_WindowEvent *first;
-  Way_WindowEvent *last;
-} Way_WindowEventList;
+  u32 id;
+  u16 opcode;
+  u16 size;
+} Wl_MessageHeader;
 
-typedef struct Wayland_Window {
-  struct wl_surface *surface;
-  struct wl_buffer *buffer;
+typedef struct Wl_WindowEvent {
+  OS_Event value;
+  struct Wl_WindowEvent *next;
+} Wl_WindowEvent;
 
-  struct xdg_surface *xdg_surface;
-  struct xdg_toplevel *xdg_toplevel;
+typedef struct {
+  Wl_WindowEvent *first;
+  Wl_WindowEvent *last;
+} Wl_WindowEventList;
 
-  OS_Handle shmlock;
+typedef struct Wl_Window {
   SharedMem shm;
 
   struct {
     OS_Handle lock;
     OS_Handle condvar;
-    Way_WindowEventList list;
+    Wl_WindowEventList list;
   } events;
 
-  u32 width, height;
-  struct Wayland_Window *next;
-  struct Wayland_Window *prev;
-} Wayland_Window;
+  struct Wl_Window *next;
+  struct Wl_Window *prev;
+} Wl_Window;
 
 typedef struct {
   Arena *arena;
-  OS_Handle dispatcher;
+  OS_Handle msg_receiver;
+  OS_Handle msg_dispatcher;
+
+  struct {
+    u8 bytes[WL_RINGBUFFER_SIZE][WL_RINGBUFFER_BYTE_COUNT];
+    usize head;
+    usize tail;
+
+    OS_Handle mutex;
+    OS_Handle condvar;
+  } ringbuffer;
+
+  u32 curr_id;
+  u32 display;
+  u32 registry;
+  u32 wl_shm;
+  u32 wl_compositor;
+  u32 xdg_wm_base;
 
   struct {
     OS_Handle lock;
-    Way_WindowEventList freelist;
+    Wl_WindowEventList freelist;
   } events;
 
-  Wayland_Window *freelist_window;
-  Wayland_Window *first_window;
-  Wayland_Window *last_window;
+  Wl_Window *freelist_window;
+  Wl_Window *first_window;
+  Wl_Window *last_window;
+} Wl_State;
 
-  struct wl_display *display;
-  struct wl_registry *registry;
-  struct wl_compositor *compositor;
-  struct wl_shm *shm;
+fn u32 wl_allocate_id(void);
+fn i32 wl_display_connect(void);
+fn u32 wl_display_get_registry(void);
 
-  struct wl_callback_listener callback_listener;
-  struct wl_registry_listener reglistener;
+fn void wl_compositor_msg_receiver(void *_);
+fn void wl_compositor_msg_dispatcher(void *_);
 
-  struct xdg_wm_base *xdg_base;
-
-  struct xdg_wm_base_listener xdg_base_listener;
-  struct xdg_surface_listener xdg_surface_listener;
-  struct xdg_toplevel_listener xdg_toplevel_listener;
-} Wayland_State;
-
-fn void way_registry_handle_global(void *data, struct wl_registry *registry,
-                                   u32 name, const char *interface, u32 version);
-fn void way_registry_handle_global_remove(void *data, struct wl_registry *registry, u32 name);
-
-fn void way_xdg_base_ping(void *data, struct xdg_wm_base *xdg_base, u32 serial);
-fn void way_xdg_surface_configure(void *data, struct xdg_surface *xdg_surface, u32 serial);
-fn void way_xdg_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
-                                   i32 width, i32 height, struct wl_array *states);
-fn void way_xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel);
-fn void way_callback_frame_new(void *data, struct wl_callback *callback, u32 callback_data);
-
-fn void way_event_dispatcher(void *_);
-
-fn Way_WindowEvent* way_alloc_windowevent(void);
+fn Wl_WindowEvent* wl_alloc_windowevent(void);
 
 #endif
