@@ -11,9 +11,6 @@ fn void unx_gfx_init(void) {
   waystate.display = wl_display_connect();
   waystate.registry = wl_display_get_registry();
 
-  waystate.ringbuffer.mutex = os_mutex_alloc();
-  waystate.ringbuffer.condvar = os_cond_alloc();
-  waystate.msg_receiver = os_thread_start(wl_compositor_msg_receiver, 0);
   waystate.msg_dispatcher = os_thread_start(wl_compositor_msg_dispatcher, 0);
 }
 
@@ -78,7 +75,9 @@ fn u32 wl_display_get_registry(void) {
 
 fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   Scratch scratch = ScratchBegin(0, 0);
-  usize total_size = forwardAlign(sizeof(Wl_MessageHeader) + 4 * sizeof(u32) + interface.size, 4);
+  usize padded_interface_len = forwardAlign(interface.size, 4);
+  usize total_size = forwardAlign(sizeof(Wl_MessageHeader) + 4 * sizeof(u32) +
+                                  padded_interface_len, 4);
 
   u8 *req = New(scratch.arena, u8, total_size);
 
@@ -89,9 +88,9 @@ fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
 
   u8 *body = req + sizeof(Wl_MessageHeader);
   *body = name; body += sizeof(u32);
-  *body = interface.size; body += sizeof(u32);
+  *body = padded_interface_len; body += sizeof(u32);
   memcopy(body, interface.str, interface.size);
-  body = (u8*)forwardAlign((usize)body + interface.size, 4);
+  body += padded_interface_len;
   *body = version; body += sizeof(u32);
   u32 new_id = *body = wl_allocate_id();
 
@@ -103,6 +102,7 @@ fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   }
 #endif
 
+  Assert(total_size == send(waystate.display, req, total_size, MSG_DONTWAIT));
   ScratchEnd(scratch);
   return new_id;
 }
@@ -120,28 +120,6 @@ fn Wl_WindowEvent* wl_alloc_windowevent(void) {
   }
   Assert(event);
   return event;
-}
-
-fn void wl_compositor_msg_receiver(void *_) {
-  struct pollfd pfd = {
-    .fd = waystate.display,
-    .events = POLLIN,
-  };
-
-  for (;;) {
-    Assert(poll(&pfd, 1, -1) > 0);
-
-    OS_MutexScope(waystate.ringbuffer.mutex) {
-      while (*(u64*)waystate.ringbuffer.bytes[waystate.ringbuffer.tail] != 0) {
-        os_cond_wait(waystate.ringbuffer.condvar, waystate.ringbuffer.mutex, 0);
-      }
-      isize bytes_read = recv(waystate.display,
-                              waystate.ringbuffer.bytes[waystate.ringbuffer.tail],
-                              WL_RINGBUFFER_BYTE_COUNT, 0);
-      os_cond_signal(waystate.ringbuffer.condvar);
-    }
-    waystate.ringbuffer.tail = (waystate.ringbuffer.tail + 1) % WL_RINGBUFFER_SIZE;
-  }
 }
 
 fn void wl_compositor_register_global(u32 name, String8 interface, u32 version) {
@@ -184,76 +162,82 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
 }
 
 fn void wl_compositor_msg_advance_chunk(void) {
-  OS_MutexScope(waystate.ringbuffer.mutex) {
-    memzero(waystate.ringbuffer.bytes[waystate.ringbuffer.head], WL_RINGBUFFER_BYTE_COUNT);
-    os_cond_signal(waystate.ringbuffer.condvar);
-  }
-  waystate.ringbuffer.head = (waystate.ringbuffer.head + 1) % WL_RINGBUFFER_SIZE;
+  memzero(waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.head], WL_RINGBUFFER_BYTE_COUNT);
+  waystate.msg_ringbuffer.head = (waystate.msg_ringbuffer.head + 1) % WL_RINGBUFFER_SIZE;
 }
 
 fn void wl_compositor_msg_dispatcher(void *_) {
-  os_sleep_milliseconds(5);
-  for (isize pos = 0, offset = waystate.ringbuffer.head * WL_RINGBUFFER_BYTE_COUNT; 1;) {
-    if (pos >= WL_RINGBUFFER_BYTE_COUNT) {
-      pos -= WL_RINGBUFFER_BYTE_COUNT;
-      wl_compositor_msg_advance_chunk();
+  struct pollfd pfd = {
+    .fd = waystate.display,
+    .events = POLLIN,
+  };
+
+  for (;poll(&pfd, 1, -1);) {
+    while (*(u64*)waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.tail] == 0 &&
+           poll(&pfd, 1, 0) > 0) {
+      recv(waystate.display, waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.tail],
+           WL_RINGBUFFER_BYTE_COUNT, 0);
+      waystate.msg_ringbuffer.tail = (waystate.msg_ringbuffer.tail + 1) % WL_RINGBUFFER_SIZE;
     }
 
-    Wl_MessageHeader *header = 0;
-    u8 *bytes = &waystate.ringbuffer.bytes[0][0] + offset;
+    for (isize pos = 0, offset = waystate.msg_ringbuffer.head * WL_RINGBUFFER_BYTE_COUNT; 1;) {
+      if (pos >= WL_RINGBUFFER_BYTE_COUNT) {
+        pos -= WL_RINGBUFFER_BYTE_COUNT;
+        wl_compositor_msg_advance_chunk();
+      }
 
-    if (offset + sizeof(Wl_MessageHeader) >= WL_RINGBUFFER_CAPACITY) {
-      // rest of header+message is wrapped around
-      Scratch scratch = ScratchBegin(0, 0);
+      Wl_MessageHeader *header = 0;
+      u8 *bytes = &waystate.msg_ringbuffer.bytes[0][0] + offset;
 
-      isize approx_msg_size = 256;
-      isize n_bytes_at_end = WL_RINGBUFFER_CAPACITY - offset;
-      u8 *message = New(scratch.arena, u8, approx_msg_size);
-      memcopy(message, bytes, n_bytes_at_end);
-      memcopy(message + n_bytes_at_end, waystate.ringbuffer.bytes[0], approx_msg_size - n_bytes_at_end);
-      wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader));
-
-      isize n_bytes_wrapped = ((Wl_MessageHeader*)message)->size - n_bytes_at_end;
-      pos = n_bytes_wrapped;
-      offset = n_bytes_wrapped;
-
-      wl_compositor_msg_advance_chunk();
-      ScratchEnd(scratch);
-    } else {
-      header = (Wl_MessageHeader*)bytes;
-
-      if (!header->size) {
-        // no messages in this chunk
-        OS_MutexScope(waystate.ringbuffer.mutex) {
-          while (!header->size) {
-            Info("Dispatcher waiting for messages");
-            os_cond_wait(waystate.ringbuffer.condvar, waystate.ringbuffer.mutex, 0);
-          }
-        }
-      } else if (offset + header->size < WL_RINGBUFFER_CAPACITY) {
-        // entire message is present
-        wl_compositor_msg_parse(header, bytes + sizeof(Wl_MessageHeader));
-        pos += header->size;
-        offset += header->size;
-      } else {
-        // part of message body is wrapped around
+      if (offset + sizeof(Wl_MessageHeader) >= WL_RINGBUFFER_CAPACITY) {
+        // rest of header+message is wrapped around
         Scratch scratch = ScratchBegin(0, 0);
-        u8 *message = New(scratch.arena, u8, header->size);
 
-        isize n_bytes_wrapped = offset + header->size - WL_RINGBUFFER_CAPACITY;
-        isize n_bytes_at_end = header->size - n_bytes_wrapped;
+        isize approx_msg_size = 256;
+        isize n_bytes_at_end = WL_RINGBUFFER_CAPACITY - offset;
+        u8 *message = New(scratch.arena, u8, approx_msg_size);
         memcopy(message, bytes, n_bytes_at_end);
-        memcopy(message + n_bytes_at_end, waystate.ringbuffer.bytes[0], n_bytes_wrapped);
+        memcopy(message + n_bytes_at_end, waystate.msg_ringbuffer.bytes[0], approx_msg_size - n_bytes_at_end);
         wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader));
 
+        isize n_bytes_wrapped = ((Wl_MessageHeader*)message)->size - n_bytes_at_end;
         pos = n_bytes_wrapped;
         offset = n_bytes_wrapped;
 
         wl_compositor_msg_advance_chunk();
         ScratchEnd(scratch);
+      } else {
+        header = (Wl_MessageHeader*)bytes;
+
+        if (!header->size) {
+          // no messages in this chunk
+          break;
+        } else if (offset + header->size < WL_RINGBUFFER_CAPACITY) {
+          // entire message is present
+          wl_compositor_msg_parse(header, bytes + sizeof(Wl_MessageHeader));
+          pos += header->size;
+          offset += header->size;
+        } else {
+          // part of message body is wrapped around
+          Scratch scratch = ScratchBegin(0, 0);
+          u8 *message = New(scratch.arena, u8, header->size);
+
+          isize n_bytes_wrapped = offset + header->size - WL_RINGBUFFER_CAPACITY;
+          isize n_bytes_at_end = header->size - n_bytes_wrapped;
+          memcopy(message, bytes, n_bytes_at_end);
+          memcopy(message + n_bytes_at_end, waystate.msg_ringbuffer.bytes[0], n_bytes_wrapped);
+          wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader));
+
+          pos = n_bytes_wrapped;
+          offset = n_bytes_wrapped;
+
+          wl_compositor_msg_advance_chunk();
+          ScratchEnd(scratch);
+        }
       }
     }
   }
+  Panic("wl_compositor_msg_dispatcher terminated");
 }
 
 // =============================================================================

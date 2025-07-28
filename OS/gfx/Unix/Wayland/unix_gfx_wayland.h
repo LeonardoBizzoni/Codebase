@@ -63,17 +63,13 @@ typedef struct Wl_Window {
 
 typedef struct {
   Arena *arena;
-  OS_Handle msg_receiver;
-  OS_Handle msg_dispatcher;
 
   struct {
     u8 bytes[WL_RINGBUFFER_SIZE][WL_RINGBUFFER_BYTE_COUNT];
     usize head;
     usize tail;
-
-    OS_Handle mutex;
-    OS_Handle condvar;
-  } ringbuffer;
+  } msg_ringbuffer;
+  OS_Handle msg_dispatcher;
 
   u32 curr_id;
   u32 display;
