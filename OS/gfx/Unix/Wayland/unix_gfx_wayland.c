@@ -12,9 +12,11 @@ fn void unx_gfx_init(void) {
   waystate.registry = wl_display_get_registry();
 
   waystate.msg_dispatcher = os_thread_start(wl_compositor_msg_dispatcher, 0);
+  while (!(waystate.wl_compositor && waystate.wl_shm && waystate.xdg_wm_base));
 }
 
 fn void unx_gfx_deinit(void) {
+  os_thread_cancel(waystate.msg_dispatcher);
 }
 
 // =============================================================================
@@ -75,8 +77,8 @@ fn u32 wl_display_get_registry(void) {
 
 fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   Scratch scratch = ScratchBegin(0, 0);
-  usize padded_interface_len = forwardAlign(interface.size, 4);
-  usize total_size = forwardAlign(sizeof(Wl_MessageHeader) + 4 * sizeof(u32) +
+  usize padded_interface_len = align_forward(interface.size, 4);
+  usize total_size = align_forward(sizeof(Wl_MessageHeader) + 4 * sizeof(u32) +
                                   padded_interface_len, 4);
 
   u8 *req = New(scratch.arena, u8, total_size);
@@ -105,6 +107,162 @@ fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   Assert(total_size == send(waystate.display, req, total_size, MSG_DONTWAIT));
   ScratchEnd(scratch);
   return new_id;
+}
+
+fn u32 wl_compositor_create_surface(void) {
+  struct { Wl_MessageHeader msg; u32 new_id; } req = {
+    .msg = {
+      .id = waystate.wl_compositor,
+      .opcode = WL_COMPOSITOR_CREATE_SURFACE_OPCODE,
+      .size = sizeof(req),
+    },
+    .new_id = wl_allocate_id(),
+  };
+#if DEBUG
+  u8 *raw = (u8*)&req;
+  dbg_print("wl_compositor_create_surface:");
+  for (int i = 0; i < sizeof(req); i += 4) {
+    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
+  }
+#endif
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  return req.new_id;
+}
+
+fn u32 wl_xdg_wm_base_get_xdg_surface(u32 wl_surface) {
+  struct { Wl_MessageHeader msg; u32 new_id; u32 surface_id; } req = {
+    .msg = {
+      .id = waystate.xdg_wm_base,
+      .opcode = WL_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE,
+      .size = sizeof(req),
+    },
+    .new_id = wl_allocate_id(),
+    .surface_id = wl_surface,
+  };
+#if DEBUG
+  u8 *raw = (u8*)&req;
+  dbg_print("wl_xdg_wm_base_get_xdg_surface:");
+  for (int i = 0; i < sizeof(req); i += 4) {
+    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
+  }
+#endif
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  return req.new_id;
+}
+
+fn u32 wl_xdg_surface_get_toplevel(u32 xdg_surface) {
+  struct { Wl_MessageHeader msg; u32 new_id; } req = {
+    .msg = {
+      .id = xdg_surface,
+      .opcode = WL_XDG_SURFACE_GET_TOPLEVEL_OPCODE,
+      .size = sizeof(req),
+    },
+    .new_id = wl_allocate_id(),
+  };
+#if DEBUG
+  u8 *raw = (u8*)&req;
+  dbg_print("wl_xdg_surface_get_toplevel:");
+  for (int i = 0; i < sizeof(req); i += 4) {
+    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
+  }
+#endif
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  return req.new_id;
+}
+
+fn void wl_surface_commit(u32 wl_surface) {
+  Wl_MessageHeader req = {
+    .id = wl_surface,
+    .opcode = WL_SURFACE_COMMIT_OPCODE,
+    .size = sizeof(req),
+  };
+#if DEBUG
+  u8 *raw = (u8*)&req;
+  dbg_print("wl_surface_commit:");
+  for (int i = 0; i < sizeof(req); i += 4) {
+    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
+  }
+#endif
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+}
+
+fn void wl_surface_attach(u32 wl_surface, u32 wl_buffer) {
+  struct { Wl_MessageHeader header; u32 wl_buffer; u32 x; u32 y;} req = {
+    .header = {
+      .id = wl_surface,
+      .opcode = WL_SURFACE_ATTACH_OPCODE,
+      .size = sizeof(req),
+    },
+    .wl_buffer = wl_buffer,
+    .x = 0,
+    .y = 0,
+  };
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+}
+
+fn u32 wl_shm_create_pool(SharedMem shm, usize size) {
+  struct { Wl_MessageHeader header; u32 new_id; u32 pool_size; } req = {
+    .header = {
+      .id = waystate.wl_shm,
+      .opcode = WL_SHM_CREATE_POOL_OPCODE,
+      .size = sizeof(req),
+    },
+    .new_id = wl_allocate_id(),
+    .pool_size = size,
+  };
+
+  u8 buff[CMSG_SPACE(sizeof(shm.file_handle.h[0]))] = {};
+  struct iovec io = {
+    .iov_base = &req,
+    .iov_len = req.header.size,
+  };
+  struct msghdr socket_msg = {
+    .msg_iov = &io,
+    .msg_iovlen = 1,
+    .msg_control = buff,
+    .msg_controllen = sizeof(buff),
+  };
+
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&socket_msg);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  cmsg->cmsg_len = CMSG_LEN(sizeof(shm.file_handle.h[0]));
+
+  *((i32*)CMSG_DATA(cmsg)) = shm.file_handle.h[0];
+  socket_msg.msg_controllen = CMSG_SPACE(sizeof(shm.file_handle.h[0]));
+  Assert(sendmsg(waystate.display, &socket_msg, 0) != -1);
+  return req.new_id;
+}
+
+fn u32 wl_shm_pool_create_buffer(u32 wl_shm_pool, u32 width, u32 height, u32 stride) {
+  struct { Wl_MessageHeader header;
+           u32 new_id;
+           u32 offset;
+           u32 width;
+           u32 height;
+           u32 stride;
+           u32 format;
+  } req = {
+    .header = {
+      .id = wl_shm_pool,
+      .opcode = WL_SHM_POOL_CREATE_BUFFER_OPCODE,
+      .size = sizeof(req),
+    },
+    .new_id = wl_allocate_id(),
+    .offset = 0,
+    .width = width,
+    .height = height,
+    .stride = stride,
+    .format = WL_FORMAT_XRGB8888,
+  };
+
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  return req.new_id;
 }
 
 fn Wl_WindowEvent* wl_alloc_windowevent(void) {
@@ -150,13 +308,46 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
       String8 interface = {};
       interface.size = *(u32*)body - 1; body += sizeof(u32);
       interface.str = body; body += interface.size;
-      body = (u8*)forwardAlign((usize)body, sizeof(u32));
+      body = (u8*)align_forward((usize)body, sizeof(u32));
       u32 version = *((u32*)body); body += sizeof(u32);
       wl_compositor_register_global(name, interface, version);
     } break;
     case WL_REGISTRY_EVENT_GLOBAL_REMOVE: {
       /* Info("WL_REGISTRY_EVENT_GLOBAL_REMOVE"); */
     } break;
+    }
+  } else if (header->id == waystate.xdg_wm_base) {
+    switch (header->opcode) {
+    case WL_XDG_WM_BASE_EVENT_PING: {
+      struct { Wl_MessageHeader header; u32 serial; } req = {
+        .header = {
+          .id = waystate.xdg_wm_base,
+          .opcode = WL_XDG_WM_BASE_PONG_OPCODE,
+          .size = sizeof(req),
+        },
+        .serial = *(u32*)body,
+      };
+      Assert(req.header.size == send(waystate.display, &req, req.header.size, MSG_DONTWAIT));
+    } break;
+    }
+  } else { // NOTE(lb): window specific events
+    for (Wl_Window *curr = waystate.first_window; curr; curr = curr->next) {
+      if (header->id == curr->xdg_surface) {
+        switch (header->opcode) {
+        case WL_XDG_SURFACE_EVENT_CONFIGURE: {
+          curr->xdg_surface_acked = true;
+          struct { Wl_MessageHeader header; u32 serial; } req = {
+            .header = {
+              .id = curr->xdg_surface,
+              .opcode = WL_XDG_SURFACE_ACK_CONFIGURE_OPCODE,
+              .size = sizeof(req),
+            },
+            .serial = *(u32*)body,
+          };
+          Assert(req.header.size == send(waystate.display, &req, req.header.size, MSG_DONTWAIT));
+        } break;
+        }
+      }
     }
   }
 }
@@ -211,6 +402,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
 
         if (!header->size) {
           // no messages in this chunk
+          wl_compositor_msg_advance_chunk();
           break;
         } else if (offset + header->size < WL_RINGBUFFER_CAPACITY) {
           // entire message is present
@@ -236,6 +428,8 @@ fn void wl_compositor_msg_dispatcher(void *_) {
         }
       }
     }
+
+    Assert(waystate.msg_ringbuffer.head == waystate.msg_ringbuffer.tail);
   }
   Panic("wl_compositor_msg_dispatcher terminated");
 }
@@ -254,14 +448,29 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   window->events.lock = os_mutex_alloc();
   window->events.condvar = os_cond_alloc();
 
-  Scratch scratch = ScratchBegin(0, 0);
-  StringStream ss = {};
-  strstream_append_str(scratch.arena, &ss, Strlit("/"));
-  strstream_append_str(scratch.arena, &ss, str8_from_i64(scratch.arena, Random(10000, 99999)));
-  window->shm = os_sharedmem_open(str8_from_stream(scratch.arena, ss), width * height * 4,
-                                  OS_acfRead | OS_acfWrite | OS_acfExecute);
-  os_sharedmem_unlink_name(&window->shm);
-  ScratchEnd(scratch);
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    StringStream ss = {};
+    strstream_append_str(scratch.arena, &ss, Strlit("/"));
+    strstream_append_str(scratch.arena, &ss, str8_from_i64(scratch.arena, Random(10000, 99999)));
+    window->shm = os_sharedmem_open(str8_from_stream(scratch.arena, ss), width * height * 4,
+                                    OS_acfRead | OS_acfWrite | OS_acfExecute);
+    os_sharedmem_unlink_name(&window->shm);
+    ScratchEnd(scratch);
+  }
+
+  window->wl_surface = wl_compositor_create_surface();
+  window->xdg_surface = wl_xdg_wm_base_get_xdg_surface(window->wl_surface);
+  window->xdg_toplevel = wl_xdg_surface_get_toplevel(window->xdg_surface);
+  wl_surface_commit(window->wl_surface);
+
+  while (!window->xdg_surface_acked);
+  Assert(window->wl_surface && window->xdg_surface && window->xdg_toplevel);
+
+  window->wl_shm_pool = wl_shm_create_pool(window->shm, width * height * 4);
+  window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool, width, height, width * 4);
+  wl_surface_attach(window->wl_surface, window->wl_buffer);
+  wl_surface_commit(window->wl_surface);
 
   OS_Window res = {0};
   res.handle.h[0] = (u64)window;
@@ -278,7 +487,12 @@ fn void os_window_close(OS_Window window_) {}
 
 fn void os_window_swapBuffers(OS_Window handle) {}
 
-fn void os_window_render(OS_Window window_, void *mem) {}
+fn void os_window_render(OS_Window window_, void *mem) {
+  Wl_Window *window = (Wl_Window*)window_.handle.h[0];
+  memcopy(window->shm.content, mem, window_.width * window_.height * 4);
+  wl_surface_attach(window->wl_surface, window->wl_buffer);
+  wl_surface_commit(window->wl_surface);
+}
 
 fn OS_Event os_window_get_event(OS_Window window_) {
   OS_Event res = {0};

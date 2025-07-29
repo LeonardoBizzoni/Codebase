@@ -49,6 +49,14 @@ typedef struct {
 } Wl_WindowEventList;
 
 typedef struct Wl_Window {
+  u32 wl_buffer;
+  u32 wl_shm_pool;
+  u32 wl_surface;
+  u32 xdg_surface;
+  u32 xdg_toplevel;
+
+  bool xdg_surface_acked;
+
   SharedMem shm;
 
   struct {
