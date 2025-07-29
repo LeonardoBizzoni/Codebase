@@ -314,7 +314,7 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   String8 res = str8(New(arena, u8, 50), max_keyname_size);
   GetKeyNameText(lparam, (char*)res.str, res.size);
   res.size = str8_len((char*)res.str);
-  arenaPop(arena, max_keyname_size - res.size);
+  arena_pop(arena, max_keyname_size - res.size);
   return res;
 }
 

@@ -1075,7 +1075,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
     res.size = 0;
   }
 
-  arenaPop(arena, PATH_MAX - res.size);
+  arena_pop(arena, PATH_MAX - res.size);
   return res;
 }
 

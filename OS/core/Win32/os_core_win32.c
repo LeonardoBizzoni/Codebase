@@ -658,7 +658,7 @@ fn String8 os_currentDir(Arena *arena) {
   String8 res = {};
   res.str = New(arena, u8, MAX_PATH);
   res.size = GetCurrentDirectoryA(MAX_PATH, (LPSTR)res.str);
-  arenaPop(arena, MAX_PATH - res.size);
+  arena_pop(arena, MAX_PATH - res.size);
   return res;
 }
 
@@ -1043,7 +1043,7 @@ fn String8 fs_pathFromHandle(Arena *arena, OS_Handle handle) {
   res.str = New(arena, u8, MAX_PATH);
   res.size = GetFinalPathNameByHandleA(((OS_W32_Primitive*)handle.h[0])->file.handle, (LPSTR)res.str,
                                        MAX_PATH, FILE_NAME_NORMALIZED);
-  arenaPop(arena, MAX_PATH - res.size);
+  arena_pop(arena, MAX_PATH - res.size);
   if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
     res.str += 4; // skips the `\\?\`
     res.size -= 4;
@@ -1062,7 +1062,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
                                        MAX_PATH, FILE_NAME_NORMALIZED);
   CloseHandle(pathfd);
   ScratchEnd(scratch);
-  arenaPop(arena, MAX_PATH - res.size);
+  arena_pop(arena, MAX_PATH - res.size);
   if (res.str[0] == '\\') { // TODO(lb): not sure if its guaranteed to be here
     res.str += 4; // skips the `\\?\`
     res.size -= 4;

@@ -209,8 +209,7 @@ fn String8 str8_from_i64(Arena *arena, i64 n) {
     str[j] = tmp;
   }
 
-  arenaPop(arena, approx - i);
-
+  arena_pop(arena, approx - i);
   return str8(str,i);
 }
 
@@ -227,8 +226,7 @@ fn String8 str8_from_u64(Arena *arena, u64 n) {
     str[j] = tmp;
   }
 
-  arenaPop(arena, approx - i);
-
+  arena_pop(arena, approx - i);
   return str8(str, i);
 }
 
@@ -238,7 +236,7 @@ fn String8 str8_from_f64(Arena *arena, f64 n) {
 
   // TODO: maybe implement `sprintf`?
   size = sprintf((char *)str, "%f", n);
-  arenaPop(arena, approx - size);
+  arena_pop(arena, approx - size);
 
   return str8(str, size);
 }
@@ -726,7 +724,7 @@ fn String8 UTF8From16(Arena *arena, String16 in) {
     res_offset += utf8_codepoint_size;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   return str8(bytes, res_size);
 }
 
@@ -744,7 +742,7 @@ fn String8 UTF8From32(Arena *arena, String32 in) {
     res_offset += utf8_codepoint_size;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   return str8(bytes, res_size);
 }
 
@@ -762,7 +760,7 @@ fn String16 UTF16From8(Arena *arena, String8 in) {
     res_offset += utf16_codepoint_size;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   String16 res = {words, res_size};
   return res;
 }
@@ -781,7 +779,7 @@ fn String16 UTF16From32(Arena *arena, String32 in) {
     res_offset += utf16_codepoint_size;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   String16 res = {words, res_size};
   return res;
 }
@@ -797,7 +795,7 @@ fn String32 UTF32From8(Arena *arena, String8 in) {
     *res_offset++ = cp.codepoint;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   String32 res = {dwords, res_size};
   return res;
 }
@@ -813,7 +811,7 @@ fn String32 UTF32From16(Arena *arena, String16 in) {
     *res_offset++ = cp.codepoint;
   }
 
-  arenaPop(arena, (approx_size - res_size));
+  arena_pop(arena, (approx_size - res_size));
   String32 res = {dwords, res_size};
   return res;
 }

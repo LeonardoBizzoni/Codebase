@@ -5,9 +5,9 @@ typedef struct {
   Arena *arenas[2];
 } TlsContext;
 
-fn Arena *tlsGetScratch(Arena **conflicts, usize count);
+fn Arena *tls_get_scratch(Arena **conflicts, usize count);
 
-#define ScratchBegin(conflicts, count) tmpBegin(tlsGetScratch((conflicts), (count)))
-#define ScratchEnd(scratch) tmpEnd((scratch))
+#define ScratchBegin(conflicts, count) tmp_begin(tls_get_scratch((conflicts), (count)))
+#define ScratchEnd(scratch) tmp_end((scratch))
 
 #endif

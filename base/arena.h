@@ -5,8 +5,8 @@
 
 #define New(...) Newx(__VA_ARGS__,New3,New2)(__VA_ARGS__)
 #define Newx(a,b,c,d,...) d
-#define New2(arenaptr, type) (type*)arenaPush(arenaptr, sizeof(type), AlignOf(type))
-#define New3(arenaptr, type, count) (type*)arenaPush(arenaptr, (count) * sizeof(type), AlignOf(type))
+#define New2(arenaptr, type) (type*)arena_push(arenaptr, sizeof(type), AlignOf(type))
+#define New3(arenaptr, type, count) (type*)arena_push(arenaptr, (count) * sizeof(type), AlignOf(type))
 
 #define ArenaDefaultReserveSize MB(4)
 #define ArenaDefaultCommitSize KiB(4)
@@ -41,23 +41,23 @@ typedef struct {
   usize pos;
 } Scratch;
 
-inline fn usize forwardAlign(usize ptr, usize align);
-inline fn bool isPowerOfTwo(usize value);
+fn bool is_power_of_two(usize value);
+fn usize align_forward(usize ptr, usize align);
 
-inline fn void arenaPop(Arena *arena, usize bytes);
-inline fn void arenaFree(Arena *arena);
-       fn void *arenaPush(Arena *arena, usize size, usize align);
+fn void arena_pop(Arena *arena, usize bytes);
+fn void arena_free(Arena *arena);
+fn void *arena_push(Arena *arena, usize size, usize align);
 
-fn Arena *_arenaBuild(ArenaArgs args);
+fn Arena *_arena_build(ArenaArgs args);
 #if CPP
-#  define ArenaBuild(...) _arenaBuild(ArenaArgs { __VA_ARGS__ })
+#  define ArenaBuild(...) _arena_build(ArenaArgs { __VA_ARGS__ })
 #else
-#  define ArenaBuild(...) _arenaBuild((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
+#  define ArenaBuild(...) _arena_build((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
                                                    .reserve_size = ArenaDefaultReserveSize, \
                                                    __VA_ARGS__})
 #endif
 
-inline fn Scratch tmpBegin(Arena *arena);
-inline fn void tmpEnd(Scratch tmp);
+inline fn Scratch tmp_begin(Arena *arena);
+inline fn void tmp_end(Scratch tmp);
 
 #endif
