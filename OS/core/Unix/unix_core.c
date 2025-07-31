@@ -680,7 +680,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   AssertMsg(res.file_handle.h[0] >= 0, "shm_open failed");
   ScratchEnd(scratch);
 
-  (void)ftruncate(res.file_handle.h[0], size);
+  Assert(!ftruncate(res.file_handle.h[0], size));
   res.prop.size = size;
   res.content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, res.file_handle.h[0], 0);
@@ -693,7 +693,7 @@ fn void os_sharedmem_resize(SharedMem *shm, usize size) {
   Assert(size);
   Assert(!ftruncate(shm->file_handle.h[0], size));
   munmap(shm->content, shm->prop.size);
-  shm->content = (u8*)mmap(shm->content, size, PROT_READ | PROT_WRITE,
+  shm->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
@@ -704,12 +704,12 @@ fn void os_sharedmem_unlink_name(SharedMem *shm) {
   Scratch scratch = ScratchBegin(0, 0);
   shm_unlink(cstr_from_str8(scratch.arena, shm->path));
   ScratchEnd(scratch);
-  shm->path.size = 0;
 }
 
-fn bool os_sharedmem_close(SharedMem *shm) {
+fn void os_sharedmem_close(SharedMem *shm) {
   os_sharedmem_unlink_name(shm);
-  return shm->content ? !munmap(shm->content, shm->prop.size) : 0;
+  munmap(shm->content, shm->prop.size);
+  close(shm->file_handle.h[0]);
 }
 
 // =============================================================================

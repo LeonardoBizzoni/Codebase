@@ -4,7 +4,7 @@ global Wl_State waystate = {0};
 // Common Linux definitions
 fn void unx_gfx_init(void) {
   waystate.arena = ArenaBuild();
-  waystate.events.lock = os_mutex_alloc();
+  waystate.events.mutex = os_mutex_alloc();
 
   // NOTE(lb): object-id:1 is the wayland display itself
   waystate.curr_id = 1;
@@ -118,14 +118,6 @@ fn u32 wl_compositor_create_surface(void) {
     },
     .new_id = wl_allocate_id(),
   };
-#if DEBUG
-  u8 *raw = (u8*)&req;
-  dbg_print("wl_compositor_create_surface:");
-  for (int i = 0; i < sizeof(req); i += 4) {
-    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
-  }
-#endif
-
   Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
   return req.new_id;
 }
@@ -140,14 +132,6 @@ fn u32 wl_xdg_wm_base_get_xdg_surface(u32 wl_surface) {
     .new_id = wl_allocate_id(),
     .surface_id = wl_surface,
   };
-#if DEBUG
-  u8 *raw = (u8*)&req;
-  dbg_print("wl_xdg_wm_base_get_xdg_surface:");
-  for (int i = 0; i < sizeof(req); i += 4) {
-    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
-  }
-#endif
-
   Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
   return req.new_id;
 }
@@ -161,14 +145,6 @@ fn u32 wl_xdg_surface_get_toplevel(u32 xdg_surface) {
     },
     .new_id = wl_allocate_id(),
   };
-#if DEBUG
-  u8 *raw = (u8*)&req;
-  dbg_print("wl_xdg_surface_get_toplevel:");
-  for (int i = 0; i < sizeof(req); i += 4) {
-    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
-  }
-#endif
-
   Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
   return req.new_id;
 }
@@ -179,14 +155,6 @@ fn void wl_surface_commit(u32 wl_surface) {
     .opcode = WL_SURFACE_COMMIT_OPCODE,
     .size = sizeof(req),
   };
-#if DEBUG
-  u8 *raw = (u8*)&req;
-  dbg_print("wl_surface_commit:");
-  for (int i = 0; i < sizeof(req); i += 4) {
-    dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
-  }
-#endif
-
   Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
 }
 
@@ -201,7 +169,24 @@ fn void wl_surface_attach(u32 wl_surface, u32 wl_buffer) {
     .x = 0,
     .y = 0,
   };
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+}
 
+fn void wl_buffer_destroy(u32 wl_buffer) {
+  Wl_MessageHeader req = {
+    .id = wl_buffer,
+    .opcode = WL_BUFFER_DESTROY_OPCODE,
+    .size = sizeof(req),
+  };
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+}
+
+fn void wl_shm_pool_destroy(u32 wl_shm_pool) {
+  Wl_MessageHeader req = {
+    .id = wl_shm_pool,
+    .opcode = WL_SHM_POOL_DESTROY_OPCODE,
+    .size = sizeof(req),
+  };
   Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
 }
 
@@ -265,12 +250,24 @@ fn u32 wl_shm_pool_create_buffer(u32 wl_shm_pool, u32 width, u32 height, u32 str
   return req.new_id;
 }
 
+fn void wl_shm_pool_resize(u32 wl_shm_pool, u32 memsize) {
+  struct { Wl_MessageHeader header; u32 size;} req = {
+    .header = {
+      .id = wl_shm_pool,
+      .opcode = WL_SHM_POOL_RESIZE_OPCODE,
+      .size = sizeof(req),
+    },
+    .size = memsize,
+  };
+  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+}
+
 fn Wl_WindowEvent* wl_alloc_windowevent(void) {
   Wl_WindowEvent *event = 0;
-  OS_MutexScope(waystate.events.lock) {
-    event = waystate.events.freelist.first;
+  OS_MutexScope(waystate.events.mutex) {
+    event = waystate.events.first;
     if (event) {
-      QueuePop(waystate.events.freelist.first);
+      QueuePop(waystate.events.first);
       memzero(event, sizeof(Wl_WindowEvent));
     } else {
       event = New(waystate.arena, Wl_WindowEvent);
@@ -345,6 +342,32 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
             .serial = *(u32*)body,
           };
           Assert(req.header.size == send(waystate.display, &req, req.header.size, MSG_DONTWAIT));
+        } break;
+        }
+      } else if (header->id == curr->xdg_toplevel) {
+        switch (header->opcode) {
+        case WL_XDG_TOPLEVEL_EVENT_CONFIGURE: {
+          i32 width = *(i32*)body;
+          i32 height = *(i32*)(body + sizeof(i32));
+          isize memsize = width * height * 4;
+          if (memsize > 0) {
+            Wl_WindowEvent *event = wl_alloc_windowevent();
+            event->value.type = OS_EventType_Expose;
+            event->value.expose.width = width;
+            event->value.expose.height = height;
+            OS_MutexScope(curr->events.mutex) {
+              QueuePush(curr->events.first, curr->events.last, event);
+              os_cond_signal(curr->events.condvar);
+            }
+          }
+        } break;
+        case WL_XDG_TOPLEVEL_EVENT_CLOSE: {
+          Wl_WindowEvent *event = wl_alloc_windowevent();
+          event->value.type = OS_EventType_Kill;
+          OS_MutexScope(curr->events.mutex) {
+            QueuePush(curr->events.first, curr->events.last, event);
+            os_cond_signal(curr->events.condvar);
+          }
         } break;
         }
       }
@@ -445,7 +468,7 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
     window = New(waystate.arena, Wl_Window);
   }
   DLLPushBack(waystate.first_window, waystate.last_window, window);
-  window->events.lock = os_mutex_alloc();
+  window->events.mutex = os_mutex_alloc();
   window->events.condvar = os_cond_alloc();
 
   {
@@ -469,8 +492,6 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   window->wl_shm_pool = wl_shm_create_pool(window->shm, width * height * 4);
   window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool, width, height, width * 4);
-  wl_surface_attach(window->wl_surface, window->wl_buffer);
-  wl_surface_commit(window->wl_surface);
 
   OS_Window res = {0};
   res.handle.h[0] = (u64)window;
@@ -479,7 +500,11 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   return res;
 }
 
-fn void os_window_show(OS_Window window_) {}
+fn void os_window_show(OS_Window window_) {
+  Wl_Window *window = (Wl_Window*)window_.handle.h[0];
+  wl_surface_attach(window->wl_surface, window->wl_buffer);
+  wl_surface_commit(window->wl_surface);
+}
 
 fn void os_window_hide(OS_Window handle) {}
 
@@ -489,18 +514,59 @@ fn void os_window_swapBuffers(OS_Window handle) {}
 
 fn void os_window_render(OS_Window window_, void *mem) {
   Wl_Window *window = (Wl_Window*)window_.handle.h[0];
-  memcopy(window->shm.content, mem, window_.width * window_.height * 4);
+  usize memsize = window_.width * window_.height * 4;
+  if (memsize > window->shm.prop.size) {
+    os_sharedmem_resize(&window->shm, memsize);
+    wl_shm_pool_resize(window->wl_shm_pool, memsize);
+  }
+
+  if (window->wl_buffer) { wl_buffer_destroy(window->wl_buffer); }
+  window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool,
+                                                window_.width,
+                                                window_.height,
+                                                window_.width * 4);
+  memcopy(window->shm.content, mem, memsize);
   wl_surface_attach(window->wl_surface, window->wl_buffer);
   wl_surface_commit(window->wl_surface);
 }
 
 fn OS_Event os_window_get_event(OS_Window window_) {
+  Wl_Window *window = (Wl_Window*)window_.handle.h[0];
   OS_Event res = {0};
+
+  Wl_WindowEvent *event = 0;
+  OS_MutexScope(window->events.mutex) {
+    event = window->events.first;
+    if (window->events.first) {
+      memcopy(&res, window->events.first, sizeof(OS_Event));
+      QueuePop(window->events.first);
+    }
+  }
+  if (event) {
+    OS_MutexScope(waystate.events.mutex) {
+      QueuePush(waystate.events.first, waystate.events.first, event);
+    }
+  }
+
   return res;
 }
 
 fn OS_Event os_window_wait_event(OS_Window window_) {
+  Wl_Window *window = (Wl_Window*)window_.handle.h[0];
   OS_Event res = {0};
+
+  Wl_WindowEvent *event = 0;
+  OS_MutexScope(window->events.mutex) {
+    for (; !event; event = window->events.first) {
+      os_cond_wait(window->events.condvar, window->events.mutex, 0);
+    }
+    memcopy(&res, window->events.first, sizeof(OS_Event));
+    QueuePop(window->events.first);
+  }
+  OS_MutexScope(waystate.events.mutex) {
+    QueuePush(waystate.events.first, waystate.events.first, event);
+  }
+
   return res;
 }
 

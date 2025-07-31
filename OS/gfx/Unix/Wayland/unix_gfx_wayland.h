@@ -10,6 +10,7 @@
 #define WL_REGISTRY_EVENT_GLOBAL_REMOVE 1
 #define WL_SHM_POOL_EVENT_FORMAT 0
 #define WL_BUFFER_EVENT_RELEASE 0
+#define WL_BUFFER_DESTROY_OPCODE 0
 #define WL_XDG_WM_BASE_EVENT_PING 0
 #define WL_XDG_TOPLEVEL_EVENT_CONFIGURE 0
 #define WL_XDG_TOPLEVEL_EVENT_CLOSE 1
@@ -23,6 +24,8 @@
 #define WL_SHM_CREATE_POOL_OPCODE 0
 #define WL_XDG_WM_BASE_GET_XDG_SURFACE_OPCODE 2
 #define WL_SHM_POOL_CREATE_BUFFER_OPCODE 0
+#define WL_SHM_POOL_DESTROY_OPCODE 1
+#define WL_SHM_POOL_RESIZE_OPCODE 2
 #define WL_SURFACE_ATTACH_OPCODE 1
 #define WL_XDG_SURFACE_GET_TOPLEVEL_OPCODE 1
 #define WL_SURFACE_COMMIT_OPCODE 6
@@ -43,11 +46,6 @@ typedef struct Wl_WindowEvent {
   struct Wl_WindowEvent *next;
 } Wl_WindowEvent;
 
-typedef struct {
-  Wl_WindowEvent *first;
-  Wl_WindowEvent *last;
-} Wl_WindowEventList;
-
 typedef struct Wl_Window {
   u32 wl_buffer;
   u32 wl_shm_pool;
@@ -60,9 +58,10 @@ typedef struct Wl_Window {
   SharedMem shm;
 
   struct {
-    OS_Handle lock;
+    OS_Handle mutex;
     OS_Handle condvar;
-    Wl_WindowEventList list;
+    Wl_WindowEvent *first;
+    Wl_WindowEvent *last;
   } events;
 
   struct Wl_Window *next;
@@ -87,8 +86,9 @@ typedef struct {
   u32 xdg_wm_base;
 
   struct {
-    OS_Handle lock;
-    Wl_WindowEventList freelist;
+    OS_Handle mutex;
+    Wl_WindowEvent *first;
+    Wl_WindowEvent *last;
   } events;
 
   Wl_Window *freelist_window;

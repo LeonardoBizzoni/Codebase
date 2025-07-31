@@ -324,7 +324,7 @@ fn void os_semaphore_free(OS_Handle sem);
 fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags);
 fn void os_sharedmem_resize(SharedMem *shm, usize size);
 fn void os_sharedmem_unlink_name(SharedMem *shm);
-fn bool os_sharedmem_close(SharedMem *shm);
+fn void os_sharedmem_close(SharedMem *shm);
 
 // =============================================================================
 // Dynamic libraries
