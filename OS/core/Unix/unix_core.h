@@ -15,6 +15,7 @@
 #include <sched.h>
 #include <dirent.h>
 #include <ifaddrs.h>
+#include <errno.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>

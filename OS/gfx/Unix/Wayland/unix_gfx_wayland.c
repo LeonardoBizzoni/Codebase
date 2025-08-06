@@ -8,11 +8,14 @@ fn void unx_gfx_init(void) {
 
   // NOTE(lb): object-id:1 is the wayland display itself
   waystate.curr_id = 1;
-  waystate.display = wl_display_connect();
+  waystate.sockfd = wl_display_connect();
   waystate.registry = wl_display_get_registry();
 
+  waystate.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
   waystate.msg_dispatcher = os_thread_start(wl_compositor_msg_dispatcher, 0);
-  while (!(waystate.wl_compositor && waystate.wl_shm && waystate.xdg_wm_base));
+  while (!(waystate.wl_compositor && waystate.wl_shm && waystate.wl_seat &&
+           waystate.xdg_wm_base));
 }
 
 fn void unx_gfx_deinit(void) {
@@ -69,8 +72,7 @@ fn u32 wl_display_get_registry(void) {
     dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
   }
 #endif
-  Assert(sizeof(req) == 12);
-  Assert(req.msg.size == send(waystate.display, &req, req.msg.size, MSG_DONTWAIT));
+  AssertMsg(req.msg.size == send(waystate.sockfd, &req, req.msg.size, MSG_DONTWAIT), "wl_display_get_registry");
   Info("wl_display#%u.get_registry: wl_registry=%u", WL_DISPLAY_OBJECT_ID, waystate.curr_id);
   return req.new_id;
 }
@@ -104,7 +106,7 @@ fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   }
 #endif
 
-  Assert(total_size == send(waystate.display, req, total_size, MSG_DONTWAIT));
+  AssertMsg(total_size == send(waystate.sockfd, req, total_size, MSG_DONTWAIT), "wl_registry_bind");
   ScratchEnd(scratch);
   return new_id;
 }
@@ -118,7 +120,7 @@ fn u32 wl_compositor_create_surface(void) {
     },
     .new_id = wl_allocate_id(),
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_compositor_create_surface");
   return req.new_id;
 }
 
@@ -132,7 +134,7 @@ fn u32 wl_xdg_wm_base_get_xdg_surface(u32 wl_surface) {
     .new_id = wl_allocate_id(),
     .surface_id = wl_surface,
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_xdg_wm_base_get_xdg_surface");
   return req.new_id;
 }
 
@@ -145,7 +147,7 @@ fn u32 wl_xdg_surface_get_toplevel(u32 xdg_surface) {
     },
     .new_id = wl_allocate_id(),
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_xdg_surface_get_toplevel");
   return req.new_id;
 }
 
@@ -155,7 +157,7 @@ fn void wl_surface_commit(u32 wl_surface) {
     .opcode = WL_SURFACE_COMMIT_OPCODE,
     .size = sizeof(req),
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_surface_commit");
 }
 
 fn void wl_surface_attach(u32 wl_surface, u32 wl_buffer) {
@@ -169,16 +171,17 @@ fn void wl_surface_attach(u32 wl_surface, u32 wl_buffer) {
     .x = 0,
     .y = 0,
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_surface_attach");
 }
 
 fn void wl_buffer_destroy(u32 wl_buffer) {
+  if (!wl_buffer) { return; }
   Wl_MessageHeader req = {
     .id = wl_buffer,
     .opcode = WL_BUFFER_DESTROY_OPCODE,
     .size = sizeof(req),
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_buffer_destroy");
 }
 
 fn void wl_shm_pool_destroy(u32 wl_shm_pool) {
@@ -187,10 +190,10 @@ fn void wl_shm_pool_destroy(u32 wl_shm_pool) {
     .opcode = WL_SHM_POOL_DESTROY_OPCODE,
     .size = sizeof(req),
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_shm_pool_destroy");
 }
 
-fn u32 wl_shm_create_pool(SharedMem shm, usize size) {
+fn u32 wl_shm_create_pool(SharedMem shm, u32 size) {
   struct { Wl_MessageHeader header; u32 new_id; u32 pool_size; } req = {
     .header = {
       .id = waystate.wl_shm,
@@ -220,7 +223,7 @@ fn u32 wl_shm_create_pool(SharedMem shm, usize size) {
 
   *((i32*)CMSG_DATA(cmsg)) = shm.file_handle.h[0];
   socket_msg.msg_controllen = CMSG_SPACE(sizeof(shm.file_handle.h[0]));
-  Assert(sendmsg(waystate.display, &socket_msg, 0) != -1);
+  AssertMsg(sendmsg(waystate.sockfd, &socket_msg, 0) != -1, "wl_shm_create_pool");
   return req.new_id;
 }
 
@@ -246,7 +249,7 @@ fn u32 wl_shm_pool_create_buffer(u32 wl_shm_pool, u32 width, u32 height, u32 str
     .format = WL_FORMAT_XRGB8888,
   };
 
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_shm_pool_create_buffer");
   return req.new_id;
 }
 
@@ -259,7 +262,7 @@ fn void wl_shm_pool_resize(u32 wl_shm_pool, u32 memsize) {
     },
     .size = memsize,
   };
-  Assert(sizeof(req) == send(waystate.display, &req, sizeof(req), MSG_DONTWAIT));
+  AssertMsg(sizeof(req) == send(waystate.sockfd, &req, sizeof(req), MSG_DONTWAIT), "wl_shm_pool_resize");
 }
 
 fn Wl_WindowEvent* wl_alloc_windowevent(void) {
@@ -284,21 +287,33 @@ fn void wl_compositor_register_global(u32 name, String8 interface, u32 version) 
     waystate.wl_shm = wl_registry_bind(name, interface, version);
   } else if (str8_eq(interface, Strlit("wl_compositor"))) {
     waystate.wl_compositor = wl_registry_bind(name, interface, version);
+  } else if (str8_eq(interface, Strlit("wl_seat"))) {
+    waystate.wl_seat = wl_registry_bind(name, interface, version);
   } else if (str8_eq(interface, Strlit("xdg_wm_base"))) {
     waystate.xdg_wm_base = wl_registry_bind(name, interface, version);
   }
 }
 
-fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
+fn Wl_Window* wl_window_from_surface(wl_identifier surface) {
+  for (Wl_Window *curr = waystate.first_window; curr; curr = curr->next) {
+    if (curr->wl_surface == surface) {
+      return curr;
+    }
+  }
+  return 0;
+}
+
+fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *received_fds, usize *curr_fd) {
+  local Wl_Window *kbd_focus = 0;
+  local Wl_Window *ptr_focus = 0;
+
   if (header->id == WL_DISPLAY_OBJECT_ID && header->opcode == WL_DISPLAY_EVENT_ERROR) {
     u32 object_id = *((u32*)body); body += sizeof(u32);
     u32 error_code = *(u32*)body; body += sizeof(u32);
-    String8 message = {
-      .size = *(u32*)body,
-      .str = body + sizeof(u32),
-    };
+    String8 message = str8(body + sizeof(u32), *(u32*)body);
     Panic("id: %d, code: %d, message: %.*s", object_id, error_code, Strexpand(message));
-  } else if (header->id == waystate.registry) {
+  }
+  else if (header->id == waystate.registry) {
     switch (header->opcode) {
     case WL_REGISTRY_EVENT_GLOBAL: {
       u32 name = *((u32*)body); body += sizeof(u32);
@@ -313,7 +328,109 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
       /* Info("WL_REGISTRY_EVENT_GLOBAL_REMOVE"); */
     } break;
     }
-  } else if (header->id == waystate.xdg_wm_base) {
+  }
+  else if (header->id == waystate.wl_seat) {
+    switch (header->opcode) {
+    case WL_SEAT_CAPABILITIES_EVENT: {
+      wl_capabilities capabilities = *(u32*)body;
+      struct { Wl_MessageHeader header; u32 new_id; } req = {
+        .header = {
+          .id = waystate.wl_seat,
+          .opcode = 0,
+          .size = sizeof(req),
+        },
+        .new_id = 0,
+      };
+
+      if (capabilities & Wl_Capabilities_Pointer) {
+        req.header.opcode = WL_SEAT_GET_POINTER_OPCODE;
+        waystate.wl_pointer = req.new_id = wl_allocate_id();
+        AssertMsg(req.header.size == send(waystate.sockfd, &req, req.header.size, MSG_DONTWAIT),
+                  "WL_SEAT_CAPABILITIES_EVENT::WL_SEAT_GET_POINTER_OPCODE");
+        Info("Seat has pointer capability");
+      }
+      if (capabilities & Wl_Capabilities_Keyboard) {
+        req.header.opcode = WL_SEAT_GET_KEYBOARD_OPCODE;
+        waystate.wl_keyboard = req.new_id = wl_allocate_id();
+        AssertMsg(req.header.size == send(waystate.sockfd, &req, req.header.size, MSG_DONTWAIT),
+                  "WL_SEAT_CAPABILITIES_EVENT::WL_SEAT_GET_KEYBOARD_OPCODE");
+        Info("Seat has keyboard capability");
+      }
+      if (capabilities & Wl_Capabilities_Touch) {
+        req.header.opcode = WL_SEAT_GET_TOUCH_OPCODE;
+        waystate.wl_touch = req.new_id = wl_allocate_id();
+        AssertMsg(req.header.size == send(waystate.sockfd, &req, req.header.size, MSG_DONTWAIT),
+                  "WL_SEAT_CAPABILITIES_EVENT::WL_SEAT_GET_TOUCH_OPCODE");
+        Info("Seat has touch capability");
+      }
+    } break;
+    }
+  }
+  else if (header->id == waystate.wl_pointer) {
+    /* Warn("unhandled wl_pointer event"); */
+  }
+  else if (header->id == waystate.wl_keyboard) {
+    switch (header->opcode) {
+    case WL_KEYBOARD_KEYMAP_EVENT: {
+      i32 fd = received_fds[*curr_fd];
+      u32 format = *(u32*)body; body += sizeof(u32);
+      u32 size = *(u32*)body; body += sizeof(u32);
+
+      char *keymap_shm = (char *)mmap(0, size, PROT_READ, MAP_PRIVATE, fd, 0);
+      AssertMsg(keymap_shm != MAP_FAILED, "wl_keyboard::keymap memory mapped");
+
+      if (format == WL_KEYBOARD_FORMAT_XKB_V1) {
+        waystate.xkb_keymap = xkb_keymap_new_from_string(waystate.xkb_context, keymap_shm,
+                                                         XKB_KEYMAP_FORMAT_TEXT_V1,
+                                                         XKB_KEYMAP_COMPILE_NO_FLAGS);
+        AssertMsg(waystate.xkb_keymap, "wl_keyboard::keymap xkb_keymap initialization");
+        waystate.xkb_state = xkb_state_new(waystate.xkb_keymap);
+        AssertMsg(waystate.xkb_state, "wl_keyboard::keymap xkb_state initialization");
+      }
+
+      munmap(keymap_shm, size);
+      close(fd);
+      *curr_fd += 1;
+    } break;
+    case WL_KEYBOARD_ENTER_EVENT: {
+      wl_identifier surface = *(u32*)(body + sizeof(u32));
+      kbd_focus = wl_window_from_surface(surface);
+    } break;
+    case WL_KEYBOARD_KEY_EVENT: {
+      AssertMsg(kbd_focus, "wl_keyboard::key no focused window");
+
+      body += 2 * sizeof(u32);
+      u32 scancode = WL_EVDEV_SCANCODE_TO_XKB(*(u32*)body); body += sizeof(u32);
+      u32 state = *(u32*)body; body += sizeof(u32);
+      xkb_keysym_t keycode = xkb_state_key_get_one_sym(waystate.xkb_state, scancode);
+
+      Wl_WindowEvent *event = wl_alloc_windowevent();
+      event->value.key.scancode = scancode;
+      event->value.key.keycode = keycode;
+      switch (state) {
+        case WL_KEYBOARD_KEY_STATE_RELEASED: {
+          event->value.type = OS_EventType_KeyUp;
+        } break;
+        case WL_KEYBOARD_KEY_STATE_PRESSED:
+        case WL_KEYBOARD_KEY_STATE_REPEATED: {
+          event->value.type = OS_EventType_KeyDown;
+        } break;
+      }
+
+      OS_MutexScope(kbd_focus->events.mutex) {
+        QueuePush(kbd_focus->events.first, kbd_focus->events.last, event);
+        os_cond_signal(kbd_focus->events.condvar);
+      }
+    } break;
+    default: {
+      Warn("unhandled wl_keyboard event: %d", header->opcode);
+    } break;
+    }
+  }
+  else if (header->id == waystate.wl_touch) {
+    Warn("unhandled wl_touch event");
+  }
+  else if (header->id == waystate.xdg_wm_base) {
     switch (header->opcode) {
     case WL_XDG_WM_BASE_EVENT_PING: {
       struct { Wl_MessageHeader header; u32 serial; } req = {
@@ -324,10 +441,11 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
         },
         .serial = *(u32*)body,
       };
-      Assert(req.header.size == send(waystate.display, &req, req.header.size, MSG_DONTWAIT));
+      AssertMsg(req.header.size == send(waystate.sockfd, &req, req.header.size, MSG_DONTWAIT), "WL_XDG_WM_BASE_EVENT_PING");
     } break;
     }
-  } else { // NOTE(lb): window specific events
+  }
+  else { // NOTE(lb): window specific events
     for (Wl_Window *curr = waystate.first_window; curr; curr = curr->next) {
       if (header->id == curr->xdg_surface) {
         switch (header->opcode) {
@@ -341,7 +459,7 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body) {
             },
             .serial = *(u32*)body,
           };
-          Assert(req.header.size == send(waystate.display, &req, req.header.size, MSG_DONTWAIT));
+          AssertMsg(req.header.size == send(waystate.sockfd, &req, req.header.size, MSG_DONTWAIT), "WL_XDG_SURFACE_EVENT_CONFIGURE");
         } break;
         }
       } else if (header->id == curr->xdg_toplevel) {
@@ -382,18 +500,47 @@ fn void wl_compositor_msg_advance_chunk(void) {
 
 fn void wl_compositor_msg_dispatcher(void *_) {
   struct pollfd pfd = {
-    .fd = waystate.display,
+    .fd = waystate.sockfd,
     .events = POLLIN,
   };
 
-  for (;poll(&pfd, 1, -1);) {
+  i32 received_fds[WL_MAX_FDS] = {};
+  for (usize curr_fd = 0; poll(&pfd, 1, -1); curr_fd = 0) {
+    // message receiver
     while (*(u64*)waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.tail] == 0 &&
            poll(&pfd, 1, 0) > 0) {
-      recv(waystate.display, waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.tail],
-           WL_RINGBUFFER_BYTE_COUNT, 0);
+      struct iovec iov = {
+        .iov_base = waystate.msg_ringbuffer.bytes[waystate.msg_ringbuffer.tail],
+        .iov_len = WL_RINGBUFFER_BYTE_COUNT,
+      };
+
+      u8 control_buf[CMSG_SPACE(sizeof(i32)) * WL_MAX_FDS] = {};
+      struct msghdr msg = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_control = control_buf,
+        .msg_controllen = sizeof(control_buf),
+      };
+
+      recvmsg(waystate.sockfd, &msg, MSG_CMSG_CLOEXEC);
+
+      i32 num_fds = 0;
+      for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+           cmsg;
+           cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+          i32 *fds = (i32 *)CMSG_DATA(cmsg);
+          i32 fd_count = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(i32);
+          for (i32 i = 0; i < fd_count && num_fds < WL_MAX_FDS; i++) {
+            received_fds[num_fds++] = fds[i];
+          }
+        }
+      }
+
       waystate.msg_ringbuffer.tail = (waystate.msg_ringbuffer.tail + 1) % WL_RINGBUFFER_SIZE;
     }
 
+    // message dispatcher
     for (isize pos = 0, offset = waystate.msg_ringbuffer.head * WL_RINGBUFFER_BYTE_COUNT; 1;) {
       if (pos >= WL_RINGBUFFER_BYTE_COUNT) {
         pos -= WL_RINGBUFFER_BYTE_COUNT;
@@ -412,7 +559,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
         u8 *message = New(scratch.arena, u8, approx_msg_size);
         memcopy(message, bytes, n_bytes_at_end);
         memcopy(message + n_bytes_at_end, waystate.msg_ringbuffer.bytes[0], approx_msg_size - n_bytes_at_end);
-        wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader));
+        wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader), received_fds, &curr_fd);
 
         isize n_bytes_wrapped = ((Wl_MessageHeader*)message)->size - n_bytes_at_end;
         pos = n_bytes_wrapped;
@@ -429,7 +576,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
           break;
         } else if (offset + header->size < WL_RINGBUFFER_CAPACITY) {
           // entire message is present
-          wl_compositor_msg_parse(header, bytes + sizeof(Wl_MessageHeader));
+          wl_compositor_msg_parse(header, bytes + sizeof(Wl_MessageHeader), received_fds, &curr_fd);
           pos += header->size;
           offset += header->size;
         } else {
@@ -441,7 +588,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
           isize n_bytes_at_end = header->size - n_bytes_wrapped;
           memcopy(message, bytes, n_bytes_at_end);
           memcopy(message + n_bytes_at_end, waystate.msg_ringbuffer.bytes[0], n_bytes_wrapped);
-          wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader));
+          wl_compositor_msg_parse((Wl_MessageHeader*)message, message + sizeof(Wl_MessageHeader), received_fds, &curr_fd);
 
           pos = n_bytes_wrapped;
           offset = n_bytes_wrapped;
@@ -451,8 +598,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
         }
       }
     }
-
-    Assert(waystate.msg_ringbuffer.head == waystate.msg_ringbuffer.tail);
+    waystate.msg_ringbuffer.head = waystate.msg_ringbuffer.tail;
   }
   Panic("wl_compositor_msg_dispatcher terminated");
 }
@@ -520,13 +666,16 @@ fn void os_window_render(OS_Window window_, void *mem) {
     wl_shm_pool_resize(window->wl_shm_pool, memsize);
   }
 
-  if (window->wl_buffer) { wl_buffer_destroy(window->wl_buffer); }
-  window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool,
-                                                window_.width,
-                                                window_.height,
-                                                window_.width * 4);
+  if (memsize != window->shm.prop.size) {
+    wl_buffer_destroy(window->wl_buffer);
+    window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool,
+                                                  window_.width,
+                                                  window_.height,
+                                                  window_.width * 4);
+    wl_surface_attach(window->wl_surface, window->wl_buffer);
+  }
+
   memcopy(window->shm.content, mem, memsize);
-  wl_surface_attach(window->wl_surface, window->wl_buffer);
   wl_surface_commit(window->wl_surface);
 }
 
@@ -571,7 +720,13 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
 }
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
-  String8 res = {0};
+  isize approx_len = 256;
+  String8 res = str8(New(arena, u8, approx_len), approx_len);
+  isize len = xkb_keysym_get_name(event.key.keycode, (char *)res.str, res.size);
+  if (len) {
+    arena_pop(arena, approx_len - len);
+    res.size = len;
+  }
   return res;
 }
 

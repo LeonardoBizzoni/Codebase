@@ -7,6 +7,8 @@ fn void unx_gfx_init(void) {
   x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
 }
 
+fn void unx_gfx_deinit(void) {}
+
 fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   X11_Window *window = x11_state.freelist_window;
   if (window) {

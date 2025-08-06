@@ -4,7 +4,8 @@
 #include <sys/un.h>
 #include <poll.h>
 
-// Wl protocol numeric values
+#include <xkbcommon/xkbcommon.h>
+
 #define WL_DISPLAY_OBJECT_ID 1
 #define WL_REGISTRY_EVENT_GLOBAL 0
 #define WL_REGISTRY_EVENT_GLOBAL_REMOVE 1
@@ -29,14 +30,43 @@
 #define WL_SURFACE_ATTACH_OPCODE 1
 #define WL_XDG_SURFACE_GET_TOPLEVEL_OPCODE 1
 #define WL_SURFACE_COMMIT_OPCODE 6
+#define WL_SEAT_GET_POINTER_OPCODE 0
+#define WL_SEAT_GET_KEYBOARD_OPCODE 1
+#define WL_SEAT_GET_TOUCH_OPCODE 2
+#define WL_SEAT_RELEASE_OPCODE 3
+#define WL_SEAT_CAPABILITIES_EVENT 0
+#define WL_KEYBOARD_FORMAT_NO_KEYMAP 0
+#define WL_KEYBOARD_FORMAT_XKB_V1 1
+#define WL_KEYBOARD_KEYMAP_EVENT 0
+#define WL_KEYBOARD_ENTER_EVENT 1
+#define WL_KEYBOARD_LEAVE_EVENT 2
+#define WL_KEYBOARD_KEY_EVENT 3
+#define WL_KEYBOARD_KEY_STATE_RELEASED 0
+#define WL_KEYBOARD_KEY_STATE_PRESSED 1
+#define WL_KEYBOARD_KEY_STATE_REPEATED 2
+#define WL_KEYBOARD_MODIFIERS_EVENT 4
+#define WL_KEYBOARD_REPEAT_INFO_EVENT 5
 #define WL_DISPLAY_ERROR_EVENT 0
 #define WL_FORMAT_XRGB8888 1
 #define WL_RINGBUFFER_SIZE 20
 #define WL_RINGBUFFER_BYTE_COUNT 256
 #define WL_RINGBUFFER_CAPACITY (WL_RINGBUFFER_SIZE * WL_RINGBUFFER_BYTE_COUNT)
+#define WL_MAX_FDS 10
+
+#define WL_EVDEV_SCANCODE_TO_XKB(EVDEV_SCANCODE) (EVDEV_SCANCODE + 8)
+
+typedef u32 wl_identifier;
+typedef i32 wl_display;
+
+typedef u32 wl_capabilities;
+enum {
+  Wl_Capabilities_Pointer  = 1 << 0,
+  Wl_Capabilities_Keyboard = 1 << 1,
+  Wl_Capabilities_Touch    = 1 << 2,
+};
 
 typedef struct {
-  u32 id;
+  wl_identifier id;
   u16 opcode;
   u16 size;
 } Wl_MessageHeader;
@@ -47,11 +77,11 @@ typedef struct Wl_WindowEvent {
 } Wl_WindowEvent;
 
 typedef struct Wl_Window {
-  u32 wl_buffer;
-  u32 wl_shm_pool;
-  u32 wl_surface;
-  u32 xdg_surface;
-  u32 xdg_toplevel;
+  wl_identifier wl_buffer;
+  wl_identifier wl_shm_pool;
+  wl_identifier wl_surface;
+  wl_identifier xdg_surface;
+  wl_identifier xdg_toplevel;
 
   bool xdg_surface_acked;
 
@@ -79,11 +109,19 @@ typedef struct {
   OS_Handle msg_dispatcher;
 
   u32 curr_id;
-  u32 display;
-  u32 registry;
-  u32 wl_shm;
-  u32 wl_compositor;
-  u32 xdg_wm_base;
+  wl_display sockfd;
+  wl_identifier registry;
+  wl_identifier wl_shm;
+  wl_identifier wl_compositor;
+  wl_identifier wl_seat;
+  wl_identifier wl_pointer;
+  wl_identifier wl_keyboard;
+  wl_identifier wl_touch;
+  wl_identifier xdg_wm_base;
+
+  struct xkb_context *xkb_context;
+  struct xkb_keymap *xkb_keymap;
+  struct xkb_state *xkb_state;
 
   struct {
     OS_Handle mutex;
@@ -96,9 +134,9 @@ typedef struct {
   Wl_Window *last_window;
 } Wl_State;
 
-fn u32 wl_allocate_id(void);
+fn wl_identifier wl_allocate_id(void);
 fn i32 wl_display_connect(void);
-fn u32 wl_display_get_registry(void);
+fn wl_identifier wl_display_get_registry(void);
 
 fn void wl_compositor_msg_receiver(void *_);
 fn void wl_compositor_msg_dispatcher(void *_);

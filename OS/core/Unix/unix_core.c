@@ -730,7 +730,7 @@ fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
   void *handle = (void*)lib.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, cstr_from_str8(scratch.arena, symbol));
-  AssertMsg(result, dlerror());
+  /* AssertMsg(result, dlerror()); */
   ScratchEnd(scratch);
   return result;
 #else

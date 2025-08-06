@@ -62,13 +62,14 @@ fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
 }
 
 fn bool fs_copy(String8 source, String8 destination) {
+  struct stat stat_src = {0};
+
   Scratch scratch = ScratchBegin(0, 0);
   i32 src = open(cstr_from_str8(scratch.arena, source), O_RDONLY, 0);
-  i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, 0644);
+  fstat(src, &stat_src);
+  i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, stat_src.st_mode);
   ScratchEnd(scratch);
 
-  struct stat stat_src = {0};
-  fstat(src, &stat_src);
   isize res = sendfile(dest, src, 0, stat_src.st_size);
   fchmod(dest, stat_src.st_mode & 0777);
 

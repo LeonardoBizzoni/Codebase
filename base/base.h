@@ -258,11 +258,12 @@ typedef uint32_t u32;
 typedef int64_t i64;
 typedef uint64_t u64;
 
-#if !CPP && __STDC_VERSION__ < 202311L
-typedef enum {
-  false,
-  true
-} bool;
+#if !CPP
+#  if __STDC_VERSION__ >= 199901L
+#    include <stdbool.h>
+#  else
+typedef enum {false, true} bool;
+#  endif
 #endif
 
 #if defined(ARCH_X64) || defined(ARCH_ARM64)
