@@ -228,6 +228,8 @@
 #define local static
 #define fn static
 
+#define fallthrough
+
 #if CPP
 #  define CExport extern "C"
 #  define CExportBegin extern "C" {

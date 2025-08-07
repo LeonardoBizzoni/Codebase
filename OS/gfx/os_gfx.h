@@ -11,9 +11,25 @@ enum {
 
   OS_EventType_KeyDown,
   OS_EventType_KeyUp,
+  OS_EventType_BtnDown,
+  OS_EventType_BtnUp,
+
+  OS_EventType_PointerMotion,
 
   OS_EventType_GamepadConnected,
   OS_EventType_GamepadDisconnected,
+};
+
+typedef u16 OS_PtrButton;
+enum {
+  OS_PtrButton_Left,
+  OS_PtrButton_Right,
+  OS_PtrButton_Middle,
+  OS_PtrButton_Side,
+  OS_PtrButton_Extra,
+  OS_PtrButton_Forward,
+  OS_PtrButton_Back,
+  OS_PtrButton_Task,
 };
 
 typedef struct {
@@ -28,6 +44,8 @@ typedef struct {
       u32 keycode;  // keyboard layout dependent
       u32 scancode; // keyboard layout independent
     } key;
+    OS_PtrButton btn;
+    Vec2f32 pointer;
   };
 } OS_Event;
 
@@ -37,15 +55,10 @@ typedef struct {
 } OS_BtnState;
 
 typedef struct {
-  f32 x; // negative values left, positive right
-  f32 y; // negative values down, positivie up
-} OS_GamepadStick;
-
-typedef struct {
   bool active;
 
-  OS_GamepadStick stick_left;
-  OS_GamepadStick stick_right;
+  Vec2f32 stick_left;  // negative X values left, positive right
+  Vec2f32 stick_right; // negative Y values down, positivie up
 
   f32 r2;
   f32 l2;

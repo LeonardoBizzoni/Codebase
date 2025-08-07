@@ -367,7 +367,59 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *receive
     }
   }
   else if (header->id == waystate.wl_pointer) {
-    /* Warn("unhandled wl_pointer event"); */
+    switch (header->opcode) {
+    case WL_POINTER_ENTER_EVENT: {
+      body += sizeof(i32);
+      wl_identifier surface = *(u32*)(body); body += sizeof(i32);
+      ptr_focus = wl_window_from_surface(surface);
+    } fallthrough;
+    case WL_POINTER_MOTION_EVENT: {
+      AssertMsg(ptr_focus, "wl_pointer::motion no focused window");
+
+      body += sizeof(u32);
+      Wl_WindowEvent *event = wl_alloc_windowevent();
+      event->value.pointer.x = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f); body += sizeof(i32);
+      event->value.pointer.y = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f); body += sizeof(i32);
+      event->value.type = OS_EventType_PointerMotion;
+      OS_MutexScope(ptr_focus->events.mutex) {
+        QueuePush(ptr_focus->events.first, ptr_focus->events.last, event);
+        os_cond_signal(ptr_focus->events.condvar);
+      }
+    } break;
+    case WL_POINTER_BUTTON_EVENT: {
+      AssertMsg(ptr_focus, "wl_pointer::button no focused window");
+
+      body += 2 * sizeof(u32);
+      u32 button = *(u32*)body; body += sizeof(u32);
+      u32 state = *(u32*)body; body += sizeof(u32);
+
+      Wl_WindowEvent *event = wl_alloc_windowevent();
+      Assert(button >= WL_POINTER_BTN_LEFT && button <= WL_POINTER_BTN_TASK);
+      event->value.btn = button - WL_POINTER_BTN_LEFT;
+      switch (state) {
+      case WL_POINTER_BUTTON_STATE_RELEASED: {
+        event->value.type = OS_EventType_BtnUp;
+      } break;
+      case WL_POINTER_BUTTON_STATE_PRESSED: {
+        event->value.type = OS_EventType_BtnDown;
+      } break;
+      default: Panic("wl_pointer::button unknown state");
+      }
+    } break;
+
+    case WL_POINTER_AXIS_EVENT: {} break;
+    case WL_POINTER_AXIS_SOURCE_EVENT: {} break;
+    case WL_POINTER_AXIS_VALUE120_EVENT: {} break;
+    case WL_POINTER_AXIS_RELATIVE_DIRECTION_EVENT: {} break;
+    case WL_POINTER_FRAME_EVENT: {
+      // NOTE(lb): push a single event generated from handling the previous axis events
+      //           ignoring wl_pointer::axis_source cause i don't think i care about it
+    } break;
+
+    default: {
+      Warn("unhandled wl_pointer event: %d", header->opcode);
+    } break;
+    }
   }
   else if (header->id == waystate.wl_keyboard) {
     switch (header->opcode) {

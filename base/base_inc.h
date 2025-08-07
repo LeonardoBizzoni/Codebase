@@ -7,6 +7,7 @@
 #include "thread_ctx.h"
 #include "time.h"
 #include "string.h"
+#include "vector.h"
 
 #if CPP
 #  include "array.hpp"
