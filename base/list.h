@@ -43,7 +43,7 @@
           NodeToInsertptr->Prev = DLLNodeLast, DLLNodeLast = NodeToInsertptr))
 
 #define DLLDelete(Head, Last, Nodeptr)                                         \
-  (!(Head)->next && (Head) == (Nodeptr)                                        \
+  ((Head) == (Last) && (Head) == (Nodeptr)                                     \
        ? (Head) = (Last) = 0                                                   \
        : ((Last) == (Nodeptr)                                                  \
               ? ((Last) = (Last)->prev, (Last)->next = 0)                      \

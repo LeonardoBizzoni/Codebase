@@ -11,6 +11,8 @@ enum {
 
   OS_EventType_KeyDown,
   OS_EventType_KeyUp,
+
+  OS_EventType_BtnDrag,
   OS_EventType_BtnDown,
   OS_EventType_BtnUp,
 
@@ -22,6 +24,7 @@ enum {
 
 typedef u16 OS_PtrButton;
 enum {
+  OS_PtrButton_None,
   OS_PtrButton_Left,
   OS_PtrButton_Right,
   OS_PtrButton_Middle,
@@ -44,7 +47,15 @@ typedef struct {
       u32 keycode;  // keyboard layout dependent
       u32 scancode; // keyboard layout independent
     } key;
-    OS_PtrButton btn;
+    struct {
+      OS_PtrButton id;
+      Vec2f32 position;
+    } btn;
+    struct {
+      OS_PtrButton id;
+      Vec2f32 end;
+      Vec2f32 start;
+    } drag;
     Vec2f32 pointer;
   };
 } OS_Event;
@@ -86,6 +97,11 @@ typedef struct {
     };
   };
 } OS_Gamepad;
+
+typedef struct {
+  Vec2f32 pointer;
+  OS_Gamepad gamepad[MAX_SUPPORTED_GAMEPAD];
+} OS_InputDeviceState;
 
 typedef struct {
   u32 width, height;

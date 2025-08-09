@@ -378,8 +378,10 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *receive
 
       body += sizeof(u32);
       Wl_WindowEvent *event = wl_alloc_windowevent();
-      event->value.pointer.x = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f); body += sizeof(i32);
-      event->value.pointer.y = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f); body += sizeof(i32);
+      os_input_device.pointer.x = event->value.pointer.x = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f);
+      body += sizeof(i32);
+      os_input_device.pointer.y = event->value.pointer.y = ClampBot(WL_F32_FROM_FIXED(*(i32*)body), 0.f);
+      body += sizeof(i32);
       event->value.type = OS_EventType_PointerMotion;
       OS_MutexScope(ptr_focus->events.mutex) {
         QueuePush(ptr_focus->events.first, ptr_focus->events.last, event);
@@ -389,21 +391,66 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *receive
     case WL_POINTER_BUTTON_EVENT: {
       AssertMsg(ptr_focus, "wl_pointer::button no focused window");
 
+      struct BtnPressInfo {
+        OS_PtrButton id;
+        Vec2f32 position;
+        struct BtnPressInfo *next;
+        struct BtnPressInfo *prev;
+      };
+
+      local usize btninfo_idx = 0;
+      local struct BtnPressInfo btninfo_list[WL_POINTER_BTN_TASK - WL_POINTER_BTN_LEFT] = {};
+      local struct BtnPressInfo *first = 0;
+      local struct BtnPressInfo *last = 0;
+      local struct BtnPressInfo *freestack = 0;
+
       body += 2 * sizeof(u32);
       u32 button = *(u32*)body; body += sizeof(u32);
       u32 state = *(u32*)body; body += sizeof(u32);
 
       Wl_WindowEvent *event = wl_alloc_windowevent();
       Assert(button >= WL_POINTER_BTN_LEFT && button <= WL_POINTER_BTN_TASK);
-      event->value.btn = button - WL_POINTER_BTN_LEFT;
+      event->value.btn.id = button - WL_POINTER_BTN_LEFT + 1;
+      memcopy(event->value.btn.position.values, os_input_device.pointer.values, 2 * sizeof(f32));
       switch (state) {
       case WL_POINTER_BUTTON_STATE_RELEASED: {
         event->value.type = OS_EventType_BtnUp;
+
+        for (struct BtnPressInfo *curr = first; curr; curr = curr->next) {
+          if (curr->id == event->value.btn.id) {
+            if (!(ApproxEq(curr->position.x, os_input_device.pointer.x) &&
+                  ApproxEq(curr->position.y, os_input_device.pointer.y))) {
+              event->value.type = OS_EventType_BtnDrag;
+              memcopy(event->value.drag.start.values, curr->position.values, 2 * sizeof(f32));
+            }
+            DLLDelete(first, last, curr);
+            curr->prev = curr->next = 0;
+            StackPush(freestack, curr);
+            break;
+          }
+        }
       } break;
       case WL_POINTER_BUTTON_STATE_PRESSED: {
         event->value.type = OS_EventType_BtnDown;
+
+        struct BtnPressInfo *node = freestack;
+        if (node) {
+          StackPop(freestack);
+          node->prev = node->next = 0;
+        } else {
+          node = &btninfo_list[btninfo_idx++];
+          Assert(btninfo_idx <= WL_POINTER_BTN_TASK - WL_POINTER_BTN_LEFT);
+        }
+        node->id = event->value.btn.id;
+        memcopy(node->position.values, os_input_device.pointer.values, 2 * sizeof(f32));
+        DLLPushBack(first, last, node);
       } break;
       default: Panic("wl_pointer::button unknown state");
+      }
+
+      OS_MutexScope(ptr_focus->events.mutex) {
+        QueuePush(ptr_focus->events.first, ptr_focus->events.last, event);
+        os_cond_signal(ptr_focus->events.condvar);
       }
     } break;
 
@@ -520,15 +567,14 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *receive
           i32 width = *(i32*)body;
           i32 height = *(i32*)(body + sizeof(i32));
           isize memsize = width * height * 4;
-          if (memsize > 0) {
-            Wl_WindowEvent *event = wl_alloc_windowevent();
-            event->value.type = OS_EventType_Expose;
-            event->value.expose.width = width;
-            event->value.expose.height = height;
-            OS_MutexScope(curr->events.mutex) {
-              QueuePush(curr->events.first, curr->events.last, event);
-              os_cond_signal(curr->events.condvar);
-            }
+          Assert(memsize > 0);
+          Wl_WindowEvent *event = wl_alloc_windowevent();
+          event->value.type = OS_EventType_Expose;
+          event->value.expose.width = width;
+          event->value.expose.height = height;
+          OS_MutexScope(curr->events.mutex) {
+            QueuePush(curr->events.first, curr->events.last, event);
+            os_cond_signal(curr->events.condvar);
           }
         } break;
         case WL_XDG_TOPLEVEL_EVENT_CLOSE: {
@@ -651,6 +697,8 @@ fn void wl_compositor_msg_dispatcher(void *_) {
       }
     }
     waystate.msg_ringbuffer.head = waystate.msg_ringbuffer.tail;
+
+    os_thread_cancelpoint();
   }
   Panic("wl_compositor_msg_dispatcher terminated");
 }
@@ -718,14 +766,12 @@ fn void os_window_render(OS_Window window_, void *mem) {
     wl_shm_pool_resize(window->wl_shm_pool, memsize);
   }
 
-  if (memsize != window->shm.prop.size) {
-    wl_buffer_destroy(window->wl_buffer);
-    window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool,
-                                                  window_.width,
-                                                  window_.height,
-                                                  window_.width * 4);
-    wl_surface_attach(window->wl_surface, window->wl_buffer);
-  }
+  wl_buffer_destroy(window->wl_buffer);
+  window->wl_buffer = wl_shm_pool_create_buffer(window->wl_shm_pool,
+                                                window_.width,
+                                                window_.height,
+                                                window_.width * 4);
+  wl_surface_attach(window->wl_surface, window->wl_buffer);
 
   memcopy(window->shm.content, mem, memsize);
   wl_surface_commit(window->wl_surface);
@@ -745,7 +791,7 @@ fn OS_Event os_window_get_event(OS_Window window_) {
   }
   if (event) {
     OS_MutexScope(waystate.events.mutex) {
-      QueuePush(waystate.events.first, waystate.events.first, event);
+      QueuePush(waystate.events.first, waystate.events.last, event);
     }
   }
 
@@ -765,7 +811,7 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
     QueuePop(window->events.first);
   }
   OS_MutexScope(waystate.events.mutex) {
-    QueuePush(waystate.events.first, waystate.events.first, event);
+    QueuePush(waystate.events.first, waystate.events.last, event);
   }
 
   return res;

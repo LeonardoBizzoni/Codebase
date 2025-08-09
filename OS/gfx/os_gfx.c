@@ -1,1 +1,1 @@
-global OS_Gamepad os_gamepad[MAX_SUPPORTED_GAMEPAD] = {};
+global OS_InputDeviceState os_input_device = {};
