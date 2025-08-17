@@ -98,7 +98,7 @@ fn time64 os_local_now(void) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   time64 res = time64_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
-  res |= (u64)(tms.tv_nsec / 1e6);
+  res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -107,7 +107,7 @@ fn DateTime os_local_dateTimeNow(void) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   DateTime res = datetime_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
-  res.ms = tms.tv_nsec / 1e6;
+  res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -129,7 +129,7 @@ fn time64 os_utc_now(void) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   time64 res = time64_from_unix(tms.tv_sec);
-  res |= (u64)(tms.tv_nsec / 1e6);
+  res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -138,7 +138,7 @@ fn DateTime os_utc_dateTimeNow(void) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   DateTime res = datetime_from_unix(tms.tv_sec);
-  res.ms = tms.tv_nsec / 1e6;
+  res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -147,7 +147,7 @@ fn time64 os_utc_localizedTime64(i8 utc_offset) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   time64 res = time64_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
-  res |= (u64)(tms.tv_nsec / 1e6);
+  res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -156,7 +156,7 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   DateTime res = datetime_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
-  res.ms = tms.tv_nsec / 1e6;
+  res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
@@ -174,7 +174,7 @@ fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {
 }
 
 fn void os_sleep_milliseconds(u32 ms) {
-  usleep(ms * 1e3);
+  usleep((useconds_t)(ms * 1e3));
 }
 
 fn void unx_sleep_nanoseconds(u32 ns) {
@@ -199,19 +199,19 @@ fn OS_Handle os_timer_start(void) {
 fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
   struct timespec tstart = ((UNX_Primitive *)start.h[0])->timer;
   struct timespec tend = ((UNX_Primitive *)end.h[0])->timer;
-  u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * 1e9 +
+  u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * (u64)1e9 +
                    (tend.tv_nsec - tstart.tv_nsec);
 
   u64 res = 0;
   switch (unit) {
     case OS_TimerGranularity_min: {
-      res = (u64)((diff_nanos / 1e9) / 60);
+      res = (u64)(((f64)diff_nanos / 1e9) / 60.0);
     } break;
     case OS_TimerGranularity_sec: {
-      res = (u64)(diff_nanos / 1e9);
+      res = (u64)((f64)diff_nanos / 1e9);
     } break;
     case OS_TimerGranularity_ms: {
-      res = (u64)(diff_nanos / 1e6);
+      res = (u64)((f64)diff_nanos / 1e6);
     } break;
     case OS_TimerGranularity_ns: {
       res = diff_nanos;
@@ -472,11 +472,11 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
-    if (abstime.tv_nsec >= 1e9) {
+    abstime.tv_sec += (i32)((f64)wait_at_most_microsec / 1e6);
+    abstime.tv_nsec += (i32)((i32)1e3 * (wait_at_most_microsec % (u32)1e6));
+    if (abstime.tv_nsec >= (i32)1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e9;
+      abstime.tv_nsec -= (i32)1e9;
     }
 
     return pthread_cond_timedwait(&cond_prim->condvar.cond, &mutex_prim->mutex, &abstime) == 0;
@@ -495,11 +495,11 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
-    if (abstime.tv_nsec >= 1e9) {
+    abstime.tv_sec += (i32)((f64)wait_at_most_microsec / 1e6);
+    abstime.tv_nsec += (i32)1e3 * (i32)(wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= (i32)1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e9;
+      abstime.tv_nsec -= (i32)1e9;
     }
 
     pthread_mutex_lock(&cond_prim->condvar.mutex);
@@ -531,11 +531,11 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
-    if (abstime.tv_nsec >= 1e9) {
+    abstime.tv_sec += (i32)((f64)wait_at_most_microsec / 1e6);
+    abstime.tv_nsec += (i32)1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= (i32)1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e9;
+      abstime.tv_nsec -= (i32)1e9;
     }
 
     pthread_mutex_lock(&cond_prim->condvar.mutex);
@@ -628,11 +628,11 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
-    abstime.tv_sec += wait_at_most_microsec/1e6;
-    abstime.tv_nsec += 1e3 * (wait_at_most_microsec % (u32)1e6);
-    if (abstime.tv_nsec >= 1e9) {
+    abstime.tv_sec += (i32)((f64)wait_at_most_microsec / 1e6);
+    abstime.tv_nsec += (i32)1e3 * (wait_at_most_microsec % (u32)1e6);
+    if (abstime.tv_nsec >= (i32)1e9) {
       abstime.tv_sec += 1;
-      abstime.tv_nsec -= 1e9;
+      abstime.tv_nsec -= (i32)1e9;
     }
 
     return sem_timedwait(prim->semaphore.sem, &abstime) == 0;
@@ -680,10 +680,10 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   AssertMsg(res.file_handle.h[0] >= 0, "shm_open failed");
   ScratchEnd(scratch);
 
-  Assert(!ftruncate(res.file_handle.h[0], size));
+  Assert(!ftruncate((i32)res.file_handle.h[0], size));
   res.prop.size = size;
   res.content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_SHARED, res.file_handle.h[0], 0);
+                           MAP_SHARED, (i32)res.file_handle.h[0], 0);
   Assert(res.content != MAP_FAILED);
 
   return res;
@@ -691,10 +691,10 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 
 fn void os_sharedmem_resize(SharedMem *shm, usize size) {
   Assert(size);
-  Assert(!ftruncate(shm->file_handle.h[0], size));
+  Assert(!ftruncate((i32)shm->file_handle.h[0], size));
   munmap(shm->content, shm->prop.size);
   shm->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_SHARED, shm->file_handle.h[0], 0);
+                           MAP_SHARED, (i32)shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
 }
@@ -709,7 +709,7 @@ fn void os_sharedmem_unlink_name(SharedMem *shm) {
 fn void os_sharedmem_close(SharedMem *shm) {
   os_sharedmem_unlink_name(shm);
   munmap(shm->content, shm->prop.size);
-  close(shm->file_handle.h[0]);
+  close((i32)shm->file_handle.h[0]);
 }
 
 // =============================================================================
@@ -879,7 +879,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
     case OS_Net_Network_IPv4: {
       cdomain = AF_INET;
       struct sockaddr_in *addr = (struct sockaddr_in*)&prim->socket.addr;
-      addr->sin_family = cdomain;
+      addr->sin_family = (sa_family_t)cdomain;
       addr->sin_port = htons(port);
       memcopy(&addr->sin_addr, server.v4.bytes, 4 * sizeof(u8));
       prim->socket.size = sizeof(struct sockaddr_in);
@@ -887,7 +887,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
     case OS_Net_Network_IPv6: {
       cdomain = AF_INET6;
       struct sockaddr_in6 *addr = (struct sockaddr_in6*)&prim->socket.addr;
-      addr->sin6_family = cdomain;
+      addr->sin6_family = (sa_family_t)cdomain;
       addr->sin6_port = htons(port);
       memcopy(&addr->sin6_addr, server.v4.bytes, 8 * sizeof(u16));
       prim->socket.size = sizeof(struct sockaddr_in6);
@@ -972,7 +972,7 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
   u8 *res = New(arena, u8, buffer_size);
   UNX_Primitive *prim = (UNX_Primitive*)client->handle.h[0];
-  read(prim->socket.fd, res, buffer_size);
+  (void)read(prim->socket.fd, res, buffer_size);
   return res;
 }
 
@@ -1020,7 +1020,7 @@ fn void os_socket_close(OS_Socket *socket) {
 // =============================================================================
 // File reading and writing/appending
 fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
-  int fd = file.h[0];
+  int fd = (i32)file.h[0];
   String8 result = {};
   if(!fd) { return result; }
 
@@ -1034,7 +1034,7 @@ fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
 }
 
 fn String8 fs_read(Arena *arena, OS_Handle file) {
-  int fd = file.h[0];
+  int fd = (i32)file.h[0];
   String8 result = {};
   if(!fd) { return result; }
 
@@ -1052,7 +1052,7 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
 
 inline fn bool fs_write(OS_Handle file, String8 content) {
   if(!file.h[0]) { return false; }
-  return write(file.h[0], content.str, content.size) == (isize)content.size;
+  return write((i32)file.h[0], content.str, content.size) == (isize)content.size;
 }
 
 fn FS_Properties fs_get_properties(OS_Handle file) {
@@ -1083,7 +1083,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
   File file = {};
-  i32 flags = fcntl(fd.h[0], F_GETFL);
+  i32 flags = fcntl((i32)fd.h[0], F_GETFL);
   if (flags < 0) { return file; }
   flags &= O_ACCMODE;
   if (!flags) {
@@ -1096,7 +1096,7 @@ fn File fs_fopen(Arena *arena, OS_Handle fd) {
   file.path = fs_path_from_handle(arena, fd);
   file.prop = fs_get_properties(file.file_handle);
   file.content = (u8 *)mmap(0, ClampBot(file.prop.size, 1),
-                            flags, MAP_SHARED, fd.h[0], 0);
+                            flags, MAP_SHARED, (i32)fd.h[0], 0);
   file.mmap_handle.h[0] = (u64)file.content;
 
   return file;
@@ -1125,14 +1125,14 @@ inline fn bool fs_fclose(File *file) {
 }
 
 inline fn bool fs_fresize(File *file, usize size) {
-  if (ftruncate(file->file_handle.h[0], size) < 0) {
+  if (ftruncate((i32)file->file_handle.h[0], size) < 0) {
     return false;
   }
 
   file->prop.size = size;
   (void)munmap(file->content, file->prop.size);
   file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                            file->file_handle.h[0], 0);
+                            (i32)file->file_handle.h[0], 0);
   return (isize)file->content > 0;
 }
 

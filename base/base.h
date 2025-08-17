@@ -111,6 +111,19 @@
 #  define OS_UNIXLIKE 0
 #endif
 
+#if !defined(LNX_X11)
+#  define LNX_X11 0
+#endif
+#if !defined(LNX_WAYLAND)
+#  define LNX_WAYLAND 0
+#endif
+#if !defined(BSD_X11)
+#  define BSD_X11 0
+#endif
+#if !defined(BSD_WAYLAND)
+#  define BSD_WAYLAND 0
+#endif
+
 #if defined(DEBUG)
 #  undef DEBUG
 #  define DEBUG 1

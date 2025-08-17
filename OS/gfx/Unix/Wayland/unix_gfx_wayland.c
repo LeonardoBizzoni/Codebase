@@ -37,7 +37,8 @@ fn i32 wl_display_connect(void) {
   // UNIX domain sockets
   struct sockaddr_un addr = {};
   addr.sun_family = AF_UNIX;
-  Assert(xdg_runtime_dir.size > 0 && xdg_runtime_dir.size <= Arrsize(addr.sun_path));
+  Assert(xdg_runtime_dir.size > 0 &&
+         xdg_runtime_dir.size <= (isize)Arrsize(addr.sun_path));
 
   Scratch scratch = ScratchBegin(0, 0);
   StringStream ss = {};
@@ -68,7 +69,7 @@ fn u32 wl_display_get_registry(void) {
 #if DEBUG
   u8 *raw = (u8*)&req;
   dbg_print("wl_display_get_registry:");
-  for (int i = 0; i < sizeof(req); i += 4) {
+  for (u32 i = 0; i < sizeof(req); i += 4) {
     dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
   }
 #endif
@@ -79,29 +80,30 @@ fn u32 wl_display_get_registry(void) {
 
 fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
   Scratch scratch = ScratchBegin(0, 0);
-  usize padded_interface_len = align_forward(interface.size, 4);
-  usize total_size = align_forward(sizeof(Wl_MessageHeader) + 4 * sizeof(u32) +
-                                  padded_interface_len, 4);
+  u32 padded_interface_len = (u32)align_forward(interface.size, 4);
+  u32 total_size = (u32)align_forward(sizeof(Wl_MessageHeader)
+                                      + 4 * sizeof(u32)
+                                      + padded_interface_len, 4);
 
   u8 *req = New(scratch.arena, u8, total_size);
 
   Wl_MessageHeader *header = (Wl_MessageHeader *)req;
   header->id = waystate.registry;
   header->opcode = WL_REGISTRY_BIND_OPCODE;
-  header->size = total_size;
+  header->size = (u16)total_size;
 
   u8 *body = req + sizeof(Wl_MessageHeader);
-  *body = name; body += sizeof(u32);
-  *body = padded_interface_len; body += sizeof(u32);
+  *(u32*)body = name; body += sizeof(u32);
+  *(u32*)body = padded_interface_len; body += sizeof(u32);
   memcopy(body, interface.str, interface.size);
   body += padded_interface_len;
-  *body = version; body += sizeof(u32);
-  u32 new_id = *body = wl_allocate_id();
+  *(u32*)body = version; body += sizeof(u32);
+  u32 new_id = *(u32*)body = wl_allocate_id();
 
 #if DEBUG
   u8 *raw = req;
   dbg_print("wl_registry_bind:");
-  for (int i = 0; i < total_size; i += 4) {
+  for (u32 i = 0; i < total_size; i += 4) {
     dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
   }
 #endif
@@ -221,7 +223,7 @@ fn u32 wl_shm_create_pool(SharedMem shm, u32 size) {
   cmsg->cmsg_type = SCM_RIGHTS;
   cmsg->cmsg_len = CMSG_LEN(sizeof(shm.file_handle.h[0]));
 
-  *((i32*)CMSG_DATA(cmsg)) = shm.file_handle.h[0];
+  *((i32*)CMSG_DATA(cmsg)) = (i32)shm.file_handle.h[0];
   socket_msg.msg_controllen = CMSG_SPACE(sizeof(shm.file_handle.h[0]));
   AssertMsg(sendmsg(waystate.sockfd, &socket_msg, 0) != -1, "wl_shm_create_pool");
   return req.new_id;
@@ -410,7 +412,7 @@ fn void wl_compositor_msg_parse(Wl_MessageHeader *header, u8 *body, i32 *receive
 
       Wl_WindowEvent *event = wl_alloc_windowevent();
       Assert(button >= WL_POINTER_BTN_LEFT && button <= WL_POINTER_BTN_TASK);
-      event->value.btn.id = button - WL_POINTER_BTN_LEFT + 1;
+      event->value.btn.id = (u16)(button - WL_POINTER_BTN_LEFT + 1);
       memcopy(event->value.btn.position.values, os_input_device.pointer.values, 2 * sizeof(f32));
       switch (state) {
       case WL_POINTER_BUTTON_STATE_RELEASED: {
@@ -628,7 +630,7 @@ fn void wl_compositor_msg_dispatcher(void *_) {
            cmsg = CMSG_NXTHDR(&msg, cmsg)) {
         if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
           i32 *fds = (i32 *)CMSG_DATA(cmsg);
-          i32 fd_count = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(i32);
+          i32 fd_count = (i32)((cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(i32));
           for (i32 i = 0; i < fd_count && num_fds < WL_MAX_FDS; i++) {
             received_fds[num_fds++] = fds[i];
           }
@@ -760,7 +762,7 @@ fn void os_window_swapBuffers(OS_Window handle) {}
 
 fn void os_window_render(OS_Window window_, void *mem) {
   Wl_Window *window = (Wl_Window*)window_.handle.h[0];
-  usize memsize = window_.width * window_.height * 4;
+  u32 memsize = window_.width * window_.height * 4;
   if (memsize > window->shm.prop.size) {
     os_sharedmem_resize(&window->shm, memsize);
     wl_shm_pool_resize(window->wl_shm_pool, memsize);

@@ -15,8 +15,8 @@
 #endif
 
 // TODO(lb): find a place for this
-#ifndef PLATFORM_CODERBOT
-#  include "../image.h"
-#endif
+/* #ifndef PLATFORM_CODERBOT */
+/* #  include "../image.h" */
+/* #endif */
 
 #endif

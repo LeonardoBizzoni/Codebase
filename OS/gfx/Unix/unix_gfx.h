@@ -4,13 +4,13 @@
 fn void unx_gfx_init(void);
 fn void unx_gfx_deinit(void);
 
-#if defined(LNX_X11) || defined(BSD_X11)
+#if LNX_X11 || BSD_X11
 #  define UNX_X11 1
 #else
 #  define UNX_X11 0
 #endif
 
-#if defined(LNX_WAYLAND) || defined(BSD_WAYLAND)
+#if LNX_WAYLAND || BSD_WAYLAND
 #  define UNX_WAYLAND 1
 #else
 #  define UNX_WAYLAND 0

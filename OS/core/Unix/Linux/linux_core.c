@@ -52,7 +52,7 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
 }
 
 fn bool fs_close(OS_Handle fd) {
-  return close(fd.h[0]) == 0;
+  return close((i32)fd.h[0]) == 0;
 }
 
 fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
@@ -95,7 +95,7 @@ fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period
     .sched_deadline = deadline_ns,
     .sched_period = period_ns
   };
-  return syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
+  return (i32)syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
 }
 
 fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
@@ -127,8 +127,8 @@ fn void lnx_signal_wait(i32 signal) {
 
 // =============================================================================
 i32 main(i32 argc, char **argv) {
-  srand(time(0));
-  unx_state.info.core_count = get_nprocs();
+  srand((u32)time(0));
+  unx_state.info.core_count = (u8)get_nprocs();
   unx_state.info.page_size = getpagesize();
   unx_state.info.hostname = unx_gethostname();
 
