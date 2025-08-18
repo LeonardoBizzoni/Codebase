@@ -79,37 +79,43 @@ fn u32 wl_display_get_registry(void) {
 }
 
 fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
-  Scratch scratch = ScratchBegin(0, 0);
-  u32 padded_interface_len = (u32)align_forward(interface.size, 4);
-  u32 total_size = (u32)align_forward(sizeof(Wl_MessageHeader)
-                                      + 4 * sizeof(u32)
-                                      + padded_interface_len, 4);
+  /* struct message {
+   *   Wl_MessageHeader header;
+   *   u32 name;
+   *   u32 string_size;
+   *   char string[string_size];
+   *   u32 version;
+   *   u32 new_id;
+   * }; */
 
-  u8 *req = New(scratch.arena, u8, total_size);
+  u8 bytes[255] = {};
+  usize offset = 0;
+  u32 new_id = wl_allocate_id();
 
-  Wl_MessageHeader *header = (Wl_MessageHeader *)req;
-  header->id = waystate.registry;
-  header->opcode = WL_REGISTRY_BIND_OPCODE;
-  header->size = (u16)total_size;
+  *(bytes + offset) = waystate.registry; offset += sizeof(wl_identifier);
+  *(bytes + offset) = WL_REGISTRY_BIND_OPCODE; offset += sizeof(u16);
+  // skip the size
+  offset += sizeof(u16);
 
-  u8 *body = req + sizeof(Wl_MessageHeader);
-  *(u32*)body = name; body += sizeof(u32);
-  *(u32*)body = padded_interface_len; body += sizeof(u32);
-  memcopy(body, interface.str, interface.size);
-  body += padded_interface_len;
-  *(u32*)body = version; body += sizeof(u32);
-  u32 new_id = *(u32*)body = wl_allocate_id();
+  *(bytes + offset) = name; offset += sizeof(u32);
+  // NOTE(lb): the string size includes the null byte
+  *(bytes + offset) = interface.size + 1; offset += sizeof(u32);
+  memcopy(bytes + offset, interface.str, interface.size); offset += (interface.size + 3) & -4;
+  *(bytes + offset) = version; offset += sizeof(u32);
+  *(bytes + offset) = new_id; offset += sizeof(u32);
+
+  offset = (offset + 3) & -4;
+  *(bytes + sizeof(wl_identifier) + sizeof(u16)) = offset;
 
 #if DEBUG
-  u8 *raw = req;
-  dbg_print("wl_registry_bind:");
-  for (u32 i = 0; i < total_size; i += 4) {
+  u8 *raw = bytes;
+  dbg_print("wl_registry_bind [%.*s]:", Strexpand(interface));
+  for (u32 i = 0; i < offset; i += 4) {
     dbg_print("\t%02x %02x %02x %02x", raw[i], raw[i+1], raw[i+2], raw[i+3]);
   }
 #endif
 
-  AssertMsg(total_size == send(waystate.sockfd, req, total_size, MSG_DONTWAIT), "wl_registry_bind");
-  ScratchEnd(scratch);
+  AssertMsg(offset == send(waystate.sockfd, bytes, offset, MSG_DONTWAIT), "wl_registry_bind");
   return new_id;
 }
 
