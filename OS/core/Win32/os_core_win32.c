@@ -242,38 +242,28 @@ fn void os_timer_free(OS_Handle handle) {
 ////////////////////////////////
 //- km: memory
 
-fn void*
-os_reserve(usize size)
-{
+fn void* os_reserve(usize size) {
   void *result = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
   return result;
 }
 
-fn void*
-os_reserveHuge(usize size)
-{
+fn void* os_reserve_huge(usize size) {
   void *result = VirtualAlloc(0, size, MEM_RESERVE | MEM_LARGE_PAGES,
                               PAGE_READWRITE);
   return result;
 }
 
-fn void
-os_release(void *base, usize size)
-{
+fn void os_release(void *base, usize size) {
   BOOL result = VirtualFree(base, size, MEM_RELEASE);
   (void)result;
 }
 
-fn void
-os_commit(void *base, usize size)
-{
+fn void os_commit(void *base, usize size) {
   void *result = VirtualAlloc(base, size, MEM_COMMIT, PAGE_READWRITE);
   (void)result;
 }
 
-fn void
-os_decommit(void *base, usize size)
-{
+fn void os_decommit(void *base, usize size) {
   BOOL result = VirtualFree(base, size, MEM_DECOMMIT);
   (void)result;
 }
@@ -617,9 +607,9 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
   return res;
 }
 
-fn bool os_sharedmem_close(SharedMem *shm) {
-  return UnmapViewOfFile(shm->content) &&
-         CloseHandle((HANDLE)shm->mmap_handle.h[0]);
+fn void os_sharedmem_close(SharedMem *shm) {
+  (void)UnmapViewOfFile(shm->content);
+  (void)CloseHandle((HANDLE)shm->mmap_handle.h[0]);
 }
 
 ////////////////////////////////
@@ -732,7 +722,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
-      AssertMsg(false, Strlit("Invalid server address."));
+      Panic("Invalid server address.");
     }
   }
   switch (protocol) {
@@ -743,7 +733,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       ctype = SOCK_DGRAM;
     } break;
     default: {
-      AssertMsg(false, Strlit("Invalid transport protocol."));
+      Panic("Invalid transport protocol.");
     }
   }
 
@@ -997,9 +987,8 @@ fn FS_Properties fs_getProp(OS_Handle file) {
                             GROUP_SECURITY_INFORMATION,
                             (PSID*)&properties.ownerID,
                             (PSID*)&properties.groupID, 0, 0,
-                            (PSECURITY_DESCRIPTOR *)&security)
-            == ERROR_SUCCESS,
-            Strlit("GetSecurityInfo"));
+                            (PSECURITY_DESCRIPTOR *)&security) == ERROR_SUCCESS,
+	    "GetSecurityInfo");
 
   BY_HANDLE_FILE_INFORMATION file_info;
   Assert(GetFileInformationByHandle(((OS_W32_Primitive*)file.h[0])->file.handle, &file_info));
@@ -1344,7 +1333,6 @@ fn void w32_setup() {
 }
 
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
-  timeBeginPeriod(1);
   Arena *args_arena = ArenaBuild();
   CmdLine *cmdln = New(args_arena, CmdLine);
   cmdln->count = argc - 1;
