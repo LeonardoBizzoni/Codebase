@@ -1,3 +1,6 @@
+#ifndef OS_GFX_WIN32_H
+#define OS_GFX_WIN32_H
+
 #if USING_OPENGL
 #  include <gl/gl.h>
 #endif
@@ -18,37 +21,44 @@ typedef struct W32_WindowEvent {
   struct W32_WindowEvent *next;
 } W32_WindowEvent;
 
-typedef struct {
-  W32_WindowEvent *first;
-  W32_WindowEvent *last;
-} W32_WindowEventList;
-
 typedef struct W32_Window {
   String8 name;
-  u32 x, y, width, height;
-
   OS_Handle task;
   HWND winhandle;
-  HDC dc;
+  HBITMAP bitmap_dib;
+  HDC mem_dc;
+  void *pixels;
 #if USING_OPENGL
   HGLRC gl_context;
 #endif
 
   struct {
     OS_Handle mutex, condvar;
-    W32_WindowEventList queue;
-    W32_WindowEventList freelist;
-  } event;
+    W32_WindowEvent *first;
+    W32_WindowEvent *last;
+  } eventlist;
 
   struct W32_Window *next;
   struct W32_Window *prev;
 } W32_Window;
 
 typedef struct {
+  String8 name;
+  i32 x, y, width, height;
+  W32_Window *window;
+} W32_WindowInitArgs;
+
+typedef struct {
   Arena *arena;
   W32_Window *first_window;
   W32_Window *last_window;
   W32_Window *freelist_window;
+  
+  struct {
+    OS_Handle mutex;
+    W32_WindowEvent *first;
+    W32_WindowEvent *last;
+  } event_freelist;
 
   HINSTANCE instance;
 } W32_GfxState;
@@ -60,3 +70,7 @@ fn void w32_xinput_load(void);
 
 fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
                                         WPARAM wparam, LPARAM lparam);
+
+fn W32_WindowEvent* w32_alloc_windowevent(void);
+
+#endif

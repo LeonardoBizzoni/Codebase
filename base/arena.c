@@ -46,10 +46,10 @@ fn Arena *_arena_build(ArenaArgs args) {
 }
 
 inline fn void arena_pop(Arena *arena, usize bytes) {
-  arena->head = ClampBot((isize)arena->head - (isize)bytes, 0);
+  arena->head = (usize)ClampBot((isize)arena->head - (isize)bytes, 0);
   usize pages2decommit = (usize)ceil((f64)bytes / (f64)arena->commit_size);
   if (pages2decommit) {
-    arena->commits = ClampBot((isize)arena->commits - (isize)pages2decommit, 0);
+    arena->commits = (usize)ClampBot((isize)arena->commits - (isize)pages2decommit, 0);
     os_decommit((void *)align_forward((usize)arena->base + arena->head,
                                       arena->commit_size),
                 pages2decommit * arena->commit_size);

@@ -1,13 +1,10 @@
-#include <aclapi.h>
+global OS_W32_State w32_state = {};
 
-fn OS_SystemInfo*
-os_getSystemInfo(void) {
+fn OS_SystemInfo* os_getSystemInfo(void) {
   return &w32_state.info;
 }
 
-fn DateTime
-os_w32_date_time_from_system_time(SYSTEMTIME* in)
-{
+fn DateTime os_w32_date_time_from_system_time(SYSTEMTIME* in) {
   DateTime result = {0};
   result.year = in->wYear;
   result.month  = (u8)in->wMonth - 1;
@@ -19,8 +16,7 @@ os_w32_date_time_from_system_time(SYSTEMTIME* in)
   return result;
 }
 
-fn time64
-os_w32_time64_from_system_time(SYSTEMTIME* in) {
+fn time64 os_w32_time64_from_system_time(SYSTEMTIME* in) {
   i16 year = in->wYear;
   time64 res = (year >= 0 ? 1ULL << 63 : 0);
   res |= (u64)((year >= 0 ? year : -year) & ~(1 << 27)) << 36;
@@ -33,9 +29,7 @@ os_w32_time64_from_system_time(SYSTEMTIME* in) {
   return res;
 }
 
-fn SYSTEMTIME
-os_w32_system_time_from_date_time(DateTime *in)
-{
+fn SYSTEMTIME os_w32_system_time_from_date_time(DateTime *in) {
   SYSTEMTIME result = {0};
   result.wYear = (WORD)in->year;
   result.wMonth = in->month + 1;
@@ -47,8 +41,7 @@ os_w32_system_time_from_date_time(DateTime *in)
   return result;
 }
 
-fn SYSTEMTIME
-os_w32_system_time_from_time64(time64 in) {
+fn SYSTEMTIME os_w32_system_time_from_time64(time64 in) {
   SYSTEMTIME res = {0};
   i16 year = (i16)((in >> 36) & ~(1 << 27)  * (in >> 63 ? 1 : -1));
   if (year < 1601 || year > 30827) { return res; }
@@ -63,13 +56,13 @@ os_w32_system_time_from_time64(time64 in) {
   return res;
 }
 
-fn time64 os_local_now() {
+fn time64 os_local_now(void) {
   SYSTEMTIME systime;
   GetLocalTime(&systime);
   return os_w32_time64_from_system_time(&systime);
 }
 
-fn DateTime os_local_dateTimeNow() {
+fn DateTime os_local_dateTimeNow(void) {
   SYSTEMTIME system_time;
   GetLocalTime(&system_time);
   DateTime result = os_w32_date_time_from_system_time(&system_time);
@@ -83,9 +76,7 @@ fn time64 os_local_fromUTCTime64(time64 in) {
   return os_w32_time64_from_system_time(&utc);
 }
 
-fn DateTime
-os_local_fromUTCDateTime(DateTime *in)
-{
+fn DateTime os_local_fromUTCDateTime(DateTime *in) {
   SYSTEMTIME systime = os_w32_system_time_from_date_time(in);
   FILETIME ftime;
   SystemTimeToFileTime(&systime, &ftime);
@@ -97,24 +88,20 @@ os_local_fromUTCDateTime(DateTime *in)
 }
 
 
-fn time64
-os_utc_now() {
+fn time64 os_utc_now(void) {
   SYSTEMTIME system_time;
   GetSystemTime(&system_time);
   return os_w32_time64_from_system_time(&system_time);
 }
 
-fn DateTime
-os_utc_dateTimeNow()
-{
+fn DateTime os_utc_dateTimeNow(void) {
   SYSTEMTIME system_time;
   GetSystemTime(&system_time);
   DateTime result = os_w32_date_time_from_system_time(&system_time);
   return result;
 }
 
-fn time64
-os_utc_localizedTime64(i8 utc_offset) {
+fn time64 os_utc_localizedTime64(i8 utc_offset) {
   time64 now = os_utc_now();
   i32 year = ((now >> 36) & ~(1 << 27));
 
@@ -183,16 +170,14 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
   return res;
 }
 
-fn time64
-os_utc_fromLocalTime64(time64 in) {
+fn time64 os_utc_fromLocalTime64(time64 in) {
   SYSTEMTIME utctime = {0};
   SYSTEMTIME localtime = os_w32_system_time_from_time64(in);
   TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
   return os_w32_time64_from_system_time(&utctime);
 }
 
-fn DateTime
-os_utc_fromLocalDateTime(DateTime *in) {
+fn DateTime os_utc_fromLocalDateTime(DateTime *in) {
   SYSTEMTIME utctime = {0};
   SYSTEMTIME localtime = os_w32_system_time_from_date_time(in);
   TzSpecificLocalTimeToSystemTime(NULL, &localtime, &utctime);
@@ -270,9 +255,7 @@ fn void os_decommit(void *base, usize size) {
 
 ////////////////////////////////
 //- km: Thread functions
-fn OS_W32_Primitive*
-os_w32_primitive_alloc(OS_W32_PrimitiveType kind)
-{
+fn OS_W32_Primitive* os_w32_primitive_alloc(OS_W32_PrimitiveType kind) {
   EnterCriticalSection(&w32_state.mutex);
   OS_W32_Primitive *result = w32_state.free_list;
   if(result)
@@ -290,18 +273,14 @@ os_w32_primitive_alloc(OS_W32_PrimitiveType kind)
   return result;
 }
 
-fn void
-os_w32_primitive_release(OS_W32_Primitive *primitive)
-{
+fn void os_w32_primitive_release(OS_W32_Primitive *primitive) {
   primitive->kind = OS_W32_Primitive_Nil;
   EnterCriticalSection(&w32_state.mutex);
   StackPush(w32_state.free_list, primitive);
   LeaveCriticalSection(&w32_state.mutex);
 }
 
-fn OS_Handle
-os_thread_start(ThreadFunc *func, void *arg)
-{
+fn OS_Handle os_thread_start(ThreadFunc *func, void *arg) {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Thread);
   HANDLE handle = CreateThread(0, 0, os_w32_thread_entry_point, primitive, 0,
                                &primitive->thread.tid);
@@ -312,9 +291,7 @@ os_thread_start(ThreadFunc *func, void *arg)
   return result;
 }
 
-fn bool
-os_thread_join(OS_Handle handle)
-{
+fn bool os_thread_join(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   DWORD wait = WAIT_OBJECT_0;
   if(primitive)
@@ -326,15 +303,12 @@ os_thread_join(OS_Handle handle)
   return wait == WAIT_OBJECT_0;
 }
 
-fn void
-os_thread_kill(OS_Handle thd)
-{
+// TODO(lb): implement os_thread_kill
+fn void os_thread_kill(OS_Handle thd) {
   (void)0;
 }
 
-fn DWORD
-os_w32_thread_entry_point(void *ptr)
-{
+fn DWORD os_w32_thread_entry_point(void *ptr) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)ptr;
   ThreadFunc *func = primitive->thread.func;
   func(primitive->thread.arg);
@@ -348,40 +322,30 @@ fn void os_exit(u8 status_code) {
 ////////////////////////////////
 //- km: critical section mutex
 
-fn OS_Handle
-os_mutex_alloc()
-{
+fn OS_Handle os_mutex_alloc(void) {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_Mutex);
   InitializeCriticalSection(&primitive->mutex);
   OS_Handle result = {(u64)primitive};
   return result;
 }
 
-fn void
-os_mutex_lock(OS_Handle handle)
-{
+fn void os_mutex_lock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   EnterCriticalSection(&primitive->mutex);
 }
 
-fn bool
-os_mutex_trylock(OS_Handle handle)
-{
+fn bool os_mutex_trylock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   BOOL result = TryEnterCriticalSection(&primitive->mutex);
   return result;
 }
 
-fn void
-os_mutex_unlock(OS_Handle handle)
-{
+fn void os_mutex_unlock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   LeaveCriticalSection(&primitive->mutex);
 }
 
-fn void
-os_mutex_free(OS_Handle handle)
-{
+fn void os_mutex_free(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   DeleteCriticalSection(&primitive->mutex);
   os_w32_primitive_release(primitive);
@@ -390,66 +354,51 @@ os_mutex_free(OS_Handle handle)
 ////////////////////////////////
 //- km read/write mutexes
 
-fn OS_Handle os_rwlock_alloc()
-{
+fn OS_Handle os_rwlock_alloc(void) {
   OS_W32_Primitive *primitive = os_w32_primitive_alloc(OS_W32_Primitive_RWLock);
   InitializeSRWLock(&primitive->rw_mutex);
   OS_Handle result = {(u64)primitive};
   return result;
 }
 
-fn void
-os_rwlock_read_lock(OS_Handle handle)
-{
+fn void os_rwlock_read_lock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   AcquireSRWLockShared(&primitive->rw_mutex);
 }
 
-fn bool
-os_rwlock_read_trylock(OS_Handle handle)
-{
+fn bool os_rwlock_read_trylock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   BOOLEAN result = TryAcquireSRWLockShared(&primitive->rw_mutex);
   return result;
 }
 
-fn void
-os_rwlock_read_unlock(OS_Handle handle)
-{
+fn void os_rwlock_read_unlock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   ReleaseSRWLockShared(&primitive->rw_mutex);
 }
 
-fn void
-os_rwlock_write_lock(OS_Handle handle)
-{
+fn void os_rwlock_write_lock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   AcquireSRWLockExclusive(&primitive->rw_mutex);
 }
 
-fn bool
-os_rwlock_write_trylock(OS_Handle handle)
-{
+fn bool os_rwlock_write_trylock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   BOOLEAN result = TryAcquireSRWLockExclusive(&primitive->rw_mutex);
   return result;
 }
 
-fn void
-os_rwlock_write_unlock(OS_Handle handle)
-{
+fn void os_rwlock_write_unlock(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   ReleaseSRWLockExclusive(&primitive->rw_mutex);
 }
 
-fn void
-os_rwlock_free(OS_Handle handle)
-{
+fn void os_rwlock_free(OS_Handle handle) {
   OS_W32_Primitive *primitive = (OS_W32_Primitive*)handle.h[0];
   os_w32_primitive_release(primitive);
 }
 
-fn OS_Handle os_cond_alloc() {
+fn OS_Handle os_cond_alloc(void) {
   OS_W32_Primitive *prim = os_w32_primitive_alloc(OS_W32_Primitive_CondVar);
   InitializeConditionVariable(&prim->condvar);
   OS_Handle res = {(u64)prim};
@@ -615,28 +564,26 @@ fn void os_sharedmem_close(SharedMem *shm) {
 ////////////////////////////////
 //- km: Dynamic libraries
 
-fn OS_Handle os_lib_open(String8 path){
-  OS_Handle result = {0};
+fn OS_Handle os_lib_open(String8 path) {
   Scratch scratch = ScratchBegin(0,0);
-  String16 path16 = UTF16From8(scratch.arena, path);
-  HMODULE module = LoadLibraryExW((WCHAR*)path16.str, 0, 0);
-  if(module != 0){
-    result.h[0] = (u64)module;
-  }
+  HMODULE module = LoadLibraryA((LPCSTR)cstr_from_str8(scratch.arena,
+                                                       path));
   ScratchEnd(scratch);
+  OS_Handle result = {{(u64)module}};
   return result;
 }
 
-fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol){
+fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol) {
+  if (!lib.h[0]) { return 0; }
+  HMODULE module = (HMODULE)lib.h[0];
   Scratch scratch = ScratchBegin(0,0);
   char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
-  HMODULE module = (HMODULE)lib.h[0];
   VoidFunc *result = (VoidFunc*)GetProcAddress(module, symbol_cstr);
   ScratchEnd(scratch);
   return result;
 }
 
-fn i32 os_lib_close(OS_Handle lib){
+fn i32 os_lib_close(OS_Handle lib) {
   HMODULE module = (HMODULE)lib.h[0];
   BOOL result = FreeLibrary(module);
   return result;
@@ -973,7 +920,7 @@ fn bool fs_copy(String8 src, String8 dest) {
   return res;
 }
 
-fn FS_Properties fs_getProp(OS_Handle file) {
+fn FS_Properties fs_get_properties(OS_Handle file) {
   FS_Properties properties = {0};
   if (!file.h[0]) { return properties; }
 
@@ -988,7 +935,7 @@ fn FS_Properties fs_getProp(OS_Handle file) {
                             (PSID*)&properties.ownerID,
                             (PSID*)&properties.groupID, 0, 0,
                             (PSECURITY_DESCRIPTOR *)&security) == ERROR_SUCCESS,
-	    "GetSecurityInfo");
+            "GetSecurityInfo");
 
   BY_HANDLE_FILE_INFORMATION file_info;
   Assert(GetFileInformationByHandle(((OS_W32_Primitive*)file.h[0])->file.handle, &file_info));
@@ -1128,7 +1075,7 @@ fn File fs_fopen(Arena *arena, OS_Handle file) {
   result.content = (u8*)MapViewOfFile((HANDLE)result.mmap_handle.h[0],
                                       access_flags, 0, 0, 0);
 
-  result.prop = fs_getProp(file);
+  result.prop = fs_get_properties(file);
   return result;
 }
 
@@ -1200,14 +1147,17 @@ inline fn bool fs_fresize(File *file, usize size) {
                                              access_flags, 0, 0, size)) != 0;
 }
 
+// TODO(lb): implement fs_fileHasChanged
 inline fn bool fs_fileHasChanged(File *file) {
   return false;
 }
 
+// TODO(lb): implement fs_fdelete
 inline fn bool fs_fdelete(File *file) {
   return false;
 }
 
+// TODO(lb): implement fs_frename
 inline fn bool fs_frename(File *file, String8 to) {
   return false;
 }
@@ -1221,14 +1171,17 @@ inline fn bool fs_delete(String8 filepath) {
   return res;
 }
 
+// TODO(lb): implement fs_rename
 inline fn bool fs_rename(String8 filepath, String8 to) {
   return false;
 }
 
+// TODO(lb): implement fs_mkdir
 inline fn bool fs_mkdir(String8 path) {
   return false;
 }
 
+// TODO(lb): implement fs_rmdir
 inline fn bool fs_rmdir(String8 path) {
   return false;
 }
@@ -1236,9 +1189,7 @@ inline fn bool fs_rmdir(String8 path) {
 ////////////////////////////////
 //- km: File iterator
 
-fn OS_FileIter*
-fs_iter_begin(Arena *arena, String8 path)
-{
+fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   Scratch scratch = ScratchBegin(&arena, 1);
   StringStream list = {0};
 
@@ -1258,9 +1209,7 @@ fs_iter_begin(Arena *arena, String8 path)
   return result;
 }
 
-fn bool
-fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
-{
+fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) {
   bool result = false;
   OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter->memory;
   for(;!w32_iter->done;)
@@ -1292,9 +1241,7 @@ fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
   return result;
 }
 
-fn void
-fs_iter_end(OS_FileIter *iter)
-{
+fn void fs_iter_end(OS_FileIter *iter) {
   OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter->memory;
   FindClose(w32_iter->handle);
 }
@@ -1315,7 +1262,7 @@ fn void dbg_print(const char *fmt, ...) {
 ////////////////////////////////
 //- km: Entry point
 
-fn void w32_setup() {
+fn void w32_setup(void) {
   SYSTEM_INFO sys_info = {0};
   GetSystemInfo(&sys_info);
 

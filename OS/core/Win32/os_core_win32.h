@@ -2,7 +2,8 @@
 #define OS_CORE_WIN32_H
 
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
+#include <aclapi.h>
 #include <ws2def.h>
 #include <ws2tcpip.h>
 
@@ -75,9 +76,6 @@ struct OS_W32_FileIter
 };
 
 StaticAssert(sizeof(OS_W32_FileIter) <= sizeof(OS_FileIter), file_iter_size_check);
-
-global OS_W32_State w32_state;
-
 
 ////////////////////////////////
 //- NOTE(km): Thread entry point

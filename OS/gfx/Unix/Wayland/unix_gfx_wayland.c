@@ -89,23 +89,23 @@ fn u32 wl_registry_bind(u32 name, String8 interface, u32 version) {
    * }; */
 
   u8 bytes[255] = {};
-  usize offset = 0;
+  u32 offset = 0;
   u32 new_id = wl_allocate_id();
 
-  *(bytes + offset) = waystate.registry; offset += sizeof(wl_identifier);
-  *(bytes + offset) = WL_REGISTRY_BIND_OPCODE; offset += sizeof(u16);
+  *(wl_identifier*)(bytes + offset) = waystate.registry; offset += sizeof(wl_identifier);
+  *(u16*)(bytes + offset) = WL_REGISTRY_BIND_OPCODE; offset += sizeof(u16);
   // skip the size
   offset += sizeof(u16);
 
-  *(bytes + offset) = name; offset += sizeof(u32);
+  *(u32*)(bytes + offset) = name; offset += sizeof(u32);
   // NOTE(lb): the string size includes the null byte
-  *(bytes + offset) = interface.size + 1; offset += sizeof(u32);
+  *(u32*)(bytes + offset) = (u32)interface.size + 1; offset += sizeof(u32);
   memcopy(bytes + offset, interface.str, interface.size); offset += (interface.size + 3) & -4;
-  *(bytes + offset) = version; offset += sizeof(u32);
-  *(bytes + offset) = new_id; offset += sizeof(u32);
+  *(u32*)(bytes + offset) = version; offset += sizeof(u32);
+  *(u32*)(bytes + offset) = new_id; offset += sizeof(u32);
 
   offset = (offset + 3) & -4;
-  *(bytes + sizeof(wl_identifier) + sizeof(u16)) = offset;
+  *(u16*)(bytes + sizeof(wl_identifier) + sizeof(u16)) = (u16)offset;
 
 #if DEBUG
   u8 *raw = bytes;

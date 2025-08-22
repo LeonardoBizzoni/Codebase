@@ -24,6 +24,10 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
+#if OS_SOUND
+#  include <pulse/pulseaudio.h>
+#endif
+
 #if NDEBUG
 #  define dbg_print(fmt, ...)
 #else

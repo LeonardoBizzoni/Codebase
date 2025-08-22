@@ -113,8 +113,8 @@ fn OS_Event unx_handle_xevent(X11_Window *window, XEvent *xevent) {
     res.type = xevent->type == KeyPress ? OS_EventType_KeyDown
                                         : OS_EventType_KeyUp;
     res.key.scancode = xkey->keycode;
-    res.key.keycode = XkbKeycodeToKeysym(x11_state.xdisplay, xkey->keycode, 0,
-                                         xkey->state & ShiftMask ? 1 : 0);
+    res.key.keycode = (u32)XkbKeycodeToKeysym(x11_state.xdisplay, (KeyCode)xkey->keycode, 0,
+                                              xkey->state & ShiftMask ? 1 : 0);
   } break;
   case ClientMessage: {
     if ((Atom)xevent->xclient.data.l[0] == x11_state.xatom_close) {

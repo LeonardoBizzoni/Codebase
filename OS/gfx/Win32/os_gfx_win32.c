@@ -4,6 +4,7 @@ fn void w32_gfx_init(HINSTANCE instance) {
   timeBeginPeriod(1);
   w32_gfxstate.arena = ArenaBuild();
   w32_gfxstate.instance = instance;
+  w32_gfxstate.event_freelist.mutex = os_mutex_alloc();
   // TODO(lb): what about non-xinput gamepads like the dualshock
   //           and nintendo controllers?
   w32_xinput_load();
@@ -34,69 +35,64 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   }
 
   W32_WindowEvent *event = 0;
-  OS_MutexScope(window->event.mutex) {
-    event = window->event.freelist.first;
-    if (event) {
-      memzero(event, sizeof(W32_WindowEvent));
-      QueuePop(window->event.freelist.first);
-    } else {
-      event = New(w32_gfxstate.arena, W32_WindowEvent);
+  switch (msg_code) {
+  case WM_QUIT:
+  case WM_CLOSE: {
+    event = w32_alloc_windowevent();
+    event->value.type = OS_EventType_Kill;
+  } break;
+  case WM_PAINT: {
+    event = w32_alloc_windowevent();
+    RECT rect;
+    GetClientRect(window->winhandle, &rect);
+    event->value.expose.width = rect.right - rect.left;
+    event->value.expose.height = rect.bottom - rect.top;
+    event->value.type = OS_EventType_Expose;
+  } break;
+  case WM_KEYUP:
+  case WM_SYSKEYUP:
+  case WM_KEYDOWN:
+  case WM_SYSKEYDOWN: {
+    event = w32_alloc_windowevent();
+    event->value.type = lparam >> 29 ? OS_EventType_KeyUp
+                        : OS_EventType_KeyDown;
+    event->value.key.keycode = wparam;
+    event->value.key.scancode = (lparam >> 16) & 0xFF;
+    if (lparam >> 24 & 0b1) {
+      event->value.key.scancode |= 0xE000;
+    } else if (event->value.key.scancode == 0x45) {
+      event->value.key.scancode = 0xE11D45;
+    } else if (event->value.key.scancode == 0x54) {
+      event->value.key.scancode = 0xE037;
     }
-    QueuePush(window->event.queue.first, window->event.queue.last, event);
-
-    switch (msg_code) {
-    case WM_QUIT:
-    case WM_CLOSE: {
-      event->value.type = OS_EventType_Kill;
-    } break;
-    case WM_SIZE:
-    case WM_PAINT: {
-      RECT rect;
-      GetClientRect(window->winhandle, &rect);
-      event->value.expose.width = rect.right - rect.left;
-      event->value.expose.height = rect.bottom - rect.top;
-      event->value.type = OS_EventType_Expose;
-    } break;
-    case WM_KEYUP:
-    case WM_SYSKEYUP:
-    case WM_KEYDOWN:
-    case WM_SYSKEYDOWN: {
-      event->value.type = lparam >> 29 ? OS_EventType_KeyUp
-                                       : OS_EventType_KeyDown;
-      event->value.key.keycode = wparam;
-      event->value.key.scancode = (lparam >> 16) & 0xFF;
-      if (lparam >> 24 & 0b1) {
-        event->value.key.scancode |= 0xE000;
-      } else if (event->value.key.scancode == 0x45) {
-        event->value.key.scancode = 0xE11D45;
-      } else if (event->value.key.scancode == 0x54) {
-        event->value.key.scancode = 0xE037;
-      }
-    } break;
-    case WM_INPUTLANGCHANGE: {
-      ActivateKeyboardLayout((HKL)lparam, KLF_SETFORPROCESS);
-    } break;
-    }
-    os_cond_signal(window->event.condvar);
+  } break;
+  case WM_INPUTLANGCHANGE: {
+    ActivateKeyboardLayout((HKL)lparam, KLF_SETFORPROCESS);
+  } break;
   }
 
+  if (event) {
+    OS_MutexScope(window->eventlist.mutex) {
+      QueuePush(window->eventlist.first, window->eventlist.last, event);
+      os_cond_signal(window->eventlist.condvar);
+    }
+  }
   return DefWindowProc(winhandle, msg_code, wparam, lparam);
 }
 
-fn void w32_event_add(W32_Window *window, OS_EventType type) {
+fn W32_WindowEvent* w32_alloc_windowevent(void) {
   W32_WindowEvent *event = 0;
-  OS_MutexScope(window->event.mutex) {
-    event = window->event.freelist.first;
+  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+    event = w32_gfxstate.event_freelist.first;
     if (event) {
       memzero(event, sizeof(W32_WindowEvent));
-      QueuePop(window->event.freelist.first);
+      QueuePop(w32_gfxstate.event_freelist.first);
     } else {
       event = New(w32_gfxstate.arena, W32_WindowEvent);
     }
-    QueuePush(window->event.queue.first, window->event.queue.last, event);
-    event->value.type = type;
-    os_cond_signal(window->event.condvar);
   }
+  Assert(event);
+  return event;
 }
 
 fn void w32_xinput_handle_digitalbtn(OS_BtnState *btn, bool is_down) {
@@ -104,18 +100,25 @@ fn void w32_xinput_handle_digitalbtn(OS_BtnState *btn, bool is_down) {
   btn->ended_down = is_down;
 }
 
-fn void w32_window_task(void *window_) {
-  W32_Window *window = (W32_Window *)window_;
-  WNDCLASS winclass = {0};
-  winclass.lpszClassName = (LPCSTR)window->name.str;
-  winclass.hInstance = w32_gfxstate.instance;
-  winclass.lpfnWndProc = w32_message_handler;
-  RegisterClass(&winclass);
-  window->winhandle = CreateWindow((LPCSTR)window->name.str, (LPCSTR)window->name.str,
-                                 WS_OVERLAPPEDWINDOW, window->x, window->y,
-                                 window->width, window->height, 0, 0,
-                                 w32_gfxstate.instance, 0);
-  Assert(window->winhandle);
+fn void w32_window_task(void *args_) {
+  W32_WindowInitArgs *args = (W32_WindowInitArgs *)args_;
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    char *window_name = cstr_from_str8(scratch.arena, args->name);
+
+    WNDCLASS winclass = {0};
+    winclass.lpszClassName = window_name;
+    winclass.hInstance = w32_gfxstate.instance;
+    winclass.lpfnWndProc = w32_message_handler;
+    RegisterClass(&winclass);
+    args->window->winhandle = CreateWindowA(window_name, window_name,
+					    WS_OVERLAPPEDWINDOW, 
+					    args->x, args->y,
+					    args->width, args->height,
+					    0, 0, w32_gfxstate.instance, 0);
+    Assert(args->window->winhandle);
+    ScratchEnd(scratch);
+  }
 
   // TODO(lb): pooling the gamepad state isn't a window specific task
   //           there should be another independent thread that pools the gamepad
@@ -129,7 +132,7 @@ fn void w32_window_task(void *window_) {
        ++controller_idx) {
     XINPUT_STATE controller_state = {0};
     if (XInputGetState(controller_idx, &controller_state) == ERROR_SUCCESS) {
-      os_gamepad[controller_idx].active = 1;
+      os_input_device.gamepad[controller_idx].active = 1;
     }
   }
 
@@ -146,62 +149,72 @@ fn void w32_window_task(void *window_) {
       DWORD state = XInputGetState(controller_idx, &controller_state);
 
       if (state != ERROR_SUCCESS) {
-        if (os_gamepad[controller_idx].active) {
-          os_gamepad[controller_idx].active = 0;
-          w32_event_add(window, OS_EventType_GamepadDisconnected);
+        if (os_input_device.gamepad[controller_idx].active) {
+          os_input_device.gamepad[controller_idx].active = 0;
+	  W32_WindowEvent *event = w32_alloc_windowevent();
+	  event->value.type = OS_EventType_GamepadDisconnected;
+	  OS_MutexScope(args->window->eventlist.mutex) {
+	    QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
+	    os_cond_signal(args->window->eventlist.condvar);
+	  }
         }
         continue;
       }
-      if (!os_gamepad[controller_idx].active) {
-        w32_event_add(window, OS_EventType_GamepadConnected);
-        os_gamepad[controller_idx].active = 1;
+      if (!os_input_device.gamepad[controller_idx].active) {
+        os_input_device.gamepad[controller_idx].active = 1;
+	W32_WindowEvent *event = w32_alloc_windowevent();
+	event->value.type = OS_EventType_GamepadConnected;
+	OS_MutexScope(args->window->eventlist.mutex) {
+	  QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
+	  os_cond_signal(args->window->eventlist.condvar);
+	}
       }
 
       XINPUT_GAMEPAD *pad = &controller_state.Gamepad;
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].dpad_up, (pad->wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].dpad_down, (pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].dpad_left, (pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].dpad_right, (pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].start, (pad->wButtons & XINPUT_GAMEPAD_START) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].select, (pad->wButtons & XINPUT_GAMEPAD_BACK) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].l3, (pad->wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].r3, (pad->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].l1, (pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].r1, (pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].a, (pad->wButtons & XINPUT_GAMEPAD_A) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].b, (pad->wButtons & XINPUT_GAMEPAD_B) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].x, (pad->wButtons & XINPUT_GAMEPAD_X) != 0);
-      w32_xinput_handle_digitalbtn(&os_gamepad[controller_idx].y, (pad->wButtons & XINPUT_GAMEPAD_Y) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].dpad_up, (pad->wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].dpad_down, (pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].dpad_left, (pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].dpad_right, (pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].start, (pad->wButtons & XINPUT_GAMEPAD_START) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].select, (pad->wButtons & XINPUT_GAMEPAD_BACK) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].l3, (pad->wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].r3, (pad->wButtons & XINPUT_GAMEPAD_RIGHT_THUMB) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].l1, (pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].r1, (pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].a, (pad->wButtons & XINPUT_GAMEPAD_A) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].b, (pad->wButtons & XINPUT_GAMEPAD_B) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].x, (pad->wButtons & XINPUT_GAMEPAD_X) != 0);
+      w32_xinput_handle_digitalbtn(&os_input_device.gamepad[controller_idx].y, (pad->wButtons & XINPUT_GAMEPAD_Y) != 0);
 
       i8 l2_diff = pad->bLeftTrigger - XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
       i8 r2_diff = pad->bRightTrigger - XINPUT_GAMEPAD_TRIGGER_THRESHOLD;
-      os_gamepad[controller_idx].l2 = l2_diff > 0 ? (f32)l2_diff / 255.f : 0.f;
-      os_gamepad[controller_idx].r2 = r2_diff > 0 ? (f32)r2_diff / 255.f : 0.f;
+      os_input_device.gamepad[controller_idx].l2 = l2_diff > 0 ? (f32)l2_diff / 255.f : 0.f;
+      os_input_device.gamepad[controller_idx].r2 = r2_diff > 0 ? (f32)r2_diff / 255.f : 0.f;
 
-      os_gamepad[controller_idx].stick_left.x = 0.f;
-      os_gamepad[controller_idx].stick_left.y = 0.f;
+      os_input_device.gamepad[controller_idx].stick_left.x = 0.f;
+      os_input_device.gamepad[controller_idx].stick_left.y = 0.f;
       if (pad->sThumbLX > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_left.x = (f32)pad->sThumbLX / 32767.f;
+        os_input_device.gamepad[controller_idx].stick_left.x = (f32)pad->sThumbLX / 32767.f;
       } else if (pad->sThumbLX < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_left.x = (f32)pad->sThumbLX / 32768.f;
+        os_input_device.gamepad[controller_idx].stick_left.x = (f32)pad->sThumbLX / 32768.f;
       }
       if (pad->sThumbLY > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_left.y = -(f32)pad->sThumbLY / 32767.f;
+        os_input_device.gamepad[controller_idx].stick_left.y = -(f32)pad->sThumbLY / 32767.f;
       } else if (pad->sThumbLY < -XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_left.y = -(f32)pad->sThumbLY / 32768.f;
+        os_input_device.gamepad[controller_idx].stick_left.y = -(f32)pad->sThumbLY / 32768.f;
       }
 
-      os_gamepad[controller_idx].stick_right.x = 0.f;
-      os_gamepad[controller_idx].stick_right.y = 0.f;
+      os_input_device.gamepad[controller_idx].stick_right.x = 0.f;
+      os_input_device.gamepad[controller_idx].stick_right.y = 0.f;
       if (pad->sThumbRX > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_right.x = (f32)pad->sThumbRX / 32767.f;
+        os_input_device.gamepad[controller_idx].stick_right.x = (f32)pad->sThumbRX / 32767.f;
       } else if (pad->sThumbRX < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_right.x = (f32)pad->sThumbRX / 32768.f;
+        os_input_device.gamepad[controller_idx].stick_right.x = (f32)pad->sThumbRX / 32768.f;
       }
       if (pad->sThumbRY > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_right.y = -(f32)pad->sThumbRY / 32767.f;
+        os_input_device.gamepad[controller_idx].stick_right.y = -(f32)pad->sThumbRY / 32767.f;
       } else if (pad->sThumbRY < -XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) {
-        os_gamepad[controller_idx].stick_right.y = -(f32)pad->sThumbRY / 32768.f;
+        os_input_device.gamepad[controller_idx].stick_right.y = -(f32)pad->sThumbRY / 32768.f;
       }
     }
   }
@@ -217,17 +230,18 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
   }
   DLLPushBack(w32_gfxstate.first_window, w32_gfxstate.last_window, window);
 
-  window->name = name;
-  window->x = x;
-  window->y = y;
-  window->width = width;
-  window->height = height;
-  window->event.mutex = os_mutex_alloc();
-  window->event.condvar = os_cond_alloc();
-  window->task = os_thread_start(w32_window_task, window);
+  W32_WindowInitArgs *args = New(w32_gfxstate.arena, W32_WindowInitArgs);
+  args->name = name;
+  args->x = x;
+  args->y = y;
+  args->width = width;
+  args->height = height;
+  args->window = window;
+  window->eventlist.mutex = os_mutex_alloc();
+  window->eventlist.condvar = os_cond_alloc();
+  window->task = os_thread_start(w32_window_task, args);
 
   while (window->winhandle == 0);
-  window->dc = GetDC(window->winhandle);
 
   RECT rect = {0};
   (void)GetWindowRect(window->winhandle, &rect);
@@ -261,17 +275,16 @@ fn OS_Event os_window_get_event(OS_Window window_) {
   W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
+  W32_WindowEvent *event = 0;
+  OS_MutexScope(window->eventlist.mutex) {
+    event = window->eventlist.first;
+    if (event) { QueuePop(window->eventlist.first); }
+  }
 
-  OS_MutexScope(window->event.mutex) {
-    W32_WindowEvent *event = window->event.queue.first;
-    QueuePop(window->event.queue.first);
-    if (event) {
-      if (event->value.type) {
-        memcopy(&res, &event->value, sizeof(OS_Event));
-      }
-      QueuePush(window->event.freelist.first, window->event.freelist.last, event);
-    }
-    QueuePush(window->event.freelist.first, window->event.freelist.last, event);
+  if (!event) { return res; }
+  memcopy(&res, &event->value, sizeof(OS_Event));
+  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+    QueuePush(w32_gfxstate.event_freelist.first, w32_gfxstate.event_freelist.last, event);
   }
   return res;
 }
@@ -280,19 +293,18 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
   W32_Window *window = (W32_Window *)window_.handle.h[0];
   OS_Event res = {0};
 
-  OS_MutexScope(window->event.mutex) {
-    W32_WindowEvent *event = window->event.queue.first;
-    for (; !event; event = window->event.queue.first) {
-      os_cond_wait(window->event.condvar, window->event.mutex, 0);
+  W32_WindowEvent *event = 0;
+  OS_MutexScope(window->eventlist.mutex) {
+    event = window->eventlist.first;
+    for (; !event; event = window->eventlist.first) {
+      os_cond_wait(window->eventlist.condvar, window->eventlist.mutex, 0);
     }
-    QueuePop(window->event.queue.first);
-    if (event) {
-      if (event->value.type) {
-        memcopy(&res, &event->value, sizeof(OS_Event));
-      }
-      QueuePush(window->event.freelist.first, window->event.freelist.last, event);
-    }
-    QueuePush(window->event.freelist.first, window->event.freelist.last, event);
+    QueuePop(window->eventlist.first);
+  }
+  Assert(event);
+  memcopy(&res, &event->value, sizeof(OS_Event));
+  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+    QueuePush(w32_gfxstate.event_freelist.first, w32_gfxstate.event_freelist.last, event);
   }
   return res;
 }
@@ -321,6 +333,7 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
 // From top to bottom of the window
 fn void os_window_render(OS_Window window_, void *mem) {
   W32_Window *window = (W32_Window *)window_.handle.h[0];
+  HDC dc = GetDC(window->winhandle);
   BITMAPINFO bitmap_info = {0};
   bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   bitmap_info.bmiHeader.biWidth = window_.width;
@@ -328,11 +341,14 @@ fn void os_window_render(OS_Window window_, void *mem) {
   bitmap_info.bmiHeader.biPlanes = 1;
   bitmap_info.bmiHeader.biBitCount = 32;
   bitmap_info.bmiHeader.biCompression = BI_RGB;
-  StretchDIBits(window->dc,
+  dbg_print("Begin StretchDIBits");
+  StretchDIBits(dc,
                 0, 0, window_.width, window_.height,
                 0, 0, window_.width, window_.height,
                 mem, &bitmap_info,
                 DIB_RGB_COLORS, SRCCOPY);
+  dbg_print("End StretchDIBits");
+  ReleaseDC(window->winhandle, dc);
 }
 
 #if USING_OPENGL
