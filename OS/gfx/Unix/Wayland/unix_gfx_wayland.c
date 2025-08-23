@@ -732,7 +732,7 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
     strstream_append_str(scratch.arena, &ss, str8_from_i64(scratch.arena, Random(10000, 99999)));
     window->shm = os_sharedmem_open(str8_from_stream(scratch.arena, ss), width * height * 4,
                                     OS_acfRead | OS_acfWrite | OS_acfExecute);
-    os_sharedmem_unlink_name(&window->shm);
+    unx_sharedmem_unlink_name(&window->shm);
     ScratchEnd(scratch);
   }
 
@@ -770,7 +770,7 @@ fn void os_window_render(OS_Window window_, void *mem) {
   Wl_Window *window = (Wl_Window*)window_.handle.h[0];
   u32 memsize = window_.width * window_.height * 4;
   if (memsize > window->shm.prop.size) {
-    os_sharedmem_resize(&window->shm, memsize);
+    unx_sharedmem_resize(&window->shm, memsize);
     wl_shm_pool_resize(window->wl_shm_pool, memsize);
   }
 

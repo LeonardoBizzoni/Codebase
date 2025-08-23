@@ -24,13 +24,27 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
   ScratchEnd(scratch);
 }
 
-inline fn void fs_fwrite(File *file, String8 content) {
+fn void fs_fwrite(File *file, String8 content) {
   if (file->prop.size < (usize)content.size) {
     fs_fresize(file, content.size);
   }
   memzero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
                                                     (isize)content.size));
   (void)memcopy(file->content, content.str, content.size);
+}
+
+fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
+                                     u64 how_much) {
+  OS_Handle now = os_timer_start();
+  u64 elapsed = os_timer_elapsed_start2end(unit, timer, now);
+  os_timer_free(now);
+  return elapsed >= how_much;
+}
+
+fn OS_FileIter* fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed) {
+  OS_FileIter *os_iter = fs_iter_begin(arena, path);
+  os_iter->filter_allowed = allowed;
+  return os_iter;
 }
 
 fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
@@ -42,10 +56,18 @@ fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
   ScratchEnd(scratch);
 }
 
-inline fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
-                                     u64 how_much) {
-  OS_Handle now = os_timer_start();
-  u64 elapsed = os_timer_elapsed_start2end(unit, timer, now);
-  os_timer_free(now);
-  return elapsed >= how_much;
+fn NetInterface os_net_interface_lookup(String8 interface) {
+  NetInterface res = {};
+
+  Scratch scratch = ScratchBegin(0, 0);
+  NetInterfaceList inters = os_net_interfaces(scratch.arena);
+  for (NetInterface *curr = inters.first; curr; curr = curr->next) {
+    if (str8_eq(curr->strip, interface) || str8_eq(curr->name, interface)) {
+      memcopy(&res, curr, sizeof(NetInterface));
+      break;
+    }
+  }
+  ScratchEnd(scratch);
+
+  return res;
 }

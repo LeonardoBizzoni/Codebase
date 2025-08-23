@@ -5,24 +5,6 @@ typedef struct {
   u64 h[1];
 } OS_Handle;
 
-typedef struct {
-  bool is_child;
-  OS_Handle handle;
-} OS_ProcHandle;
-
-// TODO(lb): not the best naming convetion
-typedef u8 OS_ProcState;
-enum {
-  OS_ProcState_Finished = 1 << 0,
-  OS_ProcState_Killed   = 1 << 1,
-  OS_ProcState_CoreDump = 1 << 2,
-};
-
-typedef struct {
-  OS_ProcState state;
-  u32 exit_code;
-} OS_ProcStatus;
-
 typedef u8 OS_SemaphoreKind;
 enum {
   OS_SemaphoreKind_Thread,
@@ -235,7 +217,7 @@ fn void start(CmdLine *cmdln);
 
 // =============================================================================
 // System information retrieval
-fn OS_SystemInfo *os_getSystemInfo(void);
+fn OS_SystemInfo *os_sysinfo(void);
 
 // =============================================================================
 // DateTime
@@ -276,13 +258,14 @@ fn void os_decommit(void *base, usize size);
 // Threads & Processes stuff
 fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
-fn void os_thread_cancel(OS_Handle thd_handle);
+fn void os_thread_cancel(OS_Handle thd);
 fn bool os_thread_join(OS_Handle thd);
 fn void os_thread_cancelpoint(void);
 
-fn OS_ProcHandle os_proc_spawn(void);
-fn void os_proc_kill(OS_ProcHandle proc);
-fn OS_ProcStatus os_proc_wait(OS_ProcHandle proc);
+// TODO(lb): add stream redirection?
+fn OS_Handle os_proc_spawn(String8 command);
+fn void os_proc_kill(OS_Handle proc);
+fn u32 os_proc_wait(OS_Handle proc);
 
 fn void os_exit(u8 status_code);
 fn void os_atexit(VoidFunc *callback);
@@ -321,9 +304,8 @@ fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
 fn bool os_semaphore_trywait(OS_Handle sem);
 fn void os_semaphore_free(OS_Handle sem);
 
-fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags);
-fn void os_sharedmem_resize(SharedMem *shm, usize size);
-fn void os_sharedmem_unlink_name(SharedMem *shm);
+fn SharedMem os_sharedmem_open(String8 name, usize size,
+                               OS_AccessFlags flags);
 fn void os_sharedmem_close(SharedMem *shm);
 
 // =============================================================================
@@ -371,29 +353,30 @@ fn String8 fs_readlink(Arena *arena, String8 path);
 
 // =============================================================================
 // Memory mapping files
-       fn File fs_fopen(Arena* arena, OS_Handle file);
-       fn File fs_fopenTmp(Arena *arena);
-inline fn bool fs_fclose(File *file);
-inline fn bool fs_fresize(File *file, usize size);
-inline fn void fs_fwrite(File *file, String8 str);
+fn File fs_fopen(Arena* arena, OS_Handle file);
+fn File fs_fopen_tmp(Arena *arena);
+fn bool fs_fclose(File *file);
+fn bool fs_fresize(File *file, usize size);
+fn void fs_fwrite(File *file, String8 str);
 
-inline fn bool fs_fileHasChanged(File *file);
-inline fn bool fs_fdelete(File *file);
-inline fn bool fs_frename(File *file, String8 to);
+fn bool fs_file_has_changed(File *file);
+fn bool fs_fdelete(File *file);
+fn bool fs_frename(File *file, String8 to);
 
 // =============================================================================
 // Misc operation on the filesystem
-inline fn bool fs_delete(String8 filepath);
-inline fn bool fs_rename(String8 filepath, String8 to);
+fn bool fs_delete(String8 filepath);
+fn bool fs_rename(String8 filepath, String8 to);
 
-inline fn bool fs_mkdir(String8 path);
-inline fn bool fs_rmdir(String8 path);
+fn bool fs_mkdir(String8 path);
+fn bool fs_rmdir(String8 path);
 
 fn String8 fs_filename_from_path(Arena *arena, String8 path);
 
 // =============================================================================
 // File iteration
 fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path);
+fn OS_FileIter* fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed);
 fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out);
 fn void fs_iter_end(OS_FileIter *iter);
 

@@ -23,12 +23,12 @@ fn Arena *_arena_build(ArenaArgs args) {
 #endif
 
   if (args.flags & Arena_UseHugePage) {
-    reserve = align_forward(args.reserve_size, os_getSystemInfo()->hugepage_size);
-    commit = align_forward(args.commit_size, os_getSystemInfo()->hugepage_size);
+    reserve = align_forward(args.reserve_size, os_sysinfo()->hugepage_size);
+    commit = align_forward(args.commit_size, os_sysinfo()->hugepage_size);
     mem = os_reserve_huge(reserve);
   } else {
-    reserve = align_forward(args.reserve_size, os_getSystemInfo()->page_size);
-    commit = align_forward(args.commit_size, os_getSystemInfo()->page_size);
+    reserve = align_forward(args.reserve_size, os_sysinfo()->page_size);
+    commit = align_forward(args.commit_size, os_sysinfo()->page_size);
     mem = os_reserve(reserve);
   }
 
