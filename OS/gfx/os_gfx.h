@@ -3,6 +3,8 @@
 
 #define MAX_SUPPORTED_GAMEPAD 4
 
+typedef OS_Handle GFX_Handle;
+
 typedef u32 OS_EventType;
 enum {
   OS_EventType_None,
@@ -103,29 +105,27 @@ typedef struct {
   OS_Gamepad gamepad[MAX_SUPPORTED_GAMEPAD];
 } OS_InputDeviceState;
 
-typedef struct {
-  u32 width, height;
-  OS_Handle handle;
-} OS_Window;
+fn OS_Handle os_window_open(String8 name, u32 width, u32 height);
+fn void os_window_show(OS_Handle window);
+fn void os_window_hide(OS_Handle window);
+fn void os_window_close(OS_Handle window);
 
-fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height);
-fn void os_window_show(OS_Window handle);
-fn void os_window_hide(OS_Window handle);
-fn void os_window_close(OS_Window handle);
+fn void os_window_swapBuffers(OS_Handle window);
+fn void os_window_render(OS_Handle window, void *mem);
 
-fn void os_window_swapBuffers(OS_Window handle);
-fn void os_window_render(OS_Window window_, void *mem);
-
-fn OS_Event os_window_get_event(OS_Window handle);
-fn OS_Event os_window_wait_event(OS_Window handle);
+fn OS_Event os_window_get_event(OS_Handle window);
+fn OS_Event os_window_wait_event(OS_Handle window);
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
 
-#if USING_OPENGL
-fn void opengl_init(OS_Window handle);
-fn void opengl_deinit(OS_Window handle);
 
-fn void opengl_make_current(OS_Window handle);
-#endif
+fn void os_gfx_init(void);
+fn void os_gfx_deinit(void);
+
+fn GFX_Handle os_gfx_context_window_init(OS_Handle window);
+fn void os_gfx_context_window_deinit(GFX_Handle context);
+
+fn void os_gfx_window_commit(GFX_Handle context);
+internal void os_gfx_window_resize(GFX_Handle context, u32 width, u32 height);
 
 #endif

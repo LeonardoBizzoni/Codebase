@@ -109,7 +109,7 @@ fn bool str8_is_floating(String8 s);
 fn bool str8_is_numerical(String8 s);
 
 fn char* cstr_from_str8(Arena *arena, String8 str);
-fn bool cstr_eq(char *s1, char *s2);
+fn bool cstr_eq(const char *s1, const char *s2);
 
 fn i64 i64_from_str8(String8 s);
 fn u64 u64_from_str8(String8 s);

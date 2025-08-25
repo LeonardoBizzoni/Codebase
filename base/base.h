@@ -133,6 +133,19 @@
 #  define NDEBUG 1
 #endif
 
+#if !defined(GFX_OPENGL)
+#  define GFX_OPENGL 0
+#endif
+#if !defined(GFX_VULKAN)
+#  define GFX_VULKAN 0
+#endif
+#if !defined(GFX_DIRECT3D)
+#  define GFX_DIRECT3D 0
+#endif
+#if !defined(GFX_METAL)
+#  define GFX_METAL 0
+#endif
+
 #if !defined(APPLICATION_NAME)
   #define APPLICATION_NAME "codebase"
 #endif
@@ -237,6 +250,7 @@
 #define Thousand(x) ((x)*1000)
 #define Million(x)  ((x)*1000000ull)
 
+#define internal static
 #define global static
 #define local static
 #define fn static

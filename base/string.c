@@ -586,7 +586,7 @@ fn char* cstr_from_str8(Arena *arena, String8 str) {
   return res;
 }
 
-fn bool cstr_eq(char *s1, char *s2) {
+fn bool cstr_eq(const char *s1, const char *s2) {
   if (s1 == s2) {
     return true;
   }
@@ -594,7 +594,7 @@ fn bool cstr_eq(char *s1, char *s2) {
     return false;
   }
 
-  char *it1 = s1, *it2 = s2;
+  const char *it1 = s1, *it2 = s2;
   for (; *it1 && *it2; ++it1, ++it2) {
     if (*it1 != *it2) {
       return false;

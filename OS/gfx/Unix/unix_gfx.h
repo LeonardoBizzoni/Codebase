@@ -24,9 +24,9 @@ fn void unx_gfx_deinit(void);
 #endif
 
 #if UNX_X11
-#  include "X11/unix_gfx_x11.h"
+#  include "X11/unix_gfx_x11_inc.h"
 #elif UNX_WAYLAND
-#  include "Wayland/unix_gfx_wayland.h"
+#  include "Wayland/unix_gfx_wayland_inc.h"
 #endif
 
 #endif
