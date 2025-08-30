@@ -127,12 +127,37 @@ fn void os_gfx_init(void) {
                                                         &dummy_surface);
   Assert(surface_create_result == VK_SUCCESS);
 
+  const char *device_extensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, };
+  u32 device_extension_count = 0;
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    vkEnumerateDeviceExtensionProperties(*wayvk_state.physical_device, 0,
+                                         &device_extension_count, 0);
+    VkExtensionProperties *device_extensions_available = New(scratch.arena,
+                                                             VkExtensionProperties,
+                                                             device_extension_count);
+    vkEnumerateDeviceExtensionProperties(*wayvk_state.physical_device, 0,
+                                         &device_extension_count, device_extensions_available);
+    for (usize i = 0; i < Arrsize(device_extensions); ++i) {
+      bool extension_found = false;
+      for (usize j = 0; j < device_extension_count; ++j) {
+        if (cstr_eq(device_extensions[i],
+                    device_extensions_available[j].extensionName)) {
+          extension_found = true;
+          break;
+        }
+      }
+      Assert(extension_found);
+    }
+    ScratchEnd(scratch);
+  }
+
   u32 graphics_family_queue_idx = -1;
   for (u32 i = 0; i < wayvk_state.physical_device_queue_family_count; ++i) {
     VkBool32 present_support = 0;
     vkGetPhysicalDeviceSurfaceSupportKHR(*wayvk_state.physical_device, i,
                                          dummy_surface, &present_support);
-    // NOTE(lb): allow using 2 different queue families?
+
     if (present_support &&
         (wayvk_state.physical_device_queue_family[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
       graphics_family_queue_idx = i;
@@ -140,8 +165,6 @@ fn void os_gfx_init(void) {
     }
   }
   Assert(graphics_family_queue_idx != (u32)-1);
-  vkDestroySurfaceKHR(wayvk_state.instance, dummy_surface, 0);
-  wl_surface_destroy(surface_create_info.surface);
 
   f32 queue_priority = 1.f;
   VkDeviceQueueCreateInfo queue_create_info = {};
@@ -157,6 +180,8 @@ fn void os_gfx_init(void) {
   device_create_info.pQueueCreateInfos = &queue_create_info;
   device_create_info.queueCreateInfoCount = 1;
   device_create_info.pEnabledFeatures = &device_used_features;
+  device_create_info.enabledExtensionCount = Arrsize(device_extensions);
+  device_create_info.ppEnabledExtensionNames = device_extensions;
 #if DEBUG
   device_create_info.enabledLayerCount = Arrsize(validation_layers);
   device_create_info.ppEnabledLayerNames = validation_layers;
@@ -171,6 +196,61 @@ fn void os_gfx_init(void) {
 
   vkGetDeviceQueue(wayvk_state.device, graphics_family_queue_idx, 0,
                    &wayvk_state.graphics_queue);
+
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*wayvk_state.physical_device,
+                                            dummy_surface,
+                                            &wayvk_state.swapchain.surface_capabilities);
+
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    u32 swapchain_format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(*wayvk_state.physical_device,
+                                         dummy_surface,
+                                         &swapchain_format_count, 0);
+    Assert(swapchain_format_count);
+    VkSurfaceFormatKHR *swapchain_formats = New(scratch.arena,
+                                                VkSurfaceFormatKHR,
+                                                swapchain_format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(*wayvk_state.physical_device,
+                                         dummy_surface,
+                                         &swapchain_format_count,
+                                         swapchain_formats);
+    for (u32 i = 0; i < swapchain_format_count; ++i) {
+      if (swapchain_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+          swapchain_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+        memcopy(&wayvk_state.swapchain.surface_format,
+                &swapchain_formats[i], sizeof (*swapchain_formats));
+      }
+    }
+    if (!wayvk_state.swapchain.surface_format.format) {
+      memcopy(&wayvk_state.swapchain.surface_format,
+              &swapchain_formats[0], sizeof (*swapchain_formats));
+    }
+
+    u32 swapchain_mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(*wayvk_state.physical_device,
+                                              dummy_surface,
+                                              &swapchain_mode_count, 0);
+    Assert(swapchain_mode_count);
+    VkPresentModeKHR *swapchain_modes = New(wayvk_state.arena, VkPresentModeKHR,
+                                            swapchain_mode_count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(*wayvk_state.physical_device,
+                                              dummy_surface,
+                                              &swapchain_mode_count,
+                                              swapchain_modes);
+    for (u32 i = 0; i < swapchain_format_count; ++i) {
+      if (swapchain_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+        wayvk_state.swapchain.present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+      }
+    }
+    if (!wayvk_state.swapchain.present_mode) {
+      wayvk_state.swapchain.present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    }
+    ScratchEnd(scratch);
+  }
+
+  vkDestroySurfaceKHR(wayvk_state.instance, dummy_surface, 0);
+  wl_surface_destroy(surface_create_info.surface);
 }
 
 fn void os_gfx_deinit(void) {
@@ -200,12 +280,59 @@ fn GFX_Handle os_gfx_context_window_init(OS_Handle window) {
                                                         &gfx_window->vk_surface);
   Assert(surface_create_result == VK_SUCCESS);
 
+  u32 min_image_count = wayvk_state.swapchain.surface_capabilities.minImageCount + 1;
+  if (wayvk_state.swapchain.surface_capabilities.maxImageCount > 0) {
+    min_image_count = ClampTop(min_image_count,
+                               wayvk_state.swapchain.surface_capabilities.maxImageCount);
+  }
+
+  if (wayvk_state.swapchain.surface_capabilities.currentExtent.width != U32_MAX) {
+    gfx_window->vk_extent.width = wayvk_state.swapchain.surface_capabilities.currentExtent.width;
+    gfx_window->vk_extent.height = wayvk_state.swapchain.surface_capabilities.currentExtent.height;
+  } else {
+    gfx_window->vk_extent.width = Clamp(os_window->width,
+                                        wayvk_state.swapchain.surface_capabilities.minImageExtent.width,
+                                        wayvk_state.swapchain.surface_capabilities.maxImageExtent.width);
+    gfx_window->vk_extent.height = Clamp(os_window->height,
+                                         wayvk_state.swapchain.surface_capabilities.minImageExtent.height,
+                                         wayvk_state.swapchain.surface_capabilities.maxImageExtent.height);
+  }
+
+  VkSwapchainCreateInfoKHR swapchain_create_info = {};
+  swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  swapchain_create_info.surface = gfx_window->vk_surface;
+  swapchain_create_info.minImageCount = min_image_count;
+  swapchain_create_info.imageFormat = wayvk_state.swapchain.surface_format.format;
+  swapchain_create_info.imageColorSpace = wayvk_state.swapchain.surface_format.colorSpace;
+  swapchain_create_info.imageExtent = gfx_window->vk_extent;
+  swapchain_create_info.imageArrayLayers = 1;
+  swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  swapchain_create_info.preTransform = wayvk_state.swapchain.surface_capabilities.currentTransform;
+  swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  swapchain_create_info.presentMode = wayvk_state.swapchain.present_mode;
+  swapchain_create_info.clipped = VK_TRUE;
+  swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
+  VkResult swapchain_create_result = vkCreateSwapchainKHR(wayvk_state.device,
+                                                          &swapchain_create_info, 0,
+                                                          &gfx_window->vk_swapchain);
+  Assert(swapchain_create_result == VK_SUCCESS);
+
+  vkGetSwapchainImagesKHR(wayvk_state.device, gfx_window->vk_swapchain,
+                          &gfx_window->vk_image_count, 0);
+  Assert(gfx_window->vk_image_count);
+  gfx_window->vk_images = New(wayvk_state.arena, VkImage,
+                              gfx_window->vk_image_count);
+  vkGetSwapchainImagesKHR(wayvk_state.device, gfx_window->vk_swapchain,
+                          &gfx_window->vk_image_count, gfx_window->vk_images);
+
   GFX_Handle res = {{(u64)gfx_window}};
   return res;
 }
 
 fn void os_gfx_context_window_deinit(GFX_Handle handle) {
   WayVk_Window *gfx_window = (WayVk_Window*)handle.h[0];
+  vkDestroySwapchainKHR(wayvk_state.device, gfx_window->vk_swapchain, 0);
   vkDestroySurfaceKHR(wayvk_state.instance, gfx_window->vk_surface, 0);
 }
 

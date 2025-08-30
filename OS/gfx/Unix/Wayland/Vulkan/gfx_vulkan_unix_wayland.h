@@ -13,6 +13,10 @@ typedef struct WayVk_Window {
   Wl_Window *os_window;
 
   VkSurfaceKHR vk_surface;
+  VkExtent2D vk_extent;
+  VkSwapchainKHR vk_swapchain;
+  VkImage *vk_images;
+  u32 vk_image_count;
 
   struct WayVk_Window *next;
   struct WayVk_Window *prev;
@@ -30,6 +34,12 @@ typedef struct {
 
   VkDevice device;
   VkQueue graphics_queue;
+
+  struct {
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    VkSurfaceFormatKHR surface_format;
+    VkPresentModeKHR present_mode;
+  } swapchain;
 } WayVk_State;
 
 #endif
