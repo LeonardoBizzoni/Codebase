@@ -323,8 +323,31 @@ fn GFX_Handle os_gfx_context_window_init(OS_Handle window) {
   Assert(gfx_window->vk_image_count);
   gfx_window->vk_images = New(wayvk_state.arena, VkImage,
                               gfx_window->vk_image_count);
+  gfx_window->vk_imageviews = New(wayvk_state.arena, VkImageView,
+                                  gfx_window->vk_image_count);
   vkGetSwapchainImagesKHR(wayvk_state.device, gfx_window->vk_swapchain,
                           &gfx_window->vk_image_count, gfx_window->vk_images);
+  for (u32 i = 0; i < gfx_window->vk_image_count; ++i) {
+    VkImageViewCreateInfo imageview_create_info = {};
+    imageview_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    imageview_create_info.image = gfx_window->vk_images[i];
+    imageview_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    imageview_create_info.format = wayvk_state.swapchain.surface_format.format;
+    imageview_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    imageview_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    imageview_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    imageview_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    imageview_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageview_create_info.subresourceRange.baseMipLevel = 0;
+    imageview_create_info.subresourceRange.levelCount = 1;
+    imageview_create_info.subresourceRange.baseArrayLayer = 0;
+    imageview_create_info.subresourceRange.layerCount = 1;
+
+    VkResult create_imageview_result = vkCreateImageView(wayvk_state.device,
+                                                         &imageview_create_info, 0,
+                                                         &gfx_window->vk_imageviews[i]);
+    Assert(create_imageview_result == VK_SUCCESS);
+  }
 
   GFX_Handle res = {{(u64)gfx_window}};
   return res;
@@ -332,6 +355,9 @@ fn GFX_Handle os_gfx_context_window_init(OS_Handle window) {
 
 fn void os_gfx_context_window_deinit(GFX_Handle handle) {
   WayVk_Window *gfx_window = (WayVk_Window*)handle.h[0];
+  for (u32 i = 0; i < gfx_window->vk_image_count; ++i) {
+    vkDestroyImageView(wayvk_state.device, gfx_window->vk_imageviews[i], 0);
+  }
   vkDestroySwapchainKHR(wayvk_state.device, gfx_window->vk_swapchain, 0);
   vkDestroySurfaceKHR(wayvk_state.instance, gfx_window->vk_surface, 0);
 }

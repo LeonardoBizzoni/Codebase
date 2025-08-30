@@ -16,6 +16,7 @@ typedef struct WayVk_Window {
   VkExtent2D vk_extent;
   VkSwapchainKHR vk_swapchain;
   VkImage *vk_images;
+  VkImageView *vk_imageviews;
   u32 vk_image_count;
 
   struct WayVk_Window *next;
