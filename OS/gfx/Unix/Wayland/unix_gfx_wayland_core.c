@@ -67,8 +67,6 @@ fn void unx_gfx_init(void) {
 
   waystate.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
-  os_gfx_init();
-
   wl_display_roundtrip(waystate.wl_display);
   waystate.event_dispatcher = os_thread_start(wl_event_dispatcher, 0);
 }
@@ -122,6 +120,10 @@ fn void wl_registry_event_global(void *data, struct wl_registry *registry,
     waystate.wl_shm = wl_registry_bind(registry, name, &wl_shm_interface, version);
   } else if (cstr_eq(interface, wl_compositor_interface.name)) {
     waystate.wl_compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version);
+    // NOTE(lb): Vulkan needs a wl_compositor to create a dummy interface
+    //           when selecting a queue family for the logical device.
+    //           OpenGL doesn't care where the init happens so it's fine.
+    os_gfx_init();
   } else if (cstr_eq(interface, wl_seat_interface.name)) {
     waystate.wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, version);
     wl_seat_add_listener(waystate.wl_seat, &wl_seat_listener, 0);

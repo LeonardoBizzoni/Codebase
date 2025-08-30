@@ -24,7 +24,10 @@ typedef struct {
   WayVk_Window *freequeue_last;
 
   VkInstance instance;
-  VkPhysicalDevice physical_device;
+  VkPhysicalDevice *physical_device;
+  u32 physical_device_queue_family_count;
+  VkQueueFamilyProperties *physical_device_queue_family;
+
   VkDevice device;
   VkQueue graphics_queue;
 } WayVk_State;
