@@ -1,3 +1,5 @@
+global WayVk_State wayvk_state = {};
+
 fn void os_gfx_init(void) {
   wayvk_state.arena = ArenaBuild();
 
@@ -58,37 +60,85 @@ fn void os_gfx_init(void) {
   vkEnumeratePhysicalDevices(wayvk_state.instance, &physical_device_count,
                              physical_devices);
 
+  u32 queue_family_count = 0;
+  VkQueueFamilyProperties *queue_families = 0;
   VkPhysicalDevice *best_physical_device = &physical_devices[0];
-  for (u32 i = 0, best_score = 0;
-       wayvk_state.rate_device && i < physical_device_count;
-       ++i) {
+  if (os_vk_rate_device) {
     Scratch scratch = ScratchBegin(0, 0);
-    VkPhysicalDeviceProperties props = {};
-    vkGetPhysicalDeviceProperties(physical_devices[i], &props);
-    VkPhysicalDeviceFeatures features = {};
-    vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
+    VkQueueFamilyProperties *tmp = 0;
+    i32 best_score = -1;
+    for (u32 i = 0; i < physical_device_count; ++i) {
+      VkPhysicalDeviceProperties props = {};
+      vkGetPhysicalDeviceProperties(physical_devices[i], &props);
+      VkPhysicalDeviceFeatures features = {};
+      vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
 
-    u32 queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
-                                             &queue_family_count, 0);
-    VkQueueFamilyProperties *queue_families = New(wayvk_state.arena,
-                                                  VkQueueFamilyProperties,
-                                                  queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
-                                             &queue_family_count,
-                                             queue_families);
+      u32 device_queue_family_count = 0;
+      vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
+                                               &device_queue_family_count, 0);
+      VkQueueFamilyProperties *device_queue_families = New(scratch.arena,
+                                                           VkQueueFamilyProperties,
+                                                           device_queue_family_count);
+      vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i],
+                                               &device_queue_family_count,
+                                               device_queue_families);
 
-    u32 score = wayvk_state.rate_device(&props, &features, queue_families,
-                                        queue_family_count);
+      i32 score = os_vk_rate_device(&props, &features, device_queue_families,
+                                    device_queue_family_count);
+      if (score > best_score) {
+        best_score = score;
+        tmp = device_queue_families;
+        best_physical_device = &physical_devices[i];
+        queue_family_count = device_queue_family_count;
+      }
+    }
+    Assert(tmp);
+    queue_families = New(wayvk_state.arena, VkQueueFamilyProperties,
+                         queue_family_count);
+    memcopy(queue_families, tmp, sizeof (*tmp) * queue_family_count);
     ScratchEnd(scratch);
-    if (score > best_score) {
-      score = best_score;
-      best_physical_device = &physical_devices[i];
+  }
+
+  u32 graphics_family_idx = -1;
+  for (u32 i = 0; i < queue_family_count; ++i) {
+    if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      graphics_family_idx = i;
     }
   }
+  Assert(graphics_family_idx != (u32)-1);
+
+  f32 queue_priority = 1.f;
+  VkDeviceQueueCreateInfo queue_create_info = {};
+  queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  queue_create_info.queueFamilyIndex = graphics_family_idx;
+  queue_create_info.queueCount = 1;
+  queue_create_info.pQueuePriorities = &queue_priority;
+
+  VkPhysicalDeviceFeatures device_used_features = {};
+
+  VkDeviceCreateInfo device_create_info = {};
+  device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  device_create_info.pQueueCreateInfos = &queue_create_info;
+  device_create_info.queueCreateInfoCount = 1;
+  device_create_info.pEnabledFeatures = &device_used_features;
+#if DEBUG
+  device_create_info.enabledLayerCount = Arrsize(validation_layers);
+  device_create_info.ppEnabledLayerNames = validation_layers;
+#else
+  device_create_info.enabledLayerCount = 0;
+#endif
+
+  VkResult create_device_result = vkCreateDevice(*best_physical_device,
+                                                 &device_create_info, 0,
+                                                 &wayvk_state.device);
+  Assert(create_device_result == VK_SUCCESS);
+
+  vkGetDeviceQueue(wayvk_state.device, graphics_family_idx, 0,
+                   &wayvk_state.graphics_queue);
 }
 
 fn void os_gfx_deinit(void) {
+  vkDestroyDevice(wayvk_state.device, 0);
   vkDestroyInstance(wayvk_state.instance, 0);
 }
 

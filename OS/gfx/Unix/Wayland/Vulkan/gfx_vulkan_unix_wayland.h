@@ -4,6 +4,11 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_wayland.h>
 
+__attribute__((weak)) i32 os_vk_rate_device(VkPhysicalDeviceProperties *props,
+                                            VkPhysicalDeviceFeatures *features,
+                                            VkQueueFamilyProperties *queue_family,
+                                            u32 family_count);
+
 typedef struct WayVk_Window {
   Wl_Window *os_window;
 
@@ -18,14 +23,10 @@ typedef struct {
   WayVk_Window *freequeue_first;
   WayVk_Window *freequeue_last;
 
-  u32 (*rate_device)(VkPhysicalDeviceProperties *,
-                     VkPhysicalDeviceFeatures *,
-                     VkQueueFamilyProperties *, u32 family_count);
-
   VkInstance instance;
   VkPhysicalDevice physical_device;
   VkDevice device;
+  VkQueue graphics_queue;
 } WayVk_State;
-global WayVk_State wayvk_state = {};
 
 #endif
