@@ -1,21 +1,14 @@
 #ifndef OS_GFX_LINUX_X11_H
 #define OS_GFX_LINUX_X11_H
 
+#undef internal
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/XKBlib.h>
-
-#if USING_OPENGL
-#  include<GL/gl.h>
-#  include<GL/glx.h>
-#  include<GL/glu.h>
-#endif
+#define internal static
 
 typedef struct X11_Window {
-  i32 xscreen;
   Window xwindow;
-  XVisualInfo xvisual;
-  XSetWindowAttributes xattrib;
   GC xgc;
 
   struct {
@@ -24,10 +17,7 @@ typedef struct X11_Window {
     OS_Handle lock;
   } eventlist;
   OS_Handle eventlistener;
-
-#if USING_OPENGL
-  GLXContext context;
-#endif
+  GFX_Handle gfx_context;
 
   struct X11_Window *next;
   struct X11_Window *prev;
@@ -40,7 +30,14 @@ typedef struct {
   X11_Window *freelist_window;
 
   Display *xdisplay;
+  XVisualInfo xvisual;
+  i32 xscreen;
+
   u64 xatom_close;
 } X11_State;
+
+fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event,
+                                     XPointer arg);
+fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent);
 
 #endif
