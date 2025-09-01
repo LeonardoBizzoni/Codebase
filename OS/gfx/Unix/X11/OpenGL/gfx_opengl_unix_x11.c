@@ -62,6 +62,7 @@ fn GFX_Handle os_gfx_context_window_init(OS_Handle window_) {
   }
   Assert(gfx_window);
 
+  os_window_show(window_);
   gfx_window->egl_surface = eglCreateWindowSurface(x11gl_state.egl_display,
                                                    x11gl_state.egl_config,
                                                    os_window->xwindow, 0);

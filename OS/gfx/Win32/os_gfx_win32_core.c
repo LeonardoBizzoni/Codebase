@@ -8,6 +8,8 @@ fn void w32_gfx_init(HINSTANCE instance) {
   // TODO(lb): what about non-xinput gamepads like the dualshock
   //           and nintendo controllers?
   w32_xinput_load();
+
+  os_gfx_init();
 }
 
 fn void w32_xinput_load(void) {
@@ -41,7 +43,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
     event = w32_alloc_windowevent();
     event->value.type = OS_EventType_Kill;
   } break;
-  case WM_PAINT: {
+  case WM_SIZE: {
     event = w32_alloc_windowevent();
     RECT rect;
     GetClientRect(window->winhandle, &rect);
@@ -76,6 +78,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
       QueuePush(window->eventlist.first, window->eventlist.last, event);
       os_cond_signal(window->eventlist.condvar);
     }
+    return 0;
   }
   return DefWindowProc(winhandle, msg_code, wparam, lparam);
 }
@@ -112,10 +115,9 @@ fn void w32_window_task(void *args_) {
     winclass.lpfnWndProc = w32_message_handler;
     RegisterClass(&winclass);
     args->window->winhandle = CreateWindowA(window_name, window_name,
-					    WS_OVERLAPPEDWINDOW, 
-					    args->x, args->y,
-					    args->width, args->height,
-					    0, 0, w32_gfxstate.instance, 0);
+                                            WS_OVERLAPPEDWINDOW,
+                                            0, 0, args->width, args->height,
+                                            0, 0, w32_gfxstate.instance, 0);
     Assert(args->window->winhandle);
     ScratchEnd(scratch);
   }
@@ -151,23 +153,23 @@ fn void w32_window_task(void *args_) {
       if (state != ERROR_SUCCESS) {
         if (os_input_device.gamepad[controller_idx].active) {
           os_input_device.gamepad[controller_idx].active = 0;
-	  W32_WindowEvent *event = w32_alloc_windowevent();
-	  event->value.type = OS_EventType_GamepadDisconnected;
-	  OS_MutexScope(args->window->eventlist.mutex) {
-	    QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
-	    os_cond_signal(args->window->eventlist.condvar);
-	  }
+          W32_WindowEvent *event = w32_alloc_windowevent();
+          event->value.type = OS_EventType_GamepadDisconnected;
+          OS_MutexScope(args->window->eventlist.mutex) {
+            QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
+            os_cond_signal(args->window->eventlist.condvar);
+          }
         }
         continue;
       }
       if (!os_input_device.gamepad[controller_idx].active) {
         os_input_device.gamepad[controller_idx].active = 1;
-	W32_WindowEvent *event = w32_alloc_windowevent();
-	event->value.type = OS_EventType_GamepadConnected;
-	OS_MutexScope(args->window->eventlist.mutex) {
-	  QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
-	  os_cond_signal(args->window->eventlist.condvar);
-	}
+        W32_WindowEvent *event = w32_alloc_windowevent();
+        event->value.type = OS_EventType_GamepadConnected;
+        OS_MutexScope(args->window->eventlist.mutex) {
+          QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
+          os_cond_signal(args->window->eventlist.condvar);
+        }
       }
 
       XINPUT_GAMEPAD *pad = &controller_state.Gamepad;
@@ -220,7 +222,7 @@ fn void w32_window_task(void *args_) {
   }
 }
 
-fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
+fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   W32_Window *window = w32_gfxstate.freelist_window;
   if (window) {
     memzero(window, sizeof(W32_Window));
@@ -232,8 +234,6 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   W32_WindowInitArgs *args = New(w32_gfxstate.arena, W32_WindowInitArgs);
   args->name = name;
-  args->x = x;
-  args->y = y;
   args->width = width;
   args->height = height;
   args->window = window;
@@ -245,34 +245,24 @@ fn OS_Window os_window_open(String8 name, u32 x, u32 y, u32 width, u32 height) {
 
   RECT rect = {0};
   (void)GetWindowRect(window->winhandle, &rect);
-  OS_Window res = {
-    .width = rect.right - rect.left,
-    .height = rect.bottom - rect.top,
-    .handle = {(u64)window}
-  };
+  OS_Handle res = {(u64)window};
   return res;
 }
 
-fn void os_window_show(OS_Window window) {
-  ShowWindow(((W32_Window *)window.handle.h[0])->winhandle, SW_SHOWDEFAULT);
+fn void os_window_show(OS_Handle window) {
+  ShowWindow(((W32_Window *)window.h[0])->winhandle, SW_SHOWDEFAULT);
 }
 
-fn void os_window_hide(OS_Window window) {
-  ShowWindow(((W32_Window *)window.handle.h[0])->winhandle, SW_HIDE);
+fn void os_window_hide(OS_Handle window) {
+  ShowWindow(((W32_Window *)window.h[0])->winhandle, SW_HIDE);
 }
 
-fn void os_window_close(OS_Window window) {
-  CloseWindow(((W32_Window *)window.handle.h[0])->winhandle);
+fn void os_window_close(OS_Handle window) {
+  CloseWindow(((W32_Window *)window.h[0])->winhandle);
 }
 
-fn void os_window_swapBuffers(OS_Window window) {
-#if USING_OPENGL
-  SwapBuffers(((W32_Window *)window.handle.h[0])->dc);
-#endif
-}
-
-fn OS_Event os_window_get_event(OS_Window window_) {
-  W32_Window *window = (W32_Window *)window_.handle.h[0];
+fn OS_Event os_window_get_event(OS_Handle window_) {
+  W32_Window *window = (W32_Window *)window_.h[0];
   OS_Event res = {0};
 
   W32_WindowEvent *event = 0;
@@ -280,17 +270,18 @@ fn OS_Event os_window_get_event(OS_Window window_) {
     event = window->eventlist.first;
     if (event) { QueuePop(window->eventlist.first); }
   }
-
   if (!event) { return res; }
   memcopy(&res, &event->value, sizeof(OS_Event));
+  event->next = 0;
   OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
-    QueuePush(w32_gfxstate.event_freelist.first, w32_gfxstate.event_freelist.last, event);
+    QueuePush(w32_gfxstate.event_freelist.first,
+              w32_gfxstate.event_freelist.last, event);
   }
   return res;
 }
 
-fn OS_Event os_window_wait_event(OS_Window window_) {
-  W32_Window *window = (W32_Window *)window_.handle.h[0];
+fn OS_Event os_window_wait_event(OS_Handle window_) {
+  W32_Window *window = (W32_Window *)window_.h[0];
   OS_Event res = {0};
 
   W32_WindowEvent *event = 0;
@@ -304,7 +295,9 @@ fn OS_Event os_window_wait_event(OS_Window window_) {
   Assert(event);
   memcopy(&res, &event->value, sizeof(OS_Event));
   OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
-    QueuePush(w32_gfxstate.event_freelist.first, w32_gfxstate.event_freelist.last, event);
+    event->next = 0;
+    QueuePush(w32_gfxstate.event_freelist.first,
+              w32_gfxstate.event_freelist.last, event);
   }
   return res;
 }
@@ -330,52 +323,8 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   return res;
 }
 
-// From top to bottom of the window
-fn void os_window_render(OS_Window window_, void *mem) {
-  W32_Window *window = (W32_Window *)window_.handle.h[0];
-  HDC dc = GetDC(window->winhandle);
-  BITMAPINFO bitmap_info = {0};
-  bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-  bitmap_info.bmiHeader.biWidth = window_.width;
-  bitmap_info.bmiHeader.biHeight = -(i32)window_.height;
-  bitmap_info.bmiHeader.biPlanes = 1;
-  bitmap_info.bmiHeader.biBitCount = 32;
-  bitmap_info.bmiHeader.biCompression = BI_RGB;
-  dbg_print("Begin StretchDIBits");
-  StretchDIBits(dc,
-                0, 0, window_.width, window_.height,
-                0, 0, window_.width, window_.height,
-                mem, &bitmap_info,
-                DIB_RGB_COLORS, SRCCOPY);
-  dbg_print("End StretchDIBits");
-  ReleaseDC(window->winhandle, dc);
-}
-
 #if USING_OPENGL
 fn void opengl_init(OS_Handle handle) {
-  W32_Window *window = (W32_Window *)handle.h[0];
-
-  PIXELFORMATDESCRIPTOR pfd = {0};
-  PIXELFORMATDESCRIPTOR desired_pfd = {
-    .nSize = sizeof(PIXELFORMATDESCRIPTOR),
-    .nVersion = 1,
-    .dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-    .iPixelType = PFD_TYPE_RGBA,
-    // NOTE(lb): docs says without alpha but returned pfd has .cColorBits=32
-    //           so im not sure if 24 or 32 is the right value
-    .cColorBits = 32,
-    .cAlphaBits = 8,
-    .iLayerType = PFD_MAIN_PLANE,
-  };
-  i32 pixel_format = ChoosePixelFormat(window->dc, &desired_pfd);
-  Assert(pixel_format);
-  DescribePixelFormat(window->dc, pixel_format,
-                      sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-  SetPixelFormat(window->dc, pixel_format, &pfd);
-
-  window->gl_context = wglCreateContext(window->dc);
-  Assert(window->gl_context);
-  wglMakeCurrent(window->dc, window->gl_context);
 }
 
 fn void opengl_deinit(OS_Handle handle) {

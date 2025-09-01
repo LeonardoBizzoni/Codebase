@@ -37,7 +37,7 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
 fn bool fs_close(OS_Handle fd) {
   bsd_filemap[fd.h[0]].str = 0;
   bsd_filemap[fd.h[0]].size = 0;
-  return !close(fd.h[0]);
+  return !close((i32)fd.h[0]);
 }
 
 fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {

@@ -1,9 +1,5 @@
-#ifndef OS_GFX_WIN32_H
-#define OS_GFX_WIN32_H
-
-#if USING_OPENGL
-#  include <gl/gl.h>
-#endif
+#ifndef OS_GFX_WIN32_CORE_H
+#define OS_GFX_WIN32_CORE_H
 
 #include <xinput.h>
 typedef DWORD WINAPI xinput_get_state(DWORD controller_idx, XINPUT_STATE *state);
@@ -28,9 +24,7 @@ typedef struct W32_Window {
   HBITMAP bitmap_dib;
   HDC mem_dc;
   void *pixels;
-#if USING_OPENGL
-  HGLRC gl_context;
-#endif
+  GFX_Handle gfx_context;
 
   struct {
     OS_Handle mutex, condvar;
@@ -53,7 +47,7 @@ typedef struct {
   W32_Window *first_window;
   W32_Window *last_window;
   W32_Window *freelist_window;
-  
+
   struct {
     OS_Handle mutex;
     W32_WindowEvent *first;
