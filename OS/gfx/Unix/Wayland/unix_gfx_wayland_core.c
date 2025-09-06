@@ -68,6 +68,11 @@ fn void unx_gfx_init(void) {
   waystate.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
   wl_display_roundtrip(waystate.wl_display);
+
+// NOTE(lb): temporary until i figure out vulkan
+#if GFX_OPENGL
+  os_gfx_init();
+#endif
   waystate.event_dispatcher = os_thread_start(wl_event_dispatcher, 0);
 }
 
@@ -75,7 +80,10 @@ fn void unx_gfx_deinit(void) {
   os_thread_cancel(waystate.event_dispatcher);
   wl_compositor_destroy(waystate.wl_compositor);
   wl_registry_destroy(waystate.wl_registry);
+// NOTE(lb): temporary until i figure out vulkan
+#if GFX_OPENGL
   os_gfx_deinit();
+#endif
   wl_display_disconnect(waystate.wl_display);
 }
 
@@ -120,10 +128,6 @@ fn void wl_registry_event_global(void *data, struct wl_registry *registry,
     waystate.wl_shm = wl_registry_bind(registry, name, &wl_shm_interface, version);
   } else if (cstr_eq(interface, wl_compositor_interface.name)) {
     waystate.wl_compositor = wl_registry_bind(registry, name, &wl_compositor_interface, version);
-    // NOTE(lb): Vulkan needs a wl_compositor to create a dummy interface
-    //           when selecting a queue family for the logical device.
-    //           OpenGL doesn't care where the init happens so it's fine.
-    os_gfx_init();
   } else if (cstr_eq(interface, wl_seat_interface.name)) {
     waystate.wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, version);
     wl_seat_add_listener(waystate.wl_seat, &wl_seat_listener, 0);
@@ -368,7 +372,6 @@ fn void xdg_toplevel_event_configure(void *data, struct xdg_toplevel *xdg_toplev
   if (width * height <= 0) { return; }
   Wl_Window *window = (Wl_Window*)data;
   Wl_WindowEvent *event = wl_alloc_windowevent();
-  os_gfx_window_resize(window->gfx_context, width, height);
   event->value.type = OS_EventType_Expose;
   window->width = event->value.expose.width = width;
   window->height = event->value.expose.height = height;
@@ -440,7 +443,6 @@ fn void os_window_hide(OS_Handle handle) {}
 fn void os_window_close(OS_Handle window_) {
   Wl_Window *window = (Wl_Window*)window_.h[0];
 
-  os_gfx_context_window_deinit(window->gfx_context);
   xdg_toplevel_destroy(window->xdg_toplevel);
   xdg_surface_destroy(window->xdg_surface);
   wl_callback_destroy(window->wl_callback);

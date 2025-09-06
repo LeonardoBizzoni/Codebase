@@ -9,7 +9,10 @@ fn void w32_gfx_init(HINSTANCE instance) {
   //           and nintendo controllers?
   w32_xinput_load();
 
+// NOTE(lb): temporary until i figure out vulkan
+#if GFX_OPENGL
   os_gfx_init();
+#endif
 }
 
 fn void w32_xinput_load(void) {
@@ -43,6 +46,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
     event = w32_alloc_windowevent();
     event->value.type = OS_EventType_Kill;
   } break;
+  case WM_SIZING:
   case WM_SIZE: {
     event = w32_alloc_windowevent();
     RECT rect;

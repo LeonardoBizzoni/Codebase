@@ -5,8 +5,6 @@
 
 #if GFX_OPENGL
 #  include "OpenGL/gfx_opengl_win32.c"
-#else
-#  error invalid graphics api
 #endif
 
 #endif

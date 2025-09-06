@@ -9,11 +9,25 @@ fn void unx_gfx_init(void) {
   x11_state.xscreen = DefaultScreen(x11_state.xdisplay);
   x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
 
+// NOTE(lb): temporary until i figure out vulkan
+#if GFX_OPENGL
   os_gfx_init();
+#elif GFX_VULKAN
+  i32 visuals_count = 0;
+  XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualScreenMask,
+                                        &(XVisualInfo){ .screen = x11_state.xscreen },
+                                        &visuals_count);
+  Assert(visuals && visuals_count > 0);
+  x11_state.xvisual = *visuals;
+  XFree(visuals);
+#endif
 }
 
 fn void unx_gfx_deinit(void) {
+// NOTE(lb): temporary until i figure out vulkan
+#if GFX_OPENGL
   os_gfx_deinit();
+#endif
 }
 
 fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
@@ -28,7 +42,8 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
 
   Window xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
   XSetWindowAttributes xattrib = {};
-  xattrib.event_mask = ExposureMask | FocusChangeMask |
+  xattrib.event_mask = ExposureMask | StructureNotifyMask |
+                       FocusChangeMask |
                        EnterWindowMask | LeaveWindowMask |
                        ButtonPressMask | PointerMotionMask |
                        KeyPressMask | KeymapStateMask;
@@ -66,7 +81,6 @@ fn void os_window_show(OS_Handle window_) {
 fn void os_window_close(OS_Handle window_) {
   X11_Window *window = (X11_Window*)window_.h[0];
   XUnmapWindow(x11_state.xdisplay, window->xwindow);
-  os_gfx_context_window_deinit(window->gfx_context);
 
   XFreeGC(x11_state.xdisplay, window->xgc);
   XDestroyWindow(x11_state.xdisplay, window->xwindow);
@@ -118,13 +132,13 @@ fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event, XPointer 
 fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent) {
   OS_Event res = {0};
   switch (xevent->type) {
-  case Expose: {
+  case Expose:
+  case ConfigureNotify: {
     XWindowAttributes gwa;
     XGetWindowAttributes(x11_state.xdisplay, window->xwindow, &gwa);
-
     res.type = OS_EventType_Expose;
-    res.expose.width = gwa.width;
-    res.expose.height = gwa.height;
+    Assert((res.expose.width = gwa.width) != 0);
+    Assert((res.expose.height = gwa.height) != 0);
   } break;
   case KeyRelease:
   case KeyPress: {
