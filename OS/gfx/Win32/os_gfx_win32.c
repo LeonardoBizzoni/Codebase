@@ -9,10 +9,7 @@ fn void w32_gfx_init(HINSTANCE instance) {
   //           and nintendo controllers?
   w32_xinput_load();
 
-// NOTE(lb): temporary until i figure out vulkan
-#if GFX_OPENGL
-  os_gfx_init();
-#endif
+  rhi_init();
 }
 
 fn void w32_xinput_load(void) {

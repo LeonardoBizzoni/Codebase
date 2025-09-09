@@ -9,6 +9,8 @@
 
 #define CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE 0
 
+#define dbg_println(Fmt, ...) dbg_print(Fmt "\n", __VA_ARGS__)
+
 typedef u64 W32_PrimitiveType;
 enum {
   W32_Primitive_Nil,

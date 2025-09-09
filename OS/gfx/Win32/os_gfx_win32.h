@@ -18,13 +18,11 @@ typedef struct W32_WindowEvent {
 } W32_WindowEvent;
 
 typedef struct W32_Window {
-  String8 name;
   OS_Handle task;
   HWND winhandle;
   HBITMAP bitmap_dib;
   HDC mem_dc;
   void *pixels;
-  GFX_Handle gfx_context;
 
   struct {
     OS_Handle mutex, condvar;

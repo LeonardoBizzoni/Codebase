@@ -1,5 +1,5 @@
-#ifndef OS_GFX_WIN32_OPENGL_H
-#define OS_GFX_WIN32_OPENGL_H
+#ifndef RHI_OPENGL_WIN32_H
+#define RHI_OPENGL_WIN32_H
 
 #include <gl/gl.h>
 

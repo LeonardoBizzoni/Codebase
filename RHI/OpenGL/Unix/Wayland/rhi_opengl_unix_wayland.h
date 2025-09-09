@@ -1,5 +1,5 @@
-#ifndef GFX_OPENGL_UNIX_WAYLAND_H
-#define GFX_OPENGL_UNIX_WAYLAND_H
+#ifndef RHI_OPENGL_UNIX_WAYLAND_H
+#define RHI_OPENGL_UNIX_WAYLAND_H
 
 #include <wayland-egl.h>
 

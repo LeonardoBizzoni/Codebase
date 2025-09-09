@@ -9,10 +9,6 @@ fn void unx_gfx_init(void) {
   x11_state.xscreen = DefaultScreen(x11_state.xdisplay);
   x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
 
-// NOTE(lb): temporary until i figure out vulkan
-#if GFX_OPENGL
-  os_gfx_init();
-#elif GFX_VULKAN
   i32 visuals_count = 0;
   XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualScreenMask,
                                         &(XVisualInfo){ .screen = x11_state.xscreen },
@@ -20,15 +16,10 @@ fn void unx_gfx_init(void) {
   Assert(visuals && visuals_count > 0);
   x11_state.xvisual = *visuals;
   XFree(visuals);
-#endif
+  rhi_init();
 }
 
-fn void unx_gfx_deinit(void) {
-// NOTE(lb): temporary until i figure out vulkan
-#if GFX_OPENGL
-  os_gfx_deinit();
-#endif
-}
+fn void unx_gfx_deinit(void) {}
 
 fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   X11_Window *window = x11_state.freelist_window;

@@ -1,6 +1,6 @@
 global W32Gl_State w32gl_state = {};
 
-fn void os_gfx_init(void) {
+fn void rhi_init(void) {
   w32gl_state.arena = ArenaBuild();
 
   WNDCLASSA window_class = {
@@ -48,17 +48,21 @@ fn void os_gfx_init(void) {
   DestroyWindow(dummy_window);
 }
 
-fn GFX_Handle os_gfx_context_window_init(OS_Handle window_) {
+fn void rhi_deinit(void) {}
+
+// =============================================================================
+// API dependent code
+fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
   W32_Window *os_window = (W32_Window *)window_.h[0];
 
-  W32Gl_Window *gfx_window = w32gl_state.freequeue_first;
-  if (gfx_window) {
-    memzero(gfx_window, sizeof (*gfx_window));
+  W32Gl_Window *rhi_window = w32gl_state.freequeue_first;
+  if (rhi_window) {
+    memzero(rhi_window, sizeof (*rhi_window));
     QueuePop(w32gl_state.freequeue_first);
   } else {
-    gfx_window = New(w32gl_state.arena, W32Gl_Window);
+    rhi_window = New(w32gl_state.arena, W32Gl_Window);
   }
-  gfx_window->os_window = os_window;
+  rhi_window->os_window = os_window;
 
   local const i32 pixel_format_attribs[] = {
     WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -90,29 +94,28 @@ fn GFX_Handle os_gfx_context_window_init(OS_Handle window_) {
     0,
   };
 
-  gfx_window->gl_context = wglCreateContextAttribsARB(dc, 0, gl33_attribs);
-  Assert(gfx_window->gl_context);
-  wglMakeCurrent(dc, gfx_window->gl_context);
+  rhi_window->gl_context = wglCreateContextAttribsARB(dc, 0, gl33_attribs);
+  Assert(rhi_window->gl_context);
+  wglMakeCurrent(dc, rhi_window->gl_context);
 
   /* Assert(gladLoadGLLoader((GLADloadproc)wglGetProcAddress)); */
 
-  GFX_Handle res = {(u64)gfx_window};
-  os_window->gfx_context = res;
+  RHI_Handle res = {(u64)rhi_window};
   return res;
 }
 
-fn void os_gfx_context_window_deinit(GFX_Handle context) {}
+fn void rhi_gl_window_deinit(RHI_Handle context) {}
 
-fn void os_gfx_window_commit(GFX_Handle context) {
-  W32Gl_Window *gfx_window = (W32Gl_Window*)context.h[0];
-  HDC dc = GetDC(gfx_window->os_window->winhandle);
+fn void rhi_gl_window_make_current(RHI_Handle handle) {
+  W32Gl_Window *rhi_window = (W32Gl_Window*)handle.h[0];
+  HDC dc = GetDC(rhi_window->os_window->winhandle);
+  wglMakeCurrent(dc, rhi_window->gl_context);
+}
+
+fn void rhi_gl_window_commit(RHI_Handle context) {
+  W32Gl_Window *rhi_window = (W32Gl_Window*)context.h[0];
+  HDC dc = GetDC(rhi_window->os_window->winhandle);
   SwapBuffers(dc);
 }
 
-fn void os_gfx_window_make_current(GFX_Handle handle) {
-  W32Gl_Window *gfx_window = (W32Gl_Window*)handle.h[0];
-  HDC dc = GetDC(gfx_window->os_window->winhandle);
-  wglMakeCurrent(dc, gfx_window->gl_context);
-}
-
-internal void os_gfx_window_resize(GFX_Handle context, u32 width, u32 height) {}
+internal void rhi_gl_window_resize(RHI_Handle context, u32 width, u32 height) {}

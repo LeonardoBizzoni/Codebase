@@ -133,17 +133,17 @@
 #  define NDEBUG 1
 #endif
 
-#if !defined(GFX_OPENGL)
-#  define GFX_OPENGL 0
+#if !defined(RHI_OPENGL)
+#  define RHI_OPENGL 0
 #endif
-#if !defined(GFX_VULKAN)
-#  define GFX_VULKAN 0
+#if !defined(RHI_VULKAN)
+#  define RHI_VULKAN 0
 #endif
-#if !defined(GFX_DIRECT3D)
-#  define GFX_DIRECT3D 0
+#if !defined(RHI_DIRECT3D)
+#  define RHI_DIRECT3D 0
 #endif
-#if !defined(GFX_METAL)
-#  define GFX_METAL 0
+#if !defined(RHI_METAL)
+#  define RHI_METAL 0
 #endif
 
 #if !defined(APPLICATION_NAME)

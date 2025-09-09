@@ -1,3 +1,5 @@
+#include "xdg-shell-protocol.c"
+
 global Wl_State waystate = {0};
 
 global struct wl_registry_listener wl_registry_listener = {
@@ -64,15 +66,11 @@ fn void unx_gfx_init(void) {
   waystate.wl_registry = wl_display_get_registry(waystate.wl_display);
   Assert(waystate.wl_registry);
   wl_registry_add_listener(waystate.wl_registry, &wl_registry_listener, 0);
+  wl_display_roundtrip(waystate.wl_display);
 
   waystate.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
 
-  wl_display_roundtrip(waystate.wl_display);
-
-// NOTE(lb): temporary until i figure out vulkan
-#if GFX_OPENGL
-  os_gfx_init();
-#endif
+  rhi_init();
   waystate.event_dispatcher = os_thread_start(wl_event_dispatcher, 0);
 }
 
@@ -80,10 +78,6 @@ fn void unx_gfx_deinit(void) {
   os_thread_cancel(waystate.event_dispatcher);
   wl_compositor_destroy(waystate.wl_compositor);
   wl_registry_destroy(waystate.wl_registry);
-// NOTE(lb): temporary until i figure out vulkan
-#if GFX_OPENGL
-  os_gfx_deinit();
-#endif
   wl_display_disconnect(waystate.wl_display);
 }
 

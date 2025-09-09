@@ -1,6 +1,6 @@
 global X11Gl_State x11gl_state = {};
 
-fn void os_gfx_init(void) {
+fn void rhi_init(void) {
   x11gl_state.arena = ArenaBuild();
   x11gl_state.egl_display = eglGetDisplay((EGLNativeDisplayType)x11_state.xdisplay);
   Assert(x11gl_state.egl_display != EGL_NO_DISPLAY);
@@ -46,50 +46,50 @@ fn void os_gfx_init(void) {
   Assert(x11gl_state.egl_context != EGL_NO_CONTEXT);
 }
 
-fn void os_gfx_deinit(void) {
+fn void rhi_deinit(void) {
   eglTerminate(x11gl_state.egl_display);
 }
 
-fn GFX_Handle os_gfx_context_window_init(OS_Handle window_) {
+// =============================================================================
+// API dependent code
+fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
   X11_Window *os_window = (X11_Window*)window_.h[0];
 
-  X11Gl_Window *gfx_window = x11gl_state.freequeue_first;
-  if (gfx_window) {
-    memzero(gfx_window, sizeof (*gfx_window));
+  X11Gl_Window *rhi_window = x11gl_state.freequeue_first;
+  if (rhi_window) {
+    memzero(rhi_window, sizeof (*rhi_window));
     QueuePop(x11gl_state.freequeue_first);
   } else {
-    gfx_window = New(x11gl_state.arena, X11Gl_Window);
+    rhi_window = New(x11gl_state.arena, X11Gl_Window);
   }
-  Assert(gfx_window);
+  Assert(rhi_window);
 
   os_window_show(window_);
-  gfx_window->egl_surface = eglCreateWindowSurface(x11gl_state.egl_display,
+  rhi_window->egl_surface = eglCreateWindowSurface(x11gl_state.egl_display,
                                                    x11gl_state.egl_config,
                                                    os_window->xwindow, 0);
-  Assert(gfx_window->egl_surface != EGL_NO_SURFACE);
+  Assert(rhi_window->egl_surface != EGL_NO_SURFACE);
 
-  eglMakeCurrent(x11gl_state.egl_display, gfx_window->egl_surface,
-                 gfx_window->egl_surface, x11gl_state.egl_context);
+  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
+                 rhi_window->egl_surface, x11gl_state.egl_context);
 
-  GFX_Handle res = {(u64)gfx_window};
-  os_window->gfx_context = res;
+  RHI_Handle res = {(u64)rhi_window};
   return res;
 }
 
-fn void os_gfx_context_window_deinit(GFX_Handle handle) {
+fn void rhi_gl_window_deinit(RHI_Handle handle) {}
+
+fn void rhi_gl_window_make_current(RHI_Handle handle) {
+  X11Gl_Window *rhi_window = (X11Gl_Window *)handle.h[0];
+  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
+                 rhi_window->egl_surface, x11gl_state.egl_context);
 }
 
-fn void os_gfx_window_make_current(GFX_Handle handle) {
-  X11Gl_Window *gfx_window = (X11Gl_Window *)handle.h[0];
-  eglMakeCurrent(x11gl_state.egl_display, gfx_window->egl_surface,
-                 gfx_window->egl_surface, x11gl_state.egl_context);
+fn void rhi_gl_window_commit(RHI_Handle handle) {
+  X11Gl_Window *rhi_window = (X11Gl_Window *)handle.h[0];
+  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
+                 rhi_window->egl_surface, x11gl_state.egl_context);
+  eglSwapBuffers(x11gl_state.egl_display, rhi_window->egl_surface);
 }
 
-fn void os_gfx_window_commit(GFX_Handle handle) {
-  X11Gl_Window *gfx_window = (X11Gl_Window *)handle.h[0];
-  eglMakeCurrent(x11gl_state.egl_display, gfx_window->egl_surface,
-                 gfx_window->egl_surface, x11gl_state.egl_context);
-  eglSwapBuffers(x11gl_state.egl_display, gfx_window->egl_surface);
-}
-
-/* internal void os_gfx_window_resize(GFX_Handle context, u32 width, u32 height) {} */
+internal void rhi_gl_window_resize(RHI_Handle context, u32 width, u32 height) {}

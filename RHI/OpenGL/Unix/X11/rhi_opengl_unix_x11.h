@@ -1,5 +1,5 @@
-#ifndef GFX_OPENGL_UNIX_X11_H
-#define GFX_OPENGL_UNIX_X11_H
+#ifndef RHI_OPENGL_UNIX_X11_H
+#define RHI_OPENGL_UNIX_X11_H
 
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>

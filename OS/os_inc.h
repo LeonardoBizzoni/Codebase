@@ -26,7 +26,7 @@
 #      include "gfx/Unix/BSD/bsd_gfx.h"
 #  endif
 #  elif OS_WINDOWS
-#    include "gfx/Win32/os_gfx_win32_inc.h"
+#    include "gfx/Win32/os_gfx_win32.h"
 #  else
 #    error os graphical layer is not supported for this platform
 #  endif
