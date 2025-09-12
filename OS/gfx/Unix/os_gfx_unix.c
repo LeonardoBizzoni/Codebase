@@ -1,25 +1,5 @@
 global X11_State x11_state = {0};
 
-// =============================================================================
-// Common Linux definitions
-fn void unx_gfx_init(void) {
-  x11_state.arena = ArenaBuild();
-  x11_state.xdisplay = XOpenDisplay(0);
-  x11_state.xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
-  XSynchronize(x11_state.xdisplay, True);
-  x11_state.xscreen = DefaultScreen(x11_state.xdisplay);
-  x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
-
-  i32 visuals_count = 0;
-  XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualScreenMask,
-                                        &(XVisualInfo){ .screen = x11_state.xscreen },
-                                        &visuals_count);
-  Assert(visuals && visuals_count > 0);
-  x11_state.xvisual = *visuals;
-  XFree(visuals);
-  rhi_init();
-}
-
 fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   X11_Window *window = x11_state.freelist_window;
   if (window) {
@@ -60,6 +40,12 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
 fn void os_window_show(OS_Handle window_) {
   X11_Window *window = (X11_Window*)window_.h[0];
   XMapWindow(x11_state.xdisplay, window->xwindow);
+  XFlush(x11_state.xdisplay);
+}
+
+fn void os_window_hide(OS_Handle window_) {
+  X11_Window *window = (X11_Window*)window_.h[0];
+  XUnmapWindow(x11_state.xdisplay, window->xwindow);
   XFlush(x11_state.xdisplay);
 }
 
@@ -109,7 +95,25 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
 }
 
 // =============================================================================
-// x11 specific definitions
+// Platform specific definitions
+fn void unx_gfx_init(void) {
+  x11_state.arena = ArenaBuild();
+  x11_state.xdisplay = XOpenDisplay(0);
+  x11_state.xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
+  XSynchronize(x11_state.xdisplay, True);
+  x11_state.xscreen = DefaultScreen(x11_state.xdisplay);
+  x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
+
+  i32 visuals_count = 0;
+  XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualScreenMask,
+                                        &(XVisualInfo){ .screen = x11_state.xscreen },
+                                        &visuals_count);
+  Assert(visuals && visuals_count > 0);
+  x11_state.xvisual = *visuals;
+  XFree(visuals);
+  rhi_init();
+}
+
 fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event, XPointer arg) {
   return event->xany.window == *(Window*)arg;
 }

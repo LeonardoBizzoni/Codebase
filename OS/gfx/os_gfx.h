@@ -110,19 +110,9 @@ fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
 fn void os_window_close(OS_Handle window);
 
-fn void os_window_swapBuffers(OS_Handle window);
-fn void os_window_render(OS_Handle window, void *mem);
-
 fn OS_Event os_window_get_event(OS_Handle window);
 fn OS_Event os_window_wait_event(OS_Handle window);
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
-
-fn GFX_Handle os_gfx_context_window_init(OS_Handle window);
-fn void os_gfx_context_window_deinit(GFX_Handle context);
-
-fn void os_gfx_window_commit(GFX_Handle context);
-fn void os_gfx_window_make_current(GFX_Handle handle);
-internal void os_gfx_window_resize(GFX_Handle context, u32 width, u32 height);
 
 #endif
