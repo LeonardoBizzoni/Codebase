@@ -1,5 +1,5 @@
-#ifndef OS_GFX_LINUX_X11_H
-#define OS_GFX_LINUX_X11_H
+#ifndef OS_GFX_UNIX_H
+#define OS_GFX_UNIX_H
 
 #undef internal
 #include <X11/Xlib.h>
@@ -32,6 +32,7 @@ typedef struct {
   Display *xdisplay;
   XVisualInfo xvisual;
   i32 xscreen;
+  Window xroot;
 
   u64 xatom_close;
 } X11_State;
@@ -39,5 +40,7 @@ typedef struct {
 fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event,
                                      XPointer arg);
 fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent);
+
+fn void unx_gfx_init(void);
 
 #endif

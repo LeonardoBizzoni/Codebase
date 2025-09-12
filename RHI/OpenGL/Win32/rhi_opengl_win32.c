@@ -48,8 +48,6 @@ fn void rhi_init(void) {
   DestroyWindow(dummy_window);
 }
 
-fn void rhi_deinit(void) {}
-
 // =============================================================================
 // API dependent code
 fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {

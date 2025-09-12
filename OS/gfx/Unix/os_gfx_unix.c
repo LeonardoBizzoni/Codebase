@@ -5,6 +5,7 @@ global X11_State x11_state = {0};
 fn void unx_gfx_init(void) {
   x11_state.arena = ArenaBuild();
   x11_state.xdisplay = XOpenDisplay(0);
+  x11_state.xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
   XSynchronize(x11_state.xdisplay, True);
   x11_state.xscreen = DefaultScreen(x11_state.xdisplay);
   x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
@@ -19,8 +20,6 @@ fn void unx_gfx_init(void) {
   rhi_init();
 }
 
-fn void unx_gfx_deinit(void) {}
-
 fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   X11_Window *window = x11_state.freelist_window;
   if (window) {
@@ -31,18 +30,14 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   }
   DLLPushBack(x11_state.first_window, x11_state.last_window, window);
 
-  Window xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
   XSetWindowAttributes xattrib = {};
-  xattrib.event_mask = ExposureMask | StructureNotifyMask |
-                       FocusChangeMask |
-                       EnterWindowMask | LeaveWindowMask |
-                       ButtonPressMask | PointerMotionMask |
-                       KeyPressMask | KeymapStateMask;
-  xattrib.border_pixel = 0;
-  xattrib.background_pixel = 0;
-  xattrib.colormap = XCreateColormap(x11_state.xdisplay, xroot,
+  xattrib.colormap = XCreateColormap(x11_state.xdisplay, x11_state.xroot,
                                      x11_state.xvisual.visual, AllocNone);
-  window->xwindow = XCreateWindow(x11_state.xdisplay, xroot,
+  xattrib.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask |
+                       PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+                       ExposureMask | FocusChangeMask | VisibilityChangeMask |
+                       EnterWindowMask | LeaveWindowMask | PropertyChangeMask;
+  window->xwindow = XCreateWindow(x11_state.xdisplay, x11_state.xroot,
                                   0, 0, width, height, 0, x11_state.xvisual.depth,
                                   InputOutput, x11_state.xvisual.visual,
                                   CWColormap | CWEventMask | CWBorderPixel,
@@ -53,10 +48,9 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   window->xgc = XCreateGC(x11_state.xdisplay, window->xwindow, 0, &gcv);
 
   Scratch scratch = ScratchBegin(&x11_state.arena, 1);
-  XStoreName(x11_state.xdisplay, window->xwindow, cstr_from_str8(scratch.arena, name));
+  XStoreName(x11_state.xdisplay, window->xwindow,
+             cstr_from_str8(scratch.arena, name));
   ScratchEnd(scratch);
-
-  XAutoRepeatOn(x11_state.xdisplay);
   XFlush(x11_state.xdisplay);
 
   OS_Handle res = {(u64)window};
@@ -122,14 +116,19 @@ fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event, XPointer 
 
 fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent) {
   OS_Event res = {0};
+  local i32 repeated_expose_events = 0;
   switch (xevent->type) {
-  case Expose:
-  case ConfigureNotify: {
+  case Expose: {
+    if (repeated_expose_events) {
+      repeated_expose_events -= 1;
+      return res;
+    }
     XWindowAttributes gwa;
     XGetWindowAttributes(x11_state.xdisplay, window->xwindow, &gwa);
     res.type = OS_EventType_Expose;
     Assert((res.expose.width = gwa.width) != 0);
     Assert((res.expose.height = gwa.height) != 0);
+    repeated_expose_events = xevent->xexpose.count;
   } break;
   case KeyRelease:
   case KeyPress: {

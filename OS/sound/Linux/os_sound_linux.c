@@ -64,13 +64,6 @@ fn void lnx_snd_init(void) {
   }
 }
 
-fn void lnx_snd_deinit(void) {
-  pa_context_disconnect(lnx_snd_state.ctx);
-  pa_context_unref(lnx_snd_state.ctx);
-  pa_threaded_mainloop_stop(lnx_snd_state.m);
-  pa_threaded_mainloop_free(lnx_snd_state.m);
-}
-
 fn OS_Handle os_snd_load(String8 path, char *name) {
   UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Sound);
   prim->sound.player_mutex = os_mutex_alloc();

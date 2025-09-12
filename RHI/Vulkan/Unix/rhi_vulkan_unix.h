@@ -1,5 +1,5 @@
-#ifndef VULKAN_UNIX_X11_H
-#define VULKAN_UNIX_X11_H
+#ifndef RHI_VULKAN_UNIX_H
+#define RHI_VULKAN_UNIX_H
 
 #include <vulkan/vulkan_xlib.h>
 

@@ -46,10 +46,6 @@ fn void rhi_init(void) {
   Assert(x11gl_state.egl_context != EGL_NO_CONTEXT);
 }
 
-fn void rhi_deinit(void) {
-  eglTerminate(x11gl_state.egl_display);
-}
-
 // =============================================================================
 // API dependent code
 fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
@@ -64,7 +60,7 @@ fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
   }
   Assert(rhi_window);
 
-  os_window_show(window_);
+  rhi_window->os_window = os_window;
   rhi_window->egl_surface = eglCreateWindowSurface(x11gl_state.egl_display,
                                                    x11gl_state.egl_config,
                                                    os_window->xwindow, 0);

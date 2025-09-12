@@ -118,9 +118,6 @@ fn OS_Event os_window_wait_event(OS_Handle window);
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
 
-fn void os_gfx_init(void);
-fn void os_gfx_deinit(void);
-
 fn GFX_Handle os_gfx_context_window_init(OS_Handle window);
 fn void os_gfx_context_window_deinit(GFX_Handle context);
 

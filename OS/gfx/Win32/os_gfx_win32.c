@@ -323,19 +323,3 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   arena_pop(arena, max_keyname_size - res.size);
   return res;
 }
-
-#if USING_OPENGL
-fn void opengl_init(OS_Handle handle) {
-}
-
-fn void opengl_deinit(OS_Handle handle) {
-  W32_Window *window = (W32_Window *)handle.h[0];
-  wglMakeCurrent(0, 0);
-  wglDeleteContext(window->gl_context);
-}
-
-fn void opengl_make_current(OS_Handle handle) {
-  W32_Window *window = (W32_Window *)handle.h[0];
-  wglMakeCurrent(window->dc, window->gl_context);
-}
-#endif

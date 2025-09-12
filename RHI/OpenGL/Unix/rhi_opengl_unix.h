@@ -1,11 +1,12 @@
-#ifndef RHI_OPENGL_UNIX_X11_H
-#define RHI_OPENGL_UNIX_X11_H
+#ifndef RHI_OPENGL_UNIX_H
+#define RHI_OPENGL_UNIX_H
 
-#include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <EGL/egl.h>
 
 typedef struct X11Gl_Window {
   EGLSurface egl_surface;
+  X11_Window *os_window;
 
   struct X11Gl_Window *next;
   struct X11Gl_Window *prev;

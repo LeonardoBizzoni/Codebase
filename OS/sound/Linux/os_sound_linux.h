@@ -32,7 +32,6 @@ typedef struct {
 } LNX_SND_State;
 
 fn void lnx_snd_init(void);
-fn void lnx_snd_deinit(void);
 
 fn void _lnx_pulse_ctx_statechange(pa_context *ctx, void *userdata);
 fn void _lnx_pulse_stream_statechange(pa_stream *stream, void *userdata);

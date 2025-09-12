@@ -158,11 +158,4 @@ i32 main(i32 argc, char **argv) {
 #endif
 
   start(&cli);
-
-#if OS_GUI
-  unx_gfx_deinit();
-#endif
-#if OS_SOUND
-  lnx_snd_deinit();
-#endif
 }
