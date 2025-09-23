@@ -1,4 +1,4 @@
-global RHI_VkState rhi_vk_state = {};
+global RHI_VK_State rhi_vk_state = {};
 
 fn void rhi_init(void) {
   rhi_vk_state.arena = ArenaBuild();
@@ -45,8 +45,8 @@ fn void rhi_init(void) {
   Assert(create_instance_result == VK_SUCCESS);
 }
 
-fn RHI_VkDevice rhi_vk_device_create(VkSurfaceKHR vk_surface) {
-  RHI_VkDevice res = {};
+fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
+  RHI_VK_Device res = {};
 
   local const char *device_extensions_required[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -188,6 +188,11 @@ fn RHI_VkDevice rhi_vk_device_create(VkSurfaceKHR vk_surface) {
       res.queue_idx.graphics = (i32)i;
       queues_set += 1;
     }
+    if (res.queue_idx.transfer == -1 &&
+        queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+      res.queue_idx.transfer = (i32)i;
+      queues_set += 1;
+    }
     VkBool32 support_present = false;
     vkGetPhysicalDeviceSurfaceSupportKHR(res.physical, i, vk_surface,
                                          &support_present);
@@ -243,19 +248,18 @@ fn RHI_VkDevice rhi_vk_device_create(VkSurfaceKHR vk_surface) {
   ScratchEnd(scratch_queue_family);
   Assert(create_device_result == VK_SUCCESS);
 
-  vkGetDeviceQueue(res.virtual,
-                   res.queue_idx.graphics, 0,
-                   &res.queue.graphics);
-  vkGetDeviceQueue(res.virtual,
-                   res.queue_idx.present, 0,
-                   &res.queue.present);
+  vkGetPhysicalDeviceMemoryProperties(res.physical, &res.memory_properties);
+  vkGetDeviceQueue(res.virtual, res.queue_idx.graphics, 0, &res.queue.graphics);
+  vkGetDeviceQueue(res.virtual, res.queue_idx.present, 0, &res.queue.present);
+  vkGetDeviceQueue(res.virtual, res.queue_idx.transfer, 0, &res.queue.transfer);
   return res;
 }
 
-fn RHI_VkSwapchain rhi_vk_swapchain_create(Arena *arena, RHI_VkDevice rhi_device,
-                                           VkSurfaceKHR surface,
-                                           u32 width, u32 height) {
-  RHI_VkSwapchain res = {};
+fn RHI_VK_Swapchain rhi_vk_swapchain_create(Arena *arena,
+                                            RHI_VK_Device rhi_device,
+                                            VkSurfaceKHR surface,
+                                            u32 width, u32 height) {
+  RHI_VK_Swapchain res = {};
 
   Scratch scratch = ScratchBegin(0, 0);
   u32 swapchain_formats_count = 0;
@@ -362,8 +366,7 @@ fn RHI_VkSwapchain rhi_vk_swapchain_create(Arena *arena, RHI_VkDevice rhi_device
     create_imageview_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     create_imageview_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     create_imageview_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    create_imageview_info.subresourceRange.aspectMask =
-      VK_IMAGE_ASPECT_COLOR_BIT;
+    create_imageview_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     create_imageview_info.subresourceRange.baseMipLevel = 0;
     create_imageview_info.subresourceRange.levelCount = 1;
     create_imageview_info.subresourceRange.baseArrayLayer = 0;
@@ -383,14 +386,146 @@ fn RHI_VkSwapchain rhi_vk_swapchain_create(Arena *arena, RHI_VkDevice rhi_device
   res.viewport.maxDepth = 1.0f;
   res.scissor.offset.x = 0;
   res.scissor.offset.y = 0;
-  res.scissor.extent = res.extent;
+  res.scissor.extent.width = res.extent.width;
+  res.scissor.extent.height = res.extent.height;
   return res;
 }
 
-fn RHI_VkShader rhi_vk_shader_create(RHI_ShaderType type,
-                                     RHI_VkDevice rhi_device,
-                                     isize size, u8 *bytes) {
-  RHI_VkShader res = {};
+fn VkFramebuffer* rhi_vk_framebuffers_create(Arena *arena,
+                                             RHI_VK_Device *rhi_device,
+                                             RHI_VK_Swapchain *rhi_swapchain,
+                                             VkRenderPass renderpass) {
+  VkFramebuffer *framebuffers = New(arena, VkFramebuffer,
+                                    rhi_swapchain->image_count);
+  for (u32 i = 0; i < rhi_swapchain->image_count; ++i) {
+    VkFramebufferCreateInfo create_framebuffer_info = {
+      .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+      .renderPass = renderpass,
+      .attachmentCount = 1,
+      .pAttachments = &rhi_swapchain->image_views[i],
+      .width = rhi_swapchain->extent.width,
+      .height = rhi_swapchain->extent.height,
+      .layers = 1,
+    };
+    VkResult create_framebuffer_result =
+      vkCreateFramebuffer(rhi_device->virtual, &create_framebuffer_info,
+                          0, &framebuffers[i]);
+    Assert(create_framebuffer_result == VK_SUCCESS);
+  }
+  return framebuffers;
+}
+
+fn RHI_VK_Buffer rhi_vk_buffer_create(RHI_VK_Device device, u32 size,
+                                      VkBufferUsageFlags usage) {
+  RHI_VK_Buffer res = {};
+  res.memorypool_position = -1;
+  VkBufferCreateInfo create_buffer_info = {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size = size,
+    .usage = usage,
+    .sharingMode = (device.queue_idx.transfer == device.queue_idx.graphics
+                    ? VK_SHARING_MODE_EXCLUSIVE
+                    : VK_SHARING_MODE_CONCURRENT),
+    .queueFamilyIndexCount = 2,
+    .pQueueFamilyIndices = (u32[]) { device.queue_idx.transfer,
+                                     device.queue_idx.graphics },
+  };
+  rhi_vk_create(vkCreateBuffer, device.virtual, &create_buffer_info, 0,
+                &res.vkbuffer);
+  vkGetBufferMemoryRequirements(device.virtual, res.vkbuffer,
+                                &res.memory_requirements);
+  return res;
+}
+
+fn VkDeviceMemory rhi_vk_alloc(RHI_VK_Device device,
+                               VkMemoryRequirements memory_requirements,
+                               VkMemoryPropertyFlags wanted_properties) {
+  VkDeviceMemory res = {};
+  VkMemoryAllocateInfo mem_alloc_info = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize = memory_requirements.size,
+    .memoryTypeIndex = -1,
+  };
+  for (u32 i = 0; i < device.memory_properties.memoryTypeCount; i++) {
+    if ((memory_requirements.memoryTypeBits & (1 << i)) &&
+        (device.memory_properties.memoryTypes[i].propertyFlags &
+         wanted_properties)) {
+      mem_alloc_info.memoryTypeIndex = i;
+      break;
+    }
+  }
+
+  Assert(mem_alloc_info.memoryTypeIndex != (u32)-1);
+  rhi_vk_create(vkAllocateMemory, device.virtual, &mem_alloc_info, 0, &res);
+  return res;
+}
+
+fn RHI_VK_MemoryPool
+rhi_vk_memorypool_build(RHI_VK_Device device, u32 size,
+                        VkBufferUsageFlags usage,
+                        VkMemoryPropertyFlags wanted_properties) {
+  RHI_VK_MemoryPool res = {};
+  res.usage = usage;
+  res.buffer = rhi_vk_buffer_create(device, size, usage);
+  res.memory = rhi_vk_alloc(device, res.buffer.memory_requirements,
+                            wanted_properties);
+  vkBindBufferMemory(device.virtual, res.buffer.vkbuffer, res.memory, 0);
+  return res;
+}
+
+fn RHI_VK_Buffer
+rhi_vk_memorypool_push(RHI_VK_Device device, RHI_VK_MemoryPool *pool, u32 size) {
+  RHI_VK_Buffer res = rhi_vk_buffer_create(device, size, pool->usage);
+  vkBindBufferMemory(device.virtual, res.vkbuffer, pool->memory, pool->offset);
+  res.memorypool_position = pool->offset;
+  pool->offset += res.memory_requirements.size;
+  return res;
+}
+
+fn void* rhi_vk_memorypool_map(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
+                               RHI_VK_Buffer buffer) {
+  Assert(buffer.memorypool_position != (u32)-1);
+  void *res = 0;
+  vkMapMemory(device.virtual, pool->memory, buffer.memorypool_position,
+              buffer.memory_requirements.size, 0, &res);
+  return res;
+}
+
+fn void rhi_vk_swapchain_destroy(RHI_VK_Device *rhi_device,
+                                 RHI_VK_Swapchain *rhi_swapchain) {
+  vkDeviceWaitIdle(rhi_device->virtual);
+  for (u32 i = 0; i < rhi_swapchain->image_count; ++i) {
+    vkDestroyImageView(rhi_device->virtual, rhi_swapchain->image_views[i], 0);
+  }
+  vkDestroySwapchainKHR(rhi_device->virtual, rhi_swapchain->swapchain, 0);
+}
+
+fn void rhi_vk_framebuffers_destroy(RHI_VK_Device *rhi_device,
+                                    RHI_VK_Swapchain *rhi_swapchain,
+                                    VkFramebuffer *framebuffers) {
+  vkDeviceWaitIdle(rhi_device->virtual);
+  for (u32 i = 0; i < rhi_swapchain->image_count; ++i) {
+    vkDestroyFramebuffer(rhi_device->virtual, framebuffers[i], 0);
+  }
+}
+
+fn RHI_VK_Shader rhi_vk_shader_from_file(RHI_ShaderType type,
+                                         RHI_VK_Device rhi_device,
+                                         String8 shader_source_path) {
+  Scratch scratch = ScratchBegin(0, 0);
+  OS_Handle file_handle = fs_open(shader_source_path, OS_acfRead);
+  String8 bytecode = fs_read(scratch.arena, file_handle);
+  fs_close(file_handle);
+  RHI_VK_Shader res = rhi_vk_shader_from_bytes(type, rhi_device,
+                                               bytecode.size, bytecode.str);
+  ScratchEnd(scratch);
+  return res;
+}
+
+fn RHI_VK_Shader rhi_vk_shader_from_bytes(RHI_ShaderType type,
+                                          RHI_VK_Device rhi_device,
+                                          isize size, u8 *bytes) {
+  RHI_VK_Shader res = {};
   res.type = type;
 
   VkShaderModuleCreateInfo create_shadermodule_info = {};
@@ -401,6 +536,26 @@ fn RHI_VkShader rhi_vk_shader_create(RHI_ShaderType type,
     vkCreateShaderModule(rhi_device.virtual, &create_shadermodule_info,
                          0, &res.module);
   Assert(create_shadermodule_result == VK_SUCCESS);
+  return res;
+}
+
+internal VkRenderPass
+_rhi_vk_renderpass_create(RHI_VK_Device device,
+                          VkAttachmentDescription *attachments, u32 attachment_count,
+                          VkSubpassDescription *subpasses, u32 subpass_count,
+                          VkSubpassDependency *dependencies, u32 dependency_count) {
+  VkRenderPass res = {};
+  VkRenderPassCreateInfo create_renderpass_info = {
+    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+    .attachmentCount = attachment_count,
+    .pAttachments = attachments,
+    .subpassCount = subpass_count,
+    .pSubpasses = subpasses,
+    .dependencyCount = dependency_count,
+    .pDependencies = dependencies,
+  };
+  rhi_vk_create(vkCreateRenderPass, device.virtual,
+                &create_renderpass_info, 0, &res);
   return res;
 }
 
