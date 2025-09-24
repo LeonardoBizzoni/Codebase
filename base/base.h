@@ -220,6 +220,8 @@
 #define Swap(a, b, _tmp) ((_tmp) = (a), (a) = (b), (b) = (_tmp))
 #define Abs(a) ((a) >= 0 ? (a) : (-(a)))
 #define Random(low, high) ((rand() % (high + 1 - low)) + low)
+#define Unused(x) (void)(x)
+#define Unreachable() Assert(false)
 
 #define DeferLoop(begin, end) for(u8 _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 
