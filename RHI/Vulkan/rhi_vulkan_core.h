@@ -22,6 +22,19 @@ do {                                    \
                             (Subpasses), Arrsize(Subpasses),                   \
                             (Dependencies), Arrsize(Dependencies))
 
+#define rhi_vk_fence_wait(Device, ...) \
+  _rhi_vk_fence_wait((Device), ((VkFence[]) {__VA_ARGS__}),\
+                     Arrsize(((VkFence[]) {__VA_ARGS__})))
+
+#define rhi_vk_fence_wait_at_least_ms(Device, Milliseconds, ...) \
+  _rhi_vk_fence_wait_at_least_ms((Device), (Milliseconds),       \
+                                 ((VkFence[]) {__VA_ARGS__}),    \
+                                 Arrsize(((VkFence[]) {__VA_ARGS__})))
+
+#define rhi_vk_fence_reset(Device, ...) \
+  _rhi_vk_fence_reset((Device), ((VkFence[]) {__VA_ARGS__}),\
+                      Arrsize(((VkFence[]) {__VA_ARGS__})))
+
 typedef struct {
   VkShaderModule module;
   RHI_ShaderType type;
@@ -84,24 +97,83 @@ fn VkSurfaceKHR rhi_vk_surface_create(OS_Handle os_window);
 fn void rhi_vk_surface_destroy(VkSurfaceKHR surface);
 
 fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface);
-fn RHI_VK_Device rhi_vk_device_destroy(RHI_VK_Device device);
 
-fn RHI_VK_Swapchain rhi_vk_swapchain_create(Arena *arena,
-                                            RHI_VK_Device rhi_device,
-                                            VkSurfaceKHR surface,
-                                            u32 width, u32 height);
-fn VkFramebuffer* rhi_vk_framebuffers_create(Arena *arena,
-                                             RHI_VK_Device *rhi_device,
-                                             RHI_VK_Swapchain *rhi_swapchain,
-                                             VkRenderPass renderpass);
+fn RHI_VK_Swapchain
+rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
+                        VkSurfaceKHR surface, u32 width, u32 height);
+fn void
+rhi_vk_swapchain_destroy(RHI_VK_Device *rhi_device,
+                         RHI_VK_Swapchain *rhi_swapchain);
 
-fn RHI_VK_Shader rhi_vk_shader_from_file(RHI_ShaderType type,
-                                         RHI_VK_Device rhi_device,
-                                         String8 shader_source_path);
-fn RHI_VK_Shader rhi_vk_shader_from_bytes(RHI_ShaderType type,
-                                          RHI_VK_Device rhi_device,
-                                          isize size, u8 *bytes);
+fn VkFramebuffer*
+rhi_vk_framebuffers_create(Arena *arena, RHI_VK_Device *rhi_device,
+                           RHI_VK_Swapchain *rhi_swapchain,
+                           VkRenderPass renderpass);
+fn void
+rhi_vk_framebuffers_destroy(RHI_VK_Device *rhi_device,
+                            RHI_VK_Swapchain *rhi_swapchain,
+                            VkFramebuffer *framebuffers);
 
-internal void rhi_vk_device_properties_print(VkPhysicalDeviceProperties *props);
+fn VkSemaphore*
+rhi_vk_semaphore_create(Arena *arena, RHI_VK_Device device, i32 count,
+                        VkSemaphoreCreateFlags flags);
+
+fn VkFence*
+rhi_vk_fence_create(Arena *arena, RHI_VK_Device device, i32 count,
+                    VkFenceCreateFlags flags);
+
+fn RHI_VK_Buffer
+rhi_vk_buffer_create(RHI_VK_Device device, u32 size,
+                     VkBufferUsageFlags usage);
+fn void
+rhi_vk_buffer_destroy(RHI_VK_Device device, RHI_VK_Buffer buffer);
+fn void
+rhi_vk_buffer_copy(RHI_VK_Device device, RHI_VK_Buffer dest, RHI_VK_Buffer src,
+                   VkCommandPool cmdpool, VkBufferCopy *buffer_copy_regions,
+                   u32 buffer_copy_region_count);
+
+fn RHI_VK_MemoryPool
+rhi_vk_memorypool_build(RHI_VK_Device device, u32 size,
+                        VkBufferUsageFlags usage,
+                        VkMemoryPropertyFlags wanted_properties);
+fn RHI_VK_Buffer
+rhi_vk_memorypool_push(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
+                       u32 size);
+fn void*
+rhi_vk_memorypool_map(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
+                      RHI_VK_Buffer buffer);
+fn void
+rhi_vk_memorypool_destroy(RHI_VK_Device device, RHI_VK_MemoryPool pool);
+
+fn RHI_VK_Shader
+rhi_vk_shader_from_file(RHI_ShaderType type, RHI_VK_Device rhi_device,
+                        String8 shader_source_path);
+fn RHI_VK_Shader
+rhi_vk_shader_from_bytes(RHI_ShaderType type, RHI_VK_Device rhi_device,
+                         isize size, u8 *bytes);
+
+
+internal VkDeviceMemory
+rhi_vk_alloc(RHI_VK_Device device, VkMemoryRequirements memory_requirements,
+             VkMemoryPropertyFlags wanted_properties);
+
+internal VkRenderPass
+_rhi_vk_renderpass_create(RHI_VK_Device device,
+                          VkAttachmentDescription *attachments,
+                          u32 attachment_count,
+                          VkSubpassDescription *subpasses, u32 subpass_count,
+                          VkSubpassDependency *dependencies,
+                          u32 dependency_count);
+
+internal void
+_rhi_vk_fence_wait(RHI_VK_Device device, VkFence *fences, u32 count);
+internal void
+_rhi_vk_fence_wait_at_least_ms(RHI_VK_Device device, u64 milliseconds,
+                               VkFence *fences, u32 count);
+internal void
+_rhi_vk_fence_reset(RHI_VK_Device device, VkFence *fences, u32 count);
+
+internal void
+rhi_vk_device_properties_print(VkPhysicalDeviceProperties *props);
 
 #endif
