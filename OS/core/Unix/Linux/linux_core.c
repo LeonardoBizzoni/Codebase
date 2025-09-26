@@ -9,14 +9,18 @@ fn void lnx_parseMeminfo(void) {
     for (StringNode *curr = ss.first; curr; curr = curr->next) {
       if (str8_eq(curr->value, Strlit("MemTotal"))) {
         curr = curr->next;
-        unx_state.info.total_memory = KiB(1) *
-                                      u64_from_str8(str8_split(unx_state.arena, str8_trim(curr->value),
-                                                               ' ').first->value);
+        unx_state.info.total_memory =
+          KiB(1) *
+          u64_from_str8(str8_split(unx_state.arena,
+                                   str8_trim(curr->value),
+                                   ' ').first->value);
       } else if (str8_eq(curr->value, Strlit("Hugepagesize"))) {
         curr = curr->next;
-        unx_state.info.hugepage_size = KiB(1) *
-                                       u64_from_str8(str8_split(unx_state.arena, str8_trim(curr->value),
-                                                                ' ').first->value);
+        unx_state.info.hugepage_size =
+          (i64)(KiB(1) *
+                u64_from_str8(str8_split(unx_state.arena,
+                                         str8_trim(curr->value),
+                                         ' ').first->value));
         return;
       }
     }
@@ -25,13 +29,12 @@ fn void lnx_parseMeminfo(void) {
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve_huge(usize size) {
+fn void* os_reserve_huge(isize size) {
+  Assert(size > 0);
   // TODO(lb): MAP_HUGETLB vs MAP_HUGE_2MB/MAP_HUGE_1GB?
-  void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
-  if (res == MAP_FAILED) {
-    res = 0;
-  }
-
+  void *res = mmap(0, (usize)size, PROT_NONE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+  if (res == MAP_FAILED) { res = 0; }
   return res;
 }
 
@@ -70,7 +73,7 @@ fn bool fs_copy(String8 source, String8 destination) {
   i32 dest = open(cstr_from_str8(scratch.arena, destination), O_WRONLY | O_CREAT, stat_src.st_mode);
   ScratchEnd(scratch);
 
-  isize res = sendfile(dest, src, 0, stat_src.st_size);
+  isize res = sendfile(dest, src, 0, (usize)stat_src.st_size);
   fchmod(dest, stat_src.st_mode & 0777);
 
   fsync(dest);
@@ -148,7 +151,7 @@ i32 main(i32 argc, char **argv) {
   struct tm lt = {0};
   (void)clock_gettime(CLOCK_REALTIME, &tms);
   (void)localtime_r(&tms.tv_sec, &lt);
-  unx_state.unix_utc_offset = lt.tm_gmtoff;
+  unx_state.unix_utc_offset = (u64)lt.tm_gmtoff;
 
 #if OS_GUI
   unx_gfx_init();

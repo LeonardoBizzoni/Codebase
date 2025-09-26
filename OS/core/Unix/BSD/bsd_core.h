@@ -28,8 +28,6 @@
 #  define MEMFILES_ALLOWED 234414
 #endif
 
-#define dbg_print(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
-
 #ifndef HOST_NAME_MAX
 #  define HOST_NAME_MAX MAXHOSTNAMELEN
 #endif

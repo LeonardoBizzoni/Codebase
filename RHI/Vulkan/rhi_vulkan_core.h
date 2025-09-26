@@ -53,11 +53,11 @@ typedef struct {
     };
   } queue;
   union {
-    i32 values[3];
+    u32 values[3];
     struct {
-      i32 graphics;
-      i32 present;
-      i32 transfer;
+      u32 graphics;
+      u32 present;
+      u32 transfer;
     };
   } queue_idx;
 } RHI_VK_Device;
@@ -72,7 +72,7 @@ typedef struct {
 
   VkImage *images;
   VkImageView *image_views;
-  u32 image_count;
+  i32 image_count;
 } RHI_VK_Swapchain;
 
 typedef struct {
@@ -100,7 +100,7 @@ fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface);
 
 fn RHI_VK_Swapchain
 rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
-                        VkSurfaceKHR surface, u32 width, u32 height);
+                        VkSurfaceKHR surface, i32 width, i32 height);
 fn void
 rhi_vk_swapchain_destroy(RHI_VK_Device *rhi_device,
                          RHI_VK_Swapchain *rhi_swapchain);

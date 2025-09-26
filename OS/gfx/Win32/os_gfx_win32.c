@@ -223,7 +223,8 @@ fn void w32_window_task(void *args_) {
   }
 }
 
-fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
+fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
+  Assert(width > 0 && height > 0);
   W32_Window *window = w32_gfxstate.freelist_window;
   if (window) {
     memzero(window, sizeof(W32_Window));

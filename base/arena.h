@@ -5,8 +5,12 @@
 
 #define New(...) Newx(__VA_ARGS__,New3,New2)(__VA_ARGS__)
 #define Newx(a,b,c,d,...) d
-#define New2(arenaptr, type) (type*)arena_push(arenaptr, sizeof(type), AlignOf(type))
-#define New3(arenaptr, type, count) (type*)arena_push(arenaptr, (count) * sizeof(type), AlignOf(type))
+#define New2(arenaptr, type) (type*)arena_push(arenaptr, sizeof(type), \
+                                               (isize)AlignOf(type))
+#define New3(arenaptr, type, count)                       \
+  (type*)arena_push(arenaptr,                             \
+                    (isize)(count) * (isize)sizeof(type), \
+                    (isize)AlignOf(type))
 
 #define ArenaDefaultReserveSize MB(4)
 #define ArenaDefaultCommitSize KiB(4)
@@ -18,8 +22,8 @@ enum {
 };
 
 typedef struct {
-  usize commit_size;
-  usize reserve_size;
+  isize commit_size;
+  isize reserve_size;
   ArenaFlags flags;
 } ArenaArgs;
 
@@ -28,9 +32,9 @@ typedef struct Arena {
   usize head;
 
   u64 flags;
-  usize commits;
-  usize commit_size;
-  usize reserve_size;
+  isize commits;
+  isize commit_size;
+  isize reserve_size;
 
   struct Arena *next;
   struct Arena *prev;
@@ -41,12 +45,12 @@ typedef struct {
   usize pos;
 } Scratch;
 
-fn bool is_power_of_two(usize value);
-fn usize align_forward(usize ptr, usize align);
+fn bool is_power_of_two(isize value);
+fn isize align_forward(isize ptr, isize align);
 
-fn void arena_pop(Arena *arena, usize bytes);
+fn void arena_pop(Arena *arena, isize bytes);
 fn void arena_free(Arena *arena);
-fn void *arena_push(Arena *arena, usize size, usize align);
+fn void *arena_push(Arena *arena, isize size, isize align);
 
 fn Arena *_arena_build(ArenaArgs args);
 #if CPP

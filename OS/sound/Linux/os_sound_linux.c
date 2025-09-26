@@ -1,15 +1,21 @@
 global LNX_SND_State lnx_snd_state = {0};
 
 fn void _lnx_pulse_ctx_statechange(pa_context *ctx, void *userdata) {
+  Unused(ctx);
   pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
 }
 fn void _lnx_pulse_stream_statechange(pa_stream *stream, void *userdata) {
+  Unused(stream);
   pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
 }
 fn void _lnx_pulse_stream_drain(pa_stream *stream, i32 success, void *userdata) {
+  Unused(stream);
+  Unused(success);
   pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
 }
 fn void _lnx_pulse_stream_write(pa_stream *stream, usize success, void *userdata) {
+  Unused(stream);
+  Unused(success);
   pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
 }
 
@@ -17,25 +23,25 @@ fn void _lnx_snd_player(void *args) {
   UNX_Primitive *prim = (UNX_Primitive *)args;
   Assert(prim->sound.file.prop.size > 0);
   for (usize offset = 0;;) {
-    OS_MutexScope(prim->sound.pausexit_mutex)
-    {
+    OS_MutexScope(prim->sound.pausexit_mutex) {
       if (prim->sound.should_exit) { return; }
       while (prim->sound.paused) {
-        os_cond_wait(prim->sound.pausexit_condvar, prim->sound.pausexit_mutex, 0);
+        os_cond_wait(prim->sound.pausexit_condvar,
+                     prim->sound.pausexit_mutex, 0);
       }
     }
 
-    OS_MutexScope(prim->sound.player_mutex)
-    {
+    OS_MutexScope(prim->sound.player_mutex) {
       offset = prim->sound.player_offset;
     }
-    if (offset >= prim->sound.file.prop.size) {return;}
+    if (offset >= (usize)prim->sound.file.prop.size) {return;}
 
-    DeferLoop(pa_threaded_mainloop_lock(lnx_snd_state.m), pa_threaded_mainloop_unlock(lnx_snd_state.m)) {
+    DeferLoop(pa_threaded_mainloop_lock(lnx_snd_state.m),
+              pa_threaded_mainloop_unlock(lnx_snd_state.m)) {
       usize writable = pa_stream_writable_size(prim->sound.stream);
       if (writable > 0) {
-        usize to_write = (prim->sound.file.prop.size - offset) < writable
-                         ? (prim->sound.file.prop.size - offset)
+        usize to_write = ((usize)prim->sound.file.prop.size - offset) < writable
+                         ? ((usize)prim->sound.file.prop.size - offset)
                          : writable;
         pa_stream_write(prim->sound.stream, &prim->sound.file.content[offset],
                         to_write, 0, 0, PA_SEEK_RELATIVE);
@@ -131,7 +137,7 @@ fn void os_snd_stop(OS_Handle handle) {
 fn void os_snd_skip(OS_Handle handle, i64 ms) {
   UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   Assert(prim->type == UNX_Primitive_Sound);
-  i64 byte_inc = 0;
+  u64 byte_inc = 0;
   TrackByteOffset_from_ms(prim->sound, (f64)ms, byte_inc);
 
   OS_MutexScope(prim->sound.player_mutex) {

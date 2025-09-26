@@ -23,7 +23,7 @@ typedef u64 time64;
 
 global const u8 daysXmonth[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-inline fn bool is_leap_year(u32 year);
+inline fn bool is_leap_year(i32 year);
 
 // =============================================================================
 // Time format conversions

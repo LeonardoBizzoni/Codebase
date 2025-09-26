@@ -111,7 +111,7 @@ typedef struct {
   u64 unix_utc_offset;
 } UNX_State;
 
-fn void unx_sharedmem_resize(SharedMem *shm, usize size);
+fn void unx_sharedmem_resize(SharedMem *shm, isize size);
 fn void unx_sharedmem_unlink_name(SharedMem *shm);
 
 #endif

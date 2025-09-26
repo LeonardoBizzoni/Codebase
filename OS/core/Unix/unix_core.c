@@ -36,10 +36,10 @@ fn FS_Properties unx_properties_from_stat(struct stat *stat) {
   FS_Properties result = {0};
   result.ownerID = stat->st_uid;
   result.groupID = stat->st_gid;
-  result.size = (usize)stat->st_size;
-  result.last_access_time = time64_from_unix(stat->st_atime);
-  result.last_modification_time = time64_from_unix(stat->st_mtime);
-  result.last_status_change_time = time64_from_unix(stat->st_ctime);
+  result.size = stat->st_size;
+  result.last_access_time = time64_from_unix((u64)stat->st_atime);
+  result.last_modification_time = time64_from_unix((u64)stat->st_mtime);
+  result.last_status_change_time = time64_from_unix((u64)stat->st_ctime);
 
   switch (stat->st_mode & S_IFMT) {
   case S_IFBLK:  result.type = OS_FileType_BlkDevice;  break;
@@ -91,11 +91,11 @@ fn i32 unx_flags_from_acf(OS_AccessFlags acf) {
   return res;
 }
 
-fn void unx_sharedmem_resize(SharedMem *shm, usize size) {
+fn void unx_sharedmem_resize(SharedMem *shm, isize size) {
   Assert(size);
   Assert(!ftruncate((i32)shm->file_handle.h[0], size));
-  munmap(shm->content, shm->prop.size);
-  shm->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
+  munmap(shm->content, (usize)shm->prop.size);
+  shm->content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, (i32)shm->file_handle.h[0], 0);
   AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
   shm->prop.size = size;
@@ -115,7 +115,7 @@ fn time64 os_local_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
+  time64 res = time64_from_unix((u64)tms.tv_sec + unx_state.unix_utc_offset);
   res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -124,7 +124,8 @@ fn DateTime os_local_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = datetime_from_unix(tms.tv_sec + unx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix((u64)tms.tv_sec +
+                                    unx_state.unix_utc_offset);
   res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -146,7 +147,7 @@ fn time64 os_utc_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix(tms.tv_sec);
+  time64 res = time64_from_unix((u64)tms.tv_sec);
   res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -155,7 +156,7 @@ fn DateTime os_utc_dateTimeNow(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = datetime_from_unix(tms.tv_sec);
+  DateTime res = datetime_from_unix((u64)tms.tv_sec);
   res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -164,7 +165,7 @@ fn time64 os_utc_localizedTime64(i8 utc_offset) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
+  time64 res = time64_from_unix((u64)(tms.tv_sec + utc_offset * UNIX_HOUR));
   res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -173,7 +174,7 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  DateTime res = datetime_from_unix(tms.tv_sec + utc_offset * UNIX_HOUR);
+  DateTime res = datetime_from_unix((u64)(tms.tv_sec + utc_offset * UNIX_HOUR));
   res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -217,8 +218,8 @@ fn OS_Handle os_timer_start(void) {
 fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
   struct timespec tstart = ((UNX_Primitive *)start.h[0])->timer;
   struct timespec tend = ((UNX_Primitive *)end.h[0])->timer;
-  u64 diff_nanos = (tend.tv_sec - tstart.tv_sec) * (u64)1e9 +
-                   (tend.tv_nsec - tstart.tv_nsec);
+  u64 diff_nanos = (u64)(tend.tv_sec - tstart.tv_sec) * (u64)1e9 +
+                   (u64)(tend.tv_nsec - tstart.tv_nsec);
 
   u64 res = 0;
   switch (unit) {
@@ -244,26 +245,28 @@ fn void os_timer_free(OS_Handle handle) {
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve(usize size) {
-  void *res = mmap(0, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (res == MAP_FAILED) {
-    res = 0;
-  }
-
+fn void* os_reserve(isize size) {
+  Assert(size > 0);
+  void *res = mmap(0, (usize)size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
+                   -1, 0);
+  if (res == MAP_FAILED) { res = 0; }
   return res;
 }
 
-fn void os_release(void *base, usize size) {
-  (void)munmap(base, size);
+fn void os_release(void *base, isize size) {
+  Assert(size > 0);
+  (void)munmap(base, (usize)size);
 }
 
-fn void os_commit(void *base, usize size) {
-  Assert(mprotect(base, size, PROT_READ | PROT_WRITE) == 0);
+fn void os_commit(void *base, isize size) {
+  Assert(size > 0);
+  Assert(mprotect(base, (usize)size, PROT_READ | PROT_WRITE) == 0);
 }
 
-fn void os_decommit(void *base, usize size) {
-  (void)mprotect(base, size, PROT_NONE);
-  (void)madvise(base, size, MADV_DONTNEED);
+fn void os_decommit(void *base, isize size) {
+  Assert(size > 0);
+  (void)mprotect(base, (usize)size, PROT_NONE);
+  (void)madvise(base, (usize)size, MADV_DONTNEED);
 }
 
 // =============================================================================
@@ -316,7 +319,7 @@ fn OS_Handle os_proc_spawn(String8 command) {
   if (!pid) {
     Scratch scratch = ScratchBegin(0, 0);
     Assert(execl("/bin/sh", "sh", "-c",
-                 cstr_from_str8(scratch.arena, command), 0) != -1);
+                 cstr_from_str8(scratch.arena, command), NULL) != -1);
     // unreachable
     ScratchEnd(scratch);
   }
@@ -329,7 +332,7 @@ fn void os_proc_kill(OS_Handle handle) {
   (void)kill((pid_t)handle.h[0], SIGKILL);
 }
 
-fn u32 os_proc_wait(OS_Handle handle) {
+fn i32 os_proc_wait(OS_Handle handle) {
   i32 child_res = 0;
   (void)waitpid((pid_t)handle.h[0], &child_res, 0);
 
@@ -628,20 +631,22 @@ fn void os_semaphore_free(OS_Handle handle) {
   unx_primitive_free(prim);
 }
 
-fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
-  SharedMem res = {};
+fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags) {
+  SharedMem res = {0};
   res.path = name;
 
   i32 access_flags = unx_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
-  res.file_handle.h[0] = shm_open(cstr_from_str8(scratch.arena, name), access_flags,
-                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  res.file_handle.h[0] = (u64)shm_open(cstr_from_str8(scratch.arena, name),
+                                       access_flags,
+                                       S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   AssertMsg(res.file_handle.h[0] >= 0, "shm_open failed");
   ScratchEnd(scratch);
 
+  Assert(size >= 0);
   Assert(!ftruncate((i32)res.file_handle.h[0], size));
   res.prop.size = size;
-  res.content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE,
+  res.content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, (i32)res.file_handle.h[0], 0);
   Assert(res.content != MAP_FAILED);
 
@@ -650,7 +655,7 @@ fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
 
 fn void os_sharedmem_close(SharedMem *shm) {
   unx_sharedmem_unlink_name(shm);
-  munmap(shm->content, shm->prop.size);
+  munmap(shm->content, (usize)shm->prop.size);
   close((i32)shm->file_handle.h[0]);
 }
 
@@ -923,7 +928,7 @@ fn void os_socket_connect(OS_Socket *server) {
 fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
   UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
-  send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), msg.size, 0);
+  send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), (usize)msg.size, 0);
   ScratchEnd(scratch);
 }
 
@@ -938,13 +943,13 @@ fn void os_socket_close(OS_Socket *socket) {
 // File reading and writing/appending
 fn String8 fs_read(Arena *arena, OS_Handle file) {
   int fd = (i32)file.h[0];
-  String8 result = {};
+  String8 result = {0};
   if(!fd) { return result; }
 
   struct stat file_stat;
   if (!fstat(fd, &file_stat)) {
     u8 *buffer = New(arena, u8, file_stat.st_size);
-    if(pread(fd, buffer, file_stat.st_size, 0) >= 0) {
+    if(pread(fd, buffer, (usize)file_stat.st_size, 0) >= 0) {
       result.str = buffer;
       result.size = file_stat.st_size;
     }
@@ -955,7 +960,7 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
 
 fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
   int fd = (i32)file.h[0];
-  String8 result = {};
+  String8 result = {0};
   if(!fd) { return result; }
 
   u8 *buffer = New(arena, u8, size);
@@ -969,7 +974,8 @@ fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
 
 fn bool fs_write(OS_Handle file, String8 content) {
   if(!file.h[0]) { return false; }
-  return write((i32)file.h[0], content.str, content.size) == (isize)content.size;
+  return write((i32)file.h[0], content.str, (usize)content.size)
+         == content.size;
 }
 
 fn FS_Properties fs_get_properties(OS_Handle file) {
@@ -984,7 +990,7 @@ fn FS_Properties fs_get_properties(OS_Handle file) {
 }
 
 fn String8 fs_readlink(Arena *arena, String8 path) {
-  String8 res = {};
+  String8 res = {0};
   res.str = New(arena, u8, PATH_MAX);
   res.size = readlink((char *)path.str, (char *)res.str, PATH_MAX);
   if (res.size <= 0) {
@@ -999,7 +1005,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 // =============================================================================
 // Memory mapping files for easier and faster handling
 fn File fs_fopen(Arena *arena, OS_Handle fd) {
-  File file = {};
+  File file = {0};
   i32 flags = fcntl((i32)fd.h[0], F_GETFL);
   if (flags < 0) { return file; }
   flags &= O_ACCMODE;
@@ -1012,7 +1018,7 @@ fn File fs_fopen(Arena *arena, OS_Handle fd) {
   file.file_handle = fd;
   file.path = fs_path_from_handle(arena, fd);
   file.prop = fs_get_properties(file.file_handle);
-  file.content = (u8 *)mmap(0, ClampBot(file.prop.size, 1),
+  file.content = (u8 *)mmap(0, (usize)ClampBot(file.prop.size, 1),
                             flags, MAP_SHARED, (i32)fd.h[0], 0);
   file.mmap_handle.h[0] = (u64)file.content;
 
@@ -1026,31 +1032,32 @@ fn File fs_fopen_tmp(Arena *arena) {
   String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
   memcopy(pathstr.str, path, Arrsize(path));
 
-  File file = {};
-  file.file_handle.h[0] = fd;
+  File file = {0};
+  file.file_handle.h[0] = (u64)fd;
   file.path = pathstr;
   file.prop = fs_get_properties(file.file_handle);
-  file.content = (u8*)mmap(0, ClampBot(file.prop.size, 1),
+  file.content = (u8*)mmap(0, (usize)ClampBot(file.prop.size, 1),
                            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   file.mmap_handle.h[0] = (u64)file.content;
   return file;
 }
 
 fn bool fs_fclose(File *file) {
-  return !munmap((void *)file->mmap_handle.h[0], file->prop.size) &&
+  return !munmap((void *)file->mmap_handle.h[0], (usize)file->prop.size) &&
          fs_close(file->file_handle);
 }
 
-fn bool fs_fresize(File *file, usize size) {
+fn bool fs_fresize(File *file, isize size) {
+  Assert(size >= 0);
   if (ftruncate((i32)file->file_handle.h[0], size) < 0) {
     return false;
   }
 
   file->prop.size = size;
-  (void)munmap(file->content, file->prop.size);
-  file->content = (u8*)mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED,
+  munmap(file->content, (usize)file->prop.size);
+  file->content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE, MAP_SHARED,
                             (i32)file->file_handle.h[0], 0);
-  return (isize)file->content > 0;
+  return file->content != MAP_FAILED;
 }
 
 fn bool fs_file_has_changed(File *file) {
@@ -1099,7 +1106,7 @@ fn String8 fs_filename_from_path(Arena *arena, String8 path) {
   char *fullname = basename(cstr_from_str8(scratch.arena, path));
   ScratchEnd(scratch);
 
-  usize last_dot = 0, size = 0;
+  isize last_dot = 0, size = 0;
   for (; fullname[size]; ++size) {
     if (fullname[size] == '.') { last_dot = size; }
   }
@@ -1123,7 +1130,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
-  String8 str = {};
+  String8 str = {0};
   UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 

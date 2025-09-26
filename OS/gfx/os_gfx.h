@@ -105,7 +105,7 @@ typedef struct {
   OS_Gamepad gamepad[MAX_SUPPORTED_GAMEPAD];
 } OS_InputDeviceState;
 
-fn OS_Handle os_window_open(String8 name, u32 width, u32 height);
+fn OS_Handle os_window_open(String8 name, i32 width, i32 height);
 fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
 fn void os_window_close(OS_Handle window);

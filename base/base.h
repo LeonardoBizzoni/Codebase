@@ -235,8 +235,8 @@
 #define GetBit(NUM, I) ((NUM & (1 << I)) >> I)
 #define SetBit(NUM, I, BIT) (NUM | (1 << (BIT - 1)))
 
-#define memcopy(Dest, Src, Size) memcpy((Dest), (Src), (Size))
-#define memzero(Dest, Size)      memset((Dest), 0, (Size))
+#define memcopy(Dest, Src, Size) memcpy((Dest), (Src), (usize)(Size))
+#define memzero(Dest, Size)      memset((Dest), 0, (usize)(Size))
 
 #define KiB(BYTES) ((BYTES)*1024)
 #define MB(BYTES) (KiB((BYTES)) * 1024)

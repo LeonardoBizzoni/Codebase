@@ -14,21 +14,21 @@ fn Codepoint decodeUTF8(u8 *glyph_start) {
     res.size = 1;
   } else if ((*glyph_start & 0xE0) == 0xC0) {
     res.codepoint = glyph_start[1] & 0x3F;
-    res.codepoint |= (glyph_start[0] & 0x1F) << 6;
+    res.codepoint |= (u32)(glyph_start[0] & 0x1F) << 6;
     res.size = 2;
   } else if ((*glyph_start & 0xF0) == 0xE0) {
     res.codepoint = glyph_start[2] & 0x3F;
-    res.codepoint |= (glyph_start[1] & 0x3F) << 6;
-    res.codepoint |= (glyph_start[0] & 0xf) << 12;
+    res.codepoint |= (u32)(glyph_start[1] & 0x3F) << 6;
+    res.codepoint |= (u32)(glyph_start[0] & 0xf) << 12;
     res.size = 3;
   } else if ((*glyph_start & 0xF8) == 0xF0) {
     res.codepoint = glyph_start[3] & 0x3F;
-    res.codepoint |= (glyph_start[2] & 0x3F) << 6;
-    res.codepoint |= (glyph_start[1] & 0x3F) << 12;
-    res.codepoint |= (glyph_start[0] & 0x7) << 18;
+    res.codepoint |= (u32)(glyph_start[2] & 0x3F) << 6;
+    res.codepoint |= (u32)(glyph_start[1] & 0x3F) << 12;
+    res.codepoint |= (u32)(glyph_start[0] & 0x7) << 18;
     res.size = 4;
   } else {
-    Assert(false);
+    Unreachable();
   }
 
   return res;
@@ -44,8 +44,8 @@ fn Codepoint decodeUTF16(u16 *glyph_start) {
   } else if ((glyph_start[0] >= 0xD800 && glyph_start[0] <= 0xDBFF) &&
              (glyph_start[1] >= 0xDC00 && glyph_start[1] <= 0xDFFF)) {
     res.size = 2;
-    res.codepoint =
-    ((glyph_start[0] - 0xD800) << 10) + (glyph_start[1] - 0xDC00) + 0x10000;
+    res.codepoint = (u32)
+      ((glyph_start[0] - 0xD800) << 10) + (glyph_start[1] - 0xDC00) + 0x10000;
   } else {
     Assert(false);
   }
@@ -124,33 +124,38 @@ fn void strstream_append_stream(StringStream *strlist, StringStream other) {
 }
 
 fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
-  String8 res = str8(New(arena, u8, strlist.total_size + strlist.node_count - 1),
+  String8 res = str8(New(arena, u8, (u32)
+                         (strlist.total_size + strlist.node_count - 1)),
                      strlist.total_size + strlist.node_count - 1);
 
-  usize i = 0;
-  for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
-    memcopy(&res.str[i], curr->value.str, curr->value.size);
+  isize i = 0;
+  for (StringNode *curr = strlist.first;
+       curr && curr->next;
+       curr = curr->next) {
+    memcopy(&res.str[i], curr->value.str, (u32)curr->value.size);
     i += curr->value.size;
-    res.str[i++] = ch;
+    res.str[i++] = (u8)ch;
   }
-  memcopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+  memcopy(&res.str[i], strlist.last->value.str, (u32)strlist.last->value.size);
 
   return res;
 }
 
 fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
-  String8 res = str8(New(arena, u8, strlist.total_size +
-                                    str.size * (strlist.node_count - 1)),
+  String8 res = str8(New(arena, u8, (u32)(strlist.total_size +
+                                          str.size * (strlist.node_count - 1))),
                      strlist.total_size + str.size * (strlist.node_count - 1));
 
-  usize i = 0;
-  for (StringNode *curr = strlist.first; curr && curr->next; curr = curr->next) {
-    memcopy(&res.str[i], curr->value.str, curr->value.size);
+  isize i = 0;
+  for (StringNode *curr = strlist.first;
+       curr && curr->next;
+       curr = curr->next) {
+    memcopy(&res.str[i], curr->value.str, (u32)curr->value.size);
     i += curr->value.size;
-    memcopy(&res.str[i], str.str, str.size);
+    memcopy(&res.str[i], str.str, (u32)str.size);
     i += str.size;
   }
-  memcopy(&res.str[i], strlist.last->value.str, strlist.last->value.size);
+  memcopy(&res.str[i], strlist.last->value.str, (u32)strlist.last->value.size);
 
   return res;
 }
@@ -167,10 +172,10 @@ fn String8 str8(u8 *chars, isize len) {
 }
 
 fn String8 str8_from_stream(Arena *arena, StringStream stream) {
-  u8 *str = New(arena, u8, stream.total_size);
+  u8 *str = New(arena, u8, (u32)stream.total_size);
   u8 *ptr = str;
   for (StringNode *curr = stream.first; curr; curr = curr->next) {
-    memcopy(ptr, curr->value.str, curr->value.size);
+    memcopy(ptr, curr->value.str, (u32)curr->value.size);
     ptr += curr->value.size;
   }
 
@@ -179,7 +184,7 @@ fn String8 str8_from_stream(Arena *arena, StringStream stream) {
 
 fn String8 str8_from_char(Arena *arena, char ch) {
   String8 res = str8(New(arena, u8), 1);
-  res.str[0] = ch;
+  res.str[0] = (u8)ch;
   return res;
 }
 
@@ -193,34 +198,34 @@ fn String8 str8_from_i64(Arena *arena, i64 n) {
     n = -n;
   }
 
-  usize i = 0, approx = 30;
+  isize i = 0, approx = 30;
   u8 *str = New(arena, u8, approx);
   for (; n > 0; ++i, n /= 10) {
-    str[i] = n % 10 + '0';
+    str[i] = (u8)(n % 10) + '0';
   }
 
   if (sign < 0) {
     str[i++] = '-';
   }
 
-  for (usize j = 0, k = i - 1; j < k; ++j, --k) {
+  for (isize j = 0, k = i - 1; j < k; ++j, --k) {
     u8 tmp = str[k];
     str[k] = str[j];
     str[j] = tmp;
   }
 
   arena_pop(arena, approx - i);
-  return str8(str,i);
+  return str8(str, i);
 }
 
 fn String8 str8_from_u64(Arena *arena, u64 n) {
-  usize i = 0, approx = 30;
-  u8 *str = New(arena, u8, approx);
+  isize i = 0, approx = 30;
+  u8 *str = New(arena, u8, (usize)approx);
   for (; n > 0; ++i, n /= 10) {
     str[i] = n % 10 + '0';
   }
 
-  for (usize j = 0, k = i - 1; j < k; ++j, --k) {
+  for (isize j = 0, k = i - 1; j < k; ++j, --k) {
     u8 tmp = str[k];
     str[k] = str[j];
     str[j] = tmp;
@@ -231,8 +236,8 @@ fn String8 str8_from_u64(Arena *arena, u64 n) {
 }
 
 fn String8 str8_from_f64(Arena *arena, f64 n) {
-  usize approx = 100, size = 0;
-  u8 *str = New(arena, u8, approx);
+  isize approx = 100, size = 0;
+  u8 *str = New(arena, u8, (usize)approx);
 
   // TODO: maybe implement `sprintf`?
   size = sprintf((char *)str, "%f", n);
@@ -281,21 +286,21 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
 #define at(m,i,j) m.x[(i)*m.n + (j)]
   typedef struct Table Table;
   struct Table {
-    usize *x;
-    usize m;
-    usize n;
+    isize *x;
+    isize m;
+    isize n;
   };
 
-  usize m = s1.size + 1;
-  usize n = s2.size + 1;
+  isize m = s1.size + 1;
+  isize n = s2.size + 1;
 
   Table c = {0};
-  c.x = New(arena, usize, m*n);
+  c.x = New(arena, isize, (usize)(m * n));
   c.m = m;
   c.n = n;
 
-  for(usize i = 1; i < m; ++i) {
-    for(usize j = 1; j < n; ++j) {
+  for(isize i = 1; i < m; ++i) {
+    for(isize j = 1; j < n; ++j) {
       if(s1.str[i-1] == s2.str[j-1]) {
         at(c,i,j) = at(c,i-1,j-1) + 1;
       } else {
@@ -304,10 +309,10 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
     }
   }
 
-  usize size = at(c,m-1,n-1);
-  u8 *str = New(arena, u8, size);
-  usize idx = size - 1;
-  for(usize i = m - 1, j = n - 1; i > 0 && j > 0;) {
+  isize size = at(c,m-1,n-1);
+  u8 *str = New(arena, u8, (usize)size);
+  isize idx = size - 1;
+  for(isize i = m - 1, j = n - 1; i > 0 && j > 0;) {
     if(at(c,i,j) == at(c,i-1,j)) {
       --i;
     } else if(at(c,i,j) == at(c,i,j-1)) {
@@ -324,7 +329,7 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
 }
 
 fn String8 str8_to_upper(Arena *arena, String8 s) {
-  String8 res = {New(arena, u8, s.size), s.size};
+  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
 
   for (isize i = 0; i < s.size; ++i) {
     res.str[i] = char_to_upper(s.str[i]);
@@ -334,7 +339,7 @@ fn String8 str8_to_upper(Arena *arena, String8 s) {
 }
 
 fn String8 str8_to_lower(Arena *arena, String8 s) {
-  String8 res = {New(arena, u8, s.size), s.size};
+  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
 
   for (isize i = 0; i < s.size; ++i) {
     res.str[i] = char_to_lower(s.str[i]);
@@ -344,7 +349,7 @@ fn String8 str8_to_lower(Arena *arena, String8 s) {
 }
 
 fn String8 str8_to_capitalized(Arena *arena, String8 s) {
-  String8 res = {New(arena, u8, s.size), s.size};
+  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
 
   res.str[0] = char_to_upper(s.str[0]);
   for (isize i = 1; i < s.size; ++i) {
@@ -397,11 +402,12 @@ fn String8 str8_format(Arena *arena, const char *fmt, ...) {
 fn String8 _str8_format(Arena *arena, const char *fmt, va_list args) {
   va_list args2;
   va_copy(args2, args);
-  u32 needed_bytes = vsnprintf(0, 0, fmt, args2) + 1;
+  i32 needed_bytes = vsnprintf(0, 0, fmt, args2) + 1;
+  Assert(needed_bytes > 0);
 
   String8 res;
-  res.str = New(arena, u8, needed_bytes);
-  res.size = vsnprintf((char *)res.str, needed_bytes, fmt, args);
+  res.str = New(arena, u8, (u32)needed_bytes);
+  res.size = vsnprintf((char *)res.str, (u32)needed_bytes, fmt, args);
   res.str[res.size] = 0;
 
   va_end(args2);
@@ -436,10 +442,9 @@ fn StringStream str8_split(Arena *arena, String8 s, char ch) {
 fn usize str8_find_first_ch(String8 s, char ch) {
   for (u8 *curr = s.str; curr < s.str + s.size + 1; ++curr) {
     if (*curr == ch) {
-      return curr - s.str;
+      return (usize)(curr - s.str);
     }
   }
-
   return 0;
 }
 
@@ -447,21 +452,17 @@ fn usize str8_find_first_str8(String8 haystack, String8 needle) {
   if (haystack.size < needle.size) {
     return 0;
   }
-
-  for (isize i = 0; i < haystack.size; ++i) {
+  for (usize i = 0; i < (usize)haystack.size; ++i) {
     if (haystack.str[i] == needle.str[0]) {
-      for (isize j = 0; j < needle.size; ++j) {
+      for (usize j = 0; j < (usize)needle.size; ++j) {
         if (haystack.str[i + j] != needle.str[j]) {
           goto outer;
         }
       }
-
       return i;
     }
-
     outer: ;
   }
-
   return 0;
 }
 
@@ -580,8 +581,8 @@ fn bool str8_is_numerical(String8 s) {
 }
 
 fn char* cstr_from_str8(Arena *arena, String8 str) {
-  char *res = New(arena, char, str.size + 1);
-  memcopy(res, str.str, str.size);
+  char *res = New(arena, char, (usize)(str.size + 1));
+  memcopy(res, str.str, (usize)str.size);
   res[str.size] = 0;
   return res;
 }
@@ -621,13 +622,11 @@ fn i64 i64_from_str8(String8 s) {
 }
 
 fn u64 u64_from_str8(String8 s) {
-  i64 res = 0, decimal = 1;
-
+  u64 res = 0, decimal = 1;
   Assert(str8_is_integer(s));
   for (u8 *curr = s.str + s.size - 1; curr >= s.str; --curr, decimal *= 10) {
     res += (*curr - '0') * decimal;
   }
-
   return res;
 }
 
@@ -686,7 +685,7 @@ bool str16Eq(String16 s1, String16 s2) {
 fn usize cstring16_length(u16 *str){
   u16 *p = str;
   for(; *p; ++p);
-  return p - str;
+  return (usize)(p - str);
 }
 
 fn String16 str16_cstr(u16 *str){
@@ -711,7 +710,7 @@ fn bool str32Eq(String32 s1, String32 s2) {
 // =============================================================================
 // UTF string conversion
 fn String8 UTF8From16(Arena *arena, String16 in) {
-  usize res_size = 0, approx_size = in.size * 4;
+  isize res_size = 0, approx_size = in.size * 4;
   u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
 
   Codepoint codepoint = {0};
@@ -725,11 +724,11 @@ fn String8 UTF8From16(Arena *arena, String16 in) {
   }
 
   arena_pop(arena, (approx_size - res_size));
-  return str8(bytes, res_size);
+  return str8(bytes, (isize)res_size);
 }
 
 fn String8 UTF8From32(Arena *arena, String32 in) {
-  usize res_size = 0, approx_size = in.size * 4;
+  isize res_size = 0, approx_size = in.size * 4;
   u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
 
   Codepoint codepoint = {0};
@@ -743,7 +742,7 @@ fn String8 UTF8From32(Arena *arena, String32 in) {
   }
 
   arena_pop(arena, (approx_size - res_size));
-  return str8(bytes, res_size);
+  return str8(bytes, (isize)res_size);
 }
 
 fn String16 UTF16From8(Arena *arena, String8 in) {
@@ -761,7 +760,7 @@ fn String16 UTF16From8(Arena *arena, String8 in) {
   }
 
   arena_pop(arena, (approx_size - res_size));
-  String16 res = {words, res_size};
+  String16 res = {words, (isize)res_size};
   return res;
 }
 

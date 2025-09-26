@@ -25,7 +25,7 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
 }
 
 fn void fs_fwrite(File *file, String8 content) {
-  if (file->prop.size < (usize)content.size) {
+  if (file->prop.size < content.size) {
     fs_fresize(file, content.size);
   }
   memzero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
@@ -57,7 +57,7 @@ fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
 }
 
 fn NetInterface os_net_interface_lookup(String8 interface) {
-  NetInterface res = {};
+  NetInterface res = {0};
 
   Scratch scratch = ScratchBegin(0, 0);
   NetInterfaceList inters = os_net_interfaces(scratch.arena);

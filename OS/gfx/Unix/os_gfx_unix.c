@@ -1,6 +1,7 @@
 global X11_State x11_state = {0};
 
-fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
+fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
+  Assert(width > 0 && height > 0);
   X11_Window *window = x11_state.freelist_window;
   if (window) {
     memzero(window, sizeof(X11_Window));
@@ -10,7 +11,7 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
   }
   DLLPushBack(x11_state.first_window, x11_state.last_window, window);
 
-  XSetWindowAttributes xattrib = {};
+  XSetWindowAttributes xattrib = {0};
   xattrib.colormap = XCreateColormap(x11_state.xdisplay, x11_state.xroot,
                                      x11_state.xvisual.visual, AllocNone);
   xattrib.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask |
@@ -18,7 +19,8 @@ fn OS_Handle os_window_open(String8 name, u32 width, u32 height) {
                        ExposureMask | FocusChangeMask | VisibilityChangeMask |
                        EnterWindowMask | LeaveWindowMask | PropertyChangeMask;
   window->xwindow = XCreateWindow(x11_state.xdisplay, x11_state.xroot,
-                                  0, 0, width, height, 0, x11_state.xvisual.depth,
+                                  0, 0, (u32)width, (u32)height, 0,
+                                  x11_state.xvisual.depth,
                                   InputOutput, x11_state.xvisual.visual,
                                   CWColormap | CWEventMask | CWBorderPixel,
                                   &xattrib);
@@ -88,6 +90,7 @@ fn OS_Event os_window_wait_event(OS_Handle window_) {
 }
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
+  Unused(arena);
   String8 res = {0};
   res.str = (u8*)XKeysymToString(event.key.keycode);
   if (res.str) { res.size = str8_len((char*)res.str); }
@@ -114,7 +117,9 @@ fn void unx_gfx_init(void) {
   rhi_init();
 }
 
-fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event, XPointer arg) {
+fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event,
+                                     XPointer arg) {
+  Unused(_display);
   return event->xany.window == *(Window*)arg;
 }
 

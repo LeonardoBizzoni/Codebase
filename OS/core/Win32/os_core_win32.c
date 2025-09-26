@@ -175,29 +175,37 @@ fn void os_timer_free(OS_Handle handle) {
 
 ////////////////////////////////
 //- km: memory
-fn void* os_reserve(usize size) {
-  void *result = VirtualAlloc(0, size, MEM_RESERVE, PAGE_READWRITE);
-  return result;
-}
-
-fn void* os_reserve_huge(usize size) {
-  void *result = VirtualAlloc(0, size, MEM_RESERVE | MEM_LARGE_PAGES,
+fn void* os_reserve(isize size) {
+  Assert(size > 0);
+  void *result = VirtualAlloc(0, (usize)size, MEM_RESERVE,
                               PAGE_READWRITE);
   return result;
 }
 
-fn void os_release(void *base, usize size) {
-  BOOL result = VirtualFree(base, size, MEM_RELEASE);
+fn void* os_reserve_huge(isize size) {
+  Assert(size > 0);
+  void *result = VirtualAlloc(0, (usize)size,
+                              MEM_RESERVE | MEM_LARGE_PAGES,
+                              PAGE_READWRITE);
+  return result;
+}
+
+fn void os_release(void *base, isize size) {
+  Assert(size > 0);
+  BOOL result = VirtualFree(base, (usize)size, MEM_RELEASE);
   (void)result;
 }
 
-fn void os_commit(void *base, usize size) {
-  void *result = VirtualAlloc(base, size, MEM_COMMIT, PAGE_READWRITE);
+fn void os_commit(void *base, isize size) {
+  Assert(size > 0);
+  void *result = VirtualAlloc(base, (usize)size, MEM_COMMIT,
+                              PAGE_READWRITE);
   (void)result;
 }
 
-fn void os_decommit(void *base, usize size) {
-  BOOL result = VirtualFree(base, size, MEM_DECOMMIT);
+fn void os_decommit(void *base, isize size) {
+  Assert(size > 0);
+  BOOL result = VirtualFree(base, (usize)size, MEM_DECOMMIT);
   (void)result;
 }
 
@@ -289,8 +297,8 @@ fn void os_proc_kill(OS_Handle handle) {
   (void)TerminateProcess((HANDLE)handle.h[0], 0);
 }
 
-fn u32 os_proc_wait(OS_Handle handle) {
-  u32 res = 0;
+fn i32 os_proc_wait(OS_Handle handle) {
+  i32 res = 0;
   HANDLE proc = (HANDLE)handle.h[0];
   WaitForSingleObject(proc, INFINITE);
   GetExitCodeProcess(proc, &res);
@@ -499,7 +507,9 @@ fn void os_semaphore_free(OS_Handle handle) {
   w32_primitive_release(prim);
 }
 
-fn SharedMem os_sharedmem_open(String8 name, usize size, OS_AccessFlags flags) {
+fn SharedMem os_sharedmem_open(String8 name, isize size,
+                               OS_AccessFlags flags) {
+  Assert(size > 0);
   SharedMem res = {0};
   DWORD access_flags = 0;
   if (flags & OS_acfRead)    { access_flags |= GENERIC_READ;}
@@ -1067,7 +1077,8 @@ fn bool fs_fclose(File *file) {
          CloseHandle((HANDLE)file->mmap_handle.h[0]);
 }
 
-fn bool fs_fresize(File *file, usize size) {
+fn bool fs_fresize(File *file, isize size) {
+  Assert(size >= 0);
   W32_Primitive *prim = (W32_Primitive*)file->file_handle.h[0];
   LARGE_INTEGER lsize = { .QuadPart = (LONGLONG)size };
   if (!SetFilePointerEx(prim->file.handle, lsize, 0, FILE_BEGIN)) {

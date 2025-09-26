@@ -20,8 +20,8 @@ enum {
 };
 
 typedef struct {
-  u64 page_size;
-  u64 hugepage_size;
+  i64 page_size;
+  i64 hugepage_size;
 
   u8 core_count;
   u64 total_memory;
@@ -74,7 +74,7 @@ enum {
 typedef struct {
   u32 ownerID;
   u32 groupID;
-  usize size;
+  isize size;
   OS_FileType type;
 
   time64 last_access_time;
@@ -247,12 +247,12 @@ fn void os_timer_free(OS_Handle handle);
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve(usize size);
-fn void* os_reserve_huge(usize size);
-fn void os_release(void *base, usize size);
+fn void* os_reserve(isize size);
+fn void* os_reserve_huge(isize size);
+fn void os_release(void *base, isize size);
 
-fn void os_commit(void *base, usize size);
-fn void os_decommit(void *base, usize size);
+fn void os_commit(void *base, isize size);
+fn void os_decommit(void *base, isize size);
 
 // =============================================================================
 // Threads & Processes stuff
@@ -265,7 +265,7 @@ fn void os_thread_cancelpoint(void);
 // TODO(lb): add stream redirection?
 fn OS_Handle os_proc_spawn(String8 command);
 fn void os_proc_kill(OS_Handle proc);
-fn u32 os_proc_wait(OS_Handle proc);
+fn i32 os_proc_wait(OS_Handle proc);
 
 fn void os_exit(u8 status_code);
 fn void os_atexit(VoidFunc *callback);
@@ -304,8 +304,7 @@ fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
 fn bool os_semaphore_trywait(OS_Handle sem);
 fn void os_semaphore_free(OS_Handle sem);
 
-fn SharedMem os_sharedmem_open(String8 name, usize size,
-                               OS_AccessFlags flags);
+fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags);
 fn void os_sharedmem_close(SharedMem *shm);
 
 // =============================================================================
@@ -356,7 +355,7 @@ fn String8 fs_readlink(Arena *arena, String8 path);
 fn File fs_fopen(Arena* arena, OS_Handle file);
 fn File fs_fopen_tmp(Arena *arena);
 fn bool fs_fclose(File *file);
-fn bool fs_fresize(File *file, usize size);
+fn bool fs_fresize(File *file, isize size);
 fn void fs_fwrite(File *file, String8 str);
 
 fn bool fs_file_has_changed(File *file);
