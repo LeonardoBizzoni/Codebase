@@ -22,6 +22,13 @@ do {                                    \
                             (Subpasses), Arrsize(Subpasses),                   \
                             (Dependencies), Arrsize(Dependencies))
 
+#define rhi_vk_descriptorpool_create(Device, VkDescriptorPoolSizes) \
+  _rhi_vk_descriptorpool_create((Device), (VkDescriptorPoolSizes),  \
+                                Arrsize(VkDescriptorPoolSizes))
+
+#define rhi_vk_descriptorset_layout_create(Device, Bindings) \
+  _rhi_vk_descriptorset_layout_create((Device), (Bindings), Arrsize(Bindings))
+
 #define rhi_vk_fence_wait(Device, ...) \
   _rhi_vk_fence_wait((Device), ((VkFence[]) {__VA_ARGS__}),\
                      Arrsize(((VkFence[]) {__VA_ARGS__})))
@@ -152,6 +159,10 @@ fn RHI_VK_Shader
 rhi_vk_shader_from_bytes(RHI_ShaderType type, RHI_VK_Device rhi_device,
                          isize size, u8 *bytes);
 
+
+internal VkDescriptorPool
+_rhi_vk_descriptorpool_create(RHI_VK_Device device,
+                              VkDescriptorPoolSize *counts, u32 counts_size);
 
 internal VkDeviceMemory
 rhi_vk_alloc(RHI_VK_Device device, VkMemoryRequirements memory_requirements,

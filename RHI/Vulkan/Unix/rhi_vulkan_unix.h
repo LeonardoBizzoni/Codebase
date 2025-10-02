@@ -11,6 +11,8 @@ global const char *rhi_vk_needed_extensions[] = {
 local const char *rhi_vk_layers[] = {
 #if DEBUG
   "VK_LAYER_KHRONOS_validation",
+#else
+  0
 #endif
 };
 

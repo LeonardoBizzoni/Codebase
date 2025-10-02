@@ -14,8 +14,12 @@ fn void rhi_init(void) {
     .flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
     .enabledExtensionCount = Arrsize(rhi_vk_needed_extensions),
     .ppEnabledExtensionNames = rhi_vk_needed_extensions,
+#if DEBUG
     .enabledLayerCount = Arrsize(rhi_vk_layers),
     .ppEnabledLayerNames = rhi_vk_layers,
+#else
+    .enabledLayerCount = 0,
+#endif
   };
 
   {
@@ -434,6 +438,50 @@ rhi_vk_framebuffers_destroy(RHI_VK_Device *rhi_device,
   }
 }
 
+fn VkDescriptorSet*
+rhi_vk_descriptorset_create(Arena *arena, RHI_VK_Device device,
+                            VkDescriptorPool descriptor_pool,
+                            i32 descriptor_count,
+                            VkDescriptorSetLayout descriptor_layout) {
+  VkDescriptorSet *res = New(arena, VkDescriptorSet, descriptor_count);
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    VkDescriptorSetLayout *layouts = New(scratch.arena,
+                                         VkDescriptorSetLayout,
+                                         descriptor_count);
+    for (i32 i = 0; i < descriptor_count; ++i) {
+      layouts[i] = descriptor_layout;
+    }
+
+    VkDescriptorSetAllocateInfo alloc_description_set_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = descriptor_pool,
+      .descriptorSetCount = (u32)descriptor_count,
+      .pSetLayouts = layouts,
+    };
+    rhi_vk_create(vkAllocateDescriptorSets, device.virtual,
+                  &alloc_description_set_info, res);
+    ScratchEnd(scratch);
+  }
+  return res;
+}
+
+internal VkDescriptorSetLayout
+_rhi_vk_descriptorset_layout_create(RHI_VK_Device device,
+                                    VkDescriptorSetLayoutBinding *bindings,
+                                    u32 bindings_count) {
+  VkDescriptorSetLayout res = {0};
+  VkDescriptorSetLayoutCreateInfo create_layout_description_set_info = {
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+    .bindingCount = bindings_count,
+    .pBindings = bindings,
+  };
+  rhi_vk_create(vkCreateDescriptorSetLayout, device.virtual,
+                &create_layout_description_set_info, 0,
+                &res);
+  return res;
+}
+
 fn VkSemaphore*
 rhi_vk_semaphore_create(Arena *arena, RHI_VK_Device device, i32 count,
                         VkSemaphoreCreateFlags flags) {
@@ -551,6 +599,8 @@ rhi_vk_memorypool_build(RHI_VK_Device device, u32 size,
 fn RHI_VK_Buffer
 rhi_vk_memorypool_push(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
                        u32 size) {
+  size = (u32)align_forward(size,
+                            (isize)pool->buffer.memory_requirements.alignment);
   RHI_VK_Buffer res = rhi_vk_buffer_create(device, size, pool->usage);
   vkBindBufferMemory(device.virtual, res.vkbuffer, pool->memory, pool->offset);
   res.memorypool_position = pool->offset;
@@ -566,6 +616,11 @@ rhi_vk_memorypool_map(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
   vkMapMemory(device.virtual, pool->memory, buffer.memorypool_position,
               buffer.memory_requirements.size, 0, &res);
   return res;
+}
+
+fn void
+rhi_vk_memorypool_unmap(RHI_VK_Device device, RHI_VK_MemoryPool *pool) {
+  vkUnmapMemory(device.virtual, pool->memory);
 }
 
 fn void
@@ -647,6 +702,27 @@ _rhi_vk_renderpass_create(RHI_VK_Device device,
   };
   rhi_vk_create(vkCreateRenderPass, device.virtual,
                 &create_renderpass_info, 0, &res);
+  return res;
+}
+
+internal VkDescriptorPool
+_rhi_vk_descriptorpool_create(RHI_VK_Device device,
+                              VkDescriptorPoolSize *counts, u32 counts_size) {
+  VkDescriptorPool res = {0};
+  u32 max_set = counts[0].descriptorCount;
+  for (u32 i = 1; i < counts_size; ++i) {
+    if (counts[i].descriptorCount > max_set) {
+      max_set = counts[i].descriptorCount;
+    }
+  }
+  VkDescriptorPoolCreateInfo create_descriptionpool_info = {
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+    .poolSizeCount = counts_size,
+    .pPoolSizes = counts,
+    .maxSets = max_set,
+  };
+  rhi_vk_create(vkCreateDescriptorPool, device.virtual,
+                &create_descriptionpool_info, 0, &res);
   return res;
 }
 

@@ -319,7 +319,7 @@ typedef enum {false, true} bool;
 #define I64_MAX 0x7FFFFFFFFFFFFFFF
 #define I64_MIN (-0x8000000000000000)
 
-#define F32_MAX 3.40282347E+38
+#define F32_MAX (f32)3.40282347E+38
 #define F32_MIN -F32_MAX
 #define F64_MAX 1.7976931348623157E+308
 #define F64_MIN -F64_MAX
