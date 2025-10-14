@@ -107,29 +107,29 @@ fn u8 utf32_encode(u32 *res, Codepoint cp) {
 
 // =============================================================================
 // UTF-8 string streams
-fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other) {
+fn void sb_append_str(Arena *arena, StringBuilder *strlist, String8 other) {
   strlist->node_count += 1;
   strlist->total_size += other.size;
-  StringNode *str = arena_push(arena, StringNode);
+  StringBuilderNode *str = arena_push(arena, StringBuilderNode);
   str->value = other;
   DLLPushBack(strlist->first, strlist->last, str);
 }
 
-fn void strstream_append_stream(StringStream *strlist, StringStream other) {
+fn void sb_append_stream(StringBuilder *strlist, StringBuilder other) {
   if (!other.first) { return; }
   strlist->total_size += other.total_size;
   strlist->node_count += other.node_count;
   DLLPushBack(strlist->first, strlist->last, other.first);
 }
 
-fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
+fn String8 sb_join_char(Arena *arena, StringBuilder strlist, char ch) {
   String8 res = str8(arena_push_many(arena, u8, (u32)
                                      (strlist.total_size +
                                       strlist.node_count - 1)),
                      strlist.total_size + strlist.node_count - 1);
 
   isize i = 0;
-  for (StringNode *curr = strlist.first;
+  for (StringBuilderNode *curr = strlist.first;
        curr && curr->next;
        curr = curr->next) {
     memcopy(&res.str[i], curr->value.str, (u32)curr->value.size);
@@ -141,14 +141,14 @@ fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
   return res;
 }
 
-fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
+fn String8 sb_join_str(Arena *arena, StringBuilder strlist, String8 str) {
   String8 res = str8(arena_push_many(arena, u8,
                                      (u32)(strlist.total_size +
                                            str.size * (strlist.node_count - 1))),
                      strlist.total_size + str.size * (strlist.node_count - 1));
 
   isize i = 0;
-  for (StringNode *curr = strlist.first;
+  for (StringBuilderNode *curr = strlist.first;
        curr && curr->next;
        curr = curr->next) {
     memcopy(&res.str[i], curr->value.str, (u32)curr->value.size);
@@ -172,10 +172,10 @@ fn String8 str8(u8 *chars, isize len) {
   return res;
 }
 
-fn String8 str8_from_stream(Arena *arena, StringStream stream) {
+fn String8 str8_from_stream(Arena *arena, StringBuilder stream) {
   u8 *str = arena_push_many(arena, u8, (u32)stream.total_size);
   u8 *ptr = str;
-  for (StringNode *curr = stream.first; curr; curr = curr->next) {
+  for (StringBuilderNode *curr = stream.first; curr; curr = curr->next) {
     memcopy(ptr, curr->value.str, (u32)curr->value.size);
     ptr += curr->value.size;
   }
@@ -236,12 +236,12 @@ fn String8 str8_from_u64(Arena *arena, u64 n) {
   return str8(str, i);
 }
 
-fn String8 str8_from_f64(Arena *arena, f64 n) {
+fn String8 str8_from_f64(Arena *arena, f64 n, i32 precision) {
   isize approx = 100, size = 0;
   u8 *str = arena_push_many(arena, u8, (usize)approx);
 
   // TODO: maybe implement `sprintf`?
-  size = snprintf((char *)str, (usize)approx, "%f", n);
+  size = snprintf((char *)str, (usize)approx, "%.*f", precision, n);
   arena_pop(arena, approx - size);
 
   return str8(str, size);
@@ -415,16 +415,14 @@ internal String8 _str8_format(Arena *arena, const char *fmt, va_list args) {
   return res;
 }
 
-fn StringStream str8_split(Arena *arena, String8 s, char ch) {
-  StringStream res = {0};
-
+fn StringBuilder str8_split(Arena *arena, String8 s, char ch) {
+  StringBuilder res = {0};
   isize prev = 0;
   for (isize i = 0; i < s.size;) {
     if (s.str[i] == ch) {
       if (prev != i) {
-        strstream_append_str(arena, &res, str8_substr(s, prev, i));
+        sb_append_str(arena, &res, str8_substr(s, prev, i));
       }
-
       do {
         prev = ++i;
       } while (s.str[i] == ch);
@@ -432,11 +430,9 @@ fn StringStream str8_split(Arena *arena, String8 s, char ch) {
       ++i;
     }
   }
-
   if (prev != s.size) {
-    strstream_append_str(arena, &res, str8_substr(s, prev, s.size));
+    sb_append_str(arena, &res, str8_substr(s, prev, s.size));
   }
-
   return res;
 }
 

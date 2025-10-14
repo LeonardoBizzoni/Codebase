@@ -448,12 +448,13 @@ rhi_vk_descriptorset_create(Arena *arena, RHI_VK_Device device,
                             VkDescriptorPool descriptor_pool,
                             i32 descriptor_count,
                             VkDescriptorSetLayout descriptor_layout) {
-  VkDescriptorSet *res = New(arena, VkDescriptorSet, descriptor_count);
+  VkDescriptorSet *res = arena_push_many(arena, VkDescriptorSet,
+                                         descriptor_count);
   {
     Scratch scratch = ScratchBegin(0, 0);
-    VkDescriptorSetLayout *layouts = New(scratch.arena,
-                                         VkDescriptorSetLayout,
-                                         descriptor_count);
+    VkDescriptorSetLayout *layouts = arena_push_many(scratch.arena,
+                                                     VkDescriptorSetLayout,
+                                                     descriptor_count);
     for (i32 i = 0; i < descriptor_count; ++i) {
       layouts[i] = descriptor_layout;
     }

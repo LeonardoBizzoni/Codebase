@@ -2,11 +2,14 @@
 // System information retrieval
 fn void lnx_parseMeminfo(void) {
   OS_Handle meminfo = os_fs_open(Strlit("/proc/meminfo"), OS_acfRead);
-  StringStream lines = str8_split(unx_state.arena, os_fs_read_virtual(unx_state.arena,
-                                                                   meminfo, 4096), '\n');
-  for (StringNode *curr_line = lines.first; curr_line; curr_line = curr_line->next) {
-    StringStream ss = str8_split(unx_state.arena, curr_line->value, ':');
-    for (StringNode *curr = ss.first; curr; curr = curr->next) {
+  StringBuilder lines = str8_split(unx_state.arena,
+                                   os_fs_read_virtual(unx_state.arena,
+                                                      meminfo, 4096), '\n');
+  for (StringBuilderNode *curr_line = lines.first;
+       curr_line;
+       curr_line = curr_line->next) {
+    StringBuilder ss = str8_split(unx_state.arena, curr_line->value, ':');
+    for (StringBuilderNode *curr = ss.first; curr; curr = curr->next) {
       if (str8_eq(curr->value, Strlit("MemTotal"))) {
         curr = curr->next;
         unx_state.info.total_memory =

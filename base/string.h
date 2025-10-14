@@ -15,12 +15,14 @@ typedef struct {
   u8 size;
 } Codepoint;
 
-fn Codepoint decodeUTF8(u8 *glyph_start);
-fn Codepoint decodeUTF16(u16 *glyph_start);
-fn Codepoint decodeUTF32(u32 *glyph_start);
-fn u8 encodeUTF8(u8 *res, Codepoint cp);
-fn u8 encodeUTF16(u16 *res, Codepoint cp);
-fn u8 encodeUTF32(u32 *res, Codepoint cp);
+fn Codepoint utf8_decode(u8 *glyph_start);
+fn u8 utf8_encode(u8 *res, Codepoint cp);
+
+fn Codepoint utf16_decode(u16 *glyph_start);
+fn u8 utf16_encode(u16 *res, Codepoint cp);
+
+fn Codepoint utf32_decode(u32 *glyph_start);
+fn u8 utf32_encode(u32 *res, Codepoint cp);
 
 // =============================================================================
 // UTF-8 string
@@ -43,15 +45,15 @@ typedef struct String8 {
 #endif
 } String8;
 
-typedef struct StringNode {
+typedef struct StringBuilderNode {
   String8 value;
-  struct StringNode *next;
-  struct StringNode *prev;
-} StringNode;
+  struct StringBuilderNode *next;
+  struct StringBuilderNode *prev;
+} StringBuilderNode;
 
-typedef struct StringStream {
-  StringNode *first;
-  StringNode *last;
+typedef struct StringBuilder {
+  StringBuilderNode *first;
+  StringBuilderNode *last;
   isize node_count;
   isize total_size;
 
@@ -63,20 +65,20 @@ typedef struct StringStream {
     return curr->value;
   }
 #endif
-} StringStream;
+} StringBuilder;
 
-fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other);
-fn void strstream_append_stream(StringStream *strlist, StringStream other);
-fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch);
-fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str);
+fn void sb_append_str(Arena *arena, StringBuilder *sb, String8 other);
+fn void sb_append_stream(StringBuilder *sb, StringBuilder other);
+fn String8 sb_join_char(Arena *arena, StringBuilder sb, char ch);
+fn String8 sb_join_str(Arena *arena, StringBuilder sb, String8 str);
 
 fn String8 str8(u8 *chars, isize len);
-fn String8 str8_from_stream(Arena *arena, StringStream stream);
+fn String8 str8_from_stream(Arena *arena, StringBuilder stream);
 fn String8 str8_from_char(Arena *arena, char ch);
 fn String8 str8_from_cstr(char *chars);
 fn String8 str8_from_i64(Arena *arena, i64 n);
 fn String8 str8_from_u64(Arena *arena, u64 n);
-fn String8 str8_from_f64(Arena *arena, f64 n);
+fn String8 str8_from_f64(Arena *arena, f64 n, i32 precision);
 fn String8 str8_from_datetime(Arena *arena, DateTime dt);
 fn String8 str8_from_unixtime(Arena *arena, u64 timestamp);
 fn String8 str8_from_time64(Arena *arena, time64 timestamp);
@@ -93,7 +95,7 @@ fn String8 str8_trim_left(String8 s);
 fn String8 str8_trim_right(String8 s);
 fn String8 str8_format(Arena *arena, const char *fmt, ...);
 fn String8 _str8_format(Arena *arena, const char *fmt, va_list args);
-fn StringStream str8_split(Arena *arena, String8 s, char ch);
+fn StringBuilder str8_split(Arena *arena, String8 s, char ch);
 fn usize str8_find_first_ch(String8 s, char ch);
 fn usize str8_find_first_str8(String8 s, String8 needle);
 fn usize str8_hash(String8 s);

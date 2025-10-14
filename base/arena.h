@@ -43,7 +43,7 @@ typedef struct Arena {
   isize commit_size;
   isize reserve_size;
 
-  struct Arena *next;
+  struct Arena *curr;
   struct Arena *prev;
 } Arena;
 
