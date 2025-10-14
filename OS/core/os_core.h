@@ -185,9 +185,9 @@ typedef struct {
   } client, server;
 } OS_Socket;
 
-typedef void VoidFunc(void);
-typedef void ThreadFunc(void*);
-typedef void SignalFunc(i32);
+typedef void Func_Void(void);
+typedef void Func_Thread(void*);
+typedef void Func_Signal(i32);
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -236,14 +236,11 @@ fn DateTime os_utc_fromLocalDateTime(DateTime *dt);
 fn void os_sleep_milliseconds(u32 ms);
 
 fn OS_Handle os_timer_start(void);
-fn u64  os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end);
-fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer, u64 how_much);
-#define os_timer_elapsed(UNIT, TIMER_START, TIMER_END_OR_WAIT_TIME) \
-  _Generic((TIMER_END_OR_WAIT_TIME),                                \
-    OS_Handle: os_timer_elapsed_start2end,                          \
-    default: os_timer_elapsed_time                                  \
-  )(UNIT, TIMER_START, TIMER_END_OR_WAIT_TIME)
 fn void os_timer_free(OS_Handle handle);
+fn bool os_timer_reached(OS_Handle timer, u64 how_much, OS_TimerGranularity unit);
+fn u64 os_timer_elapsed(OS_Handle start, OS_TimerGranularity unit);
+fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
+                                OS_TimerGranularity unit);
 
 // =============================================================================
 // Memory allocation
@@ -256,7 +253,7 @@ fn void os_decommit(void *base, isize size);
 
 // =============================================================================
 // Threads & Processes stuff
-fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args);
+fn OS_Handle os_thread_start(Func_Thread *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
 fn void os_thread_cancel(OS_Handle thd);
 fn bool os_thread_join(OS_Handle thd);
@@ -268,14 +265,14 @@ fn void os_proc_kill(OS_Handle proc);
 fn i32 os_proc_wait(OS_Handle proc);
 
 fn void os_exit(u8 status_code);
-fn void os_atexit(VoidFunc *callback);
+fn void os_atexit(Func_Void *callback);
 
 fn OS_Handle os_mutex_alloc(void);
 fn void os_mutex_lock(OS_Handle handle);
 fn bool os_mutex_trylock(OS_Handle handle);
 fn void os_mutex_unlock(OS_Handle handle);
 fn void os_mutex_free(OS_Handle handle);
-#define OS_MutexScope(mutex) DeferLoop(os_mutex_lock(mutex), os_mutex_unlock(mutex))
+#define os_mutex_scope(mutex) DeferLoop(os_mutex_lock(mutex), os_mutex_unlock(mutex))
 
 fn OS_Handle os_rwlock_alloc(void);
 fn void os_rwlock_read_lock(OS_Handle handle);
@@ -310,7 +307,7 @@ fn void os_sharedmem_close(SharedMem *shm);
 // =============================================================================
 // Dynamic libraries
 fn OS_Handle os_lib_open(String8 path);
-fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol);
+fn Func_Void *os_lib_lookup(OS_Handle lib, String8 symbol);
 fn i32 os_lib_close(OS_Handle lib);
 
 // =============================================================================
@@ -328,56 +325,53 @@ fn void os_socket_listen(OS_Socket *socket, u8 max_backlog);
 fn OS_Socket os_socket_accept(OS_Socket *socket);
 fn void os_socket_connect(OS_Socket *server);
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size);
-fn void os_socket_send_format(OS_Socket *socket, char *format, ...);
-fn void os_socket_send_str8(OS_Socket *socket, String8 msg);
+fn void os_socket_send(OS_Socket *socket, String8 msg);
 fn void os_socket_close(OS_Socket *socket);
-#define os_socket_send(SOCKET, FORMAT_OR_MSG, ...) \
-  _Generic((FORMAT_OR_MSG),                        \
-    String8: os_socket_send_str8,                  \
-    char*: os_socket_send_format                   \
-  )(SOCKET, FORMAT_OR_MSG, ##__VA_ARGS__)
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags);
-fn bool fs_close(OS_Handle fd);
-fn String8 fs_read(Arena *arena, OS_Handle file);
-fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size);
-fn bool fs_write(OS_Handle file, String8 content);
-fn bool fs_copy(String8 src, String8 dest);
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags);
+fn bool os_fs_close(OS_Handle fd);
+fn String8 os_fs_read(Arena *arena, OS_Handle file);
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size);
+fn bool os_fs_write(OS_Handle file, String8 content);
+fn bool os_fs_copy(String8 src, String8 dest);
 
-fn FS_Properties fs_get_properties(OS_Handle file);
-fn String8 fs_path_from_handle(Arena *arena, OS_Handle file);
-fn String8 fs_readlink(Arena *arena, String8 path);
+fn FS_Properties os_fs_get_properties(OS_Handle file);
+fn String8 os_fs_path_from_handle(Arena *arena, OS_Handle file);
+fn String8 os_fs_readlink(Arena *arena, String8 path);
 
 // =============================================================================
 // Memory mapping files
-fn File fs_fopen(Arena* arena, OS_Handle file);
-fn File fs_fopen_tmp(Arena *arena);
-fn bool fs_fclose(File *file);
-fn bool fs_fresize(File *file, isize size);
-fn void fs_fwrite(File *file, String8 str);
+fn void* os_fs_map(OS_Handle fd, i32 offset, isize length);
+fn bool os_fs_unmap(void *fmap, isize length);
 
-fn bool fs_file_has_changed(File *file);
-fn bool fs_fdelete(File *file);
-fn bool fs_frename(File *file, String8 to);
+fn File os_fs_fopen(Arena* arena, OS_Handle file);
+fn File os_fs_fopen_tmp(Arena *arena);
+fn bool os_fs_fclose(File *file);
+fn bool os_fs_fresize(File *file, isize size);
+fn void os_fs_fwrite(File *file, String8 str);
+
+fn bool os_fs_file_has_changed(File *file);
+fn bool os_fs_fdelete(File *file);
+fn bool os_fs_frename(File *file, String8 to);
 
 // =============================================================================
 // Misc operation on the filesystem
-fn bool fs_delete(String8 filepath);
-fn bool fs_rename(String8 filepath, String8 to);
+fn bool os_fs_delete(String8 filepath);
+fn bool os_fs_rename(String8 filepath, String8 to);
 
-fn bool fs_mkdir(String8 path);
-fn bool fs_rmdir(String8 path);
+fn bool os_fs_mkdir(String8 path);
+fn bool os_fs_rmdir(String8 path);
 
-fn String8 fs_filename_from_path(Arena *arena, String8 path);
+fn String8 os_fs_filename_from_path(Arena *arena, String8 path);
 
 // =============================================================================
 // File iteration
-fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path);
-fn OS_FileIter* fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed);
-fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out);
-fn void fs_iter_end(OS_FileIter *iter);
+fn OS_FileIter* os_fs_iter_begin(Arena *arena, String8 path);
+fn OS_FileIter* os_fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed);
+fn bool os_fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out);
+fn void os_fs_iter_end(OS_FileIter *iter);
 
 // =============================================================================
 // Debugger communication func

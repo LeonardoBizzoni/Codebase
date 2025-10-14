@@ -1,8 +1,8 @@
 // =============================================================================
 // System information retrieval
 fn void lnx_parseMeminfo(void) {
-  OS_Handle meminfo = fs_open(Strlit("/proc/meminfo"), OS_acfRead);
-  StringStream lines = str8_split(unx_state.arena, fs_read_virtual(unx_state.arena,
+  OS_Handle meminfo = os_fs_open(Strlit("/proc/meminfo"), OS_acfRead);
+  StringStream lines = str8_split(unx_state.arena, os_fs_read_virtual(unx_state.arena,
                                                                    meminfo, 4096), '\n');
   for (StringNode *curr_line = lines.first; curr_line; curr_line = curr_line->next) {
     StringStream ss = str8_split(unx_state.arena, curr_line->value, ':');
@@ -40,7 +40,7 @@ fn void* os_reserve_huge(isize size) {
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
   i32 access_flags = O_CREAT | unx_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
   i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
@@ -54,17 +54,17 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   return res;
 }
 
-fn bool fs_close(OS_Handle fd) {
+fn bool os_fs_close(OS_Handle fd) {
   return close((i32)fd.h[0]) == 0;
 }
 
-fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
+fn String8 os_fs_path_from_handle(Arena *arena, OS_Handle fd) {
   char path[PATH_MAX];
   isize len = snprintf(path, sizeof(path), "/proc/self/fd/%ld", fd.h[0]);
-  return fs_readlink(arena, str8((u8 *)path, len));
+  return os_fs_readlink(arena, str8((u8 *)path, len));
 }
 
-fn bool fs_copy(String8 source, String8 destination) {
+fn bool os_fs_copy(String8 source, String8 destination) {
   struct stat stat_src = {0};
 
   Scratch scratch = ScratchBegin(0, 0);
@@ -102,7 +102,7 @@ fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period
 }
 
 fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                               SignalFunc *deadline_miss_handler) {
+                               Func_Signal *deadline_miss_handler) {
   Assert(!lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns));
   //       \CPU time exceeded/
   (void)signal(SIGXCPU, deadline_miss_handler);
@@ -135,14 +135,14 @@ i32 main(i32 argc, char **argv) {
   unx_state.info.page_size = getpagesize();
   unx_state.info.hostname = unx_gethostname();
 
-  unx_state.arena = ArenaBuild();
+  unx_state.arena = arena_build();
   pthread_mutex_init(&unx_state.primitive_lock, 0);
   lnx_parseMeminfo();
 
   CmdLine cli = {0};
   cli.count = argc - 1;
   cli.exe = str8_from_cstr(argv[0]);
-  cli.args = New(unx_state.arena, String8, argc - 1);
+  cli.args = arena_push_many(unx_state.arena, String8, argc - 1);
   for (isize i = 1; i < argc; ++i) {
     cli.args[i - 1] = str8_from_cstr(argv[i]);
   }

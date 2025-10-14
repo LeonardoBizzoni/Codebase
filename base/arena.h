@@ -3,22 +3,29 @@
 
 #include <math.h>
 
-#define New(...) Newx(__VA_ARGS__,New3,New2)(__VA_ARGS__)
-#define Newx(a,b,c,d,...) d
-#define New2(arenaptr, type) (type*)arena_push(arenaptr, sizeof(type), \
-                                               (isize)AlignOf(type))
-#define New3(arenaptr, type, count)                       \
-  (type*)arena_push(arenaptr,                             \
+#define arena_push(arenaptr, type)           \
+  (type*)_arena_push(arenaptr, sizeof(type), \
+                     (isize)AlignOf(type))
+#define arena_push_many(arenaptr, type, count)            \
+  (type*)_arena_push(arenaptr,                            \
                     (isize)(count) * (isize)sizeof(type), \
                     (isize)AlignOf(type))
+
+#if CPP
+#  define arena_build(...) _arena_build(ArenaArgs { __VA_ARGS__ })
+#else
+#  define arena_build(...) _arena_build((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
+                                                     .reserve_size = ArenaDefaultReserveSize, \
+                                                     __VA_ARGS__})
+#endif
 
 #define ArenaDefaultReserveSize MB(4)
 #define ArenaDefaultCommitSize KiB(4)
 
 typedef u64 ArenaFlags;
 enum {
-  Arena_Growable = 1 << 0,
-  Arena_UseHugePage = 1 << 1,
+  ArenaFlags_Growable = 1 << 0,
+  ArenaFlags_UseHugePage = 1 << 1,
 };
 
 typedef struct {
@@ -31,7 +38,7 @@ typedef struct Arena {
   void *base;
   usize head;
 
-  u64 flags;
+  ArenaFlags flags;
   isize commits;
   isize commit_size;
   isize reserve_size;
@@ -50,18 +57,11 @@ fn isize align_forward(isize ptr, isize align);
 
 fn void arena_pop(Arena *arena, isize bytes);
 fn void arena_free(Arena *arena);
-fn void *arena_push(Arena *arena, isize size, isize align);
 
-fn Arena *_arena_build(ArenaArgs args);
-#if CPP
-#  define ArenaBuild(...) _arena_build(ArenaArgs { __VA_ARGS__ })
-#else
-#  define ArenaBuild(...) _arena_build((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
-                                                   .reserve_size = ArenaDefaultReserveSize, \
-                                                   __VA_ARGS__})
-#endif
+fn Scratch tmp_begin(Arena *arena);
+fn void tmp_end(Scratch tmp);
 
-inline fn Scratch tmp_begin(Arena *arena);
-inline fn void tmp_end(Scratch tmp);
+internal void *_arena_push(Arena *arena, isize size, isize align);
+internal Arena *_arena_build(ArenaArgs args);
 
 #endif

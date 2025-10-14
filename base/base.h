@@ -143,6 +143,9 @@
 #if !defined(APPLICATION_NAME)
   #define APPLICATION_NAME "codebase"
 #endif
+#if !defined(BOOL_DEFINED)
+#  define BOOL_DEFINED 0
+#endif
 
 #define TLS_CTX_SIZE MB(64)
 
@@ -173,37 +176,27 @@
 #endif
 
 
-#define _stmt(S)                                                               \
-  do {                                                                         \
-    S                                                                          \
+#define _stmt(S) \
+  do {           \
+    S            \
   } while (0)
 
 #ifndef _assert_break
 #  if OS_WINDOWS
 #    define _assert_break() __debugbreak()
-#  elif defined(CODERBOT)
-#    define _assert_break() exit(69)
 #  else
 #    define _assert_break() __builtin_trap()
 #  endif
 #endif
 
 #define AssertAlways(COND) _stmt(if (!(COND)) { _assert_break(); })
-#define AssertAlwaysWithMsg(COND, FMT, ...)                                    \
-  _stmt(if (!(COND)) {                                                         \
-    Err(FMT, ##__VA_ARGS__);                                                   \
-    _assert_break();                                                           \
-  })
 #define StaticAssert(C, ID) global u8 Glue(ID, __LINE__)[(C) ? 1 : -1]
 
 #ifdef ENABLE_ASSERT
 #  define Assert(COND) AssertAlways(COND)
-#  define AssertMsg(COND, MSG, ...) AssertAlwaysWithMsg(COND, MSG, ##__VA_ARGS__)
 #else
 #  define Assert(COND) (void)(COND)
-#  define AssertMsg(COND, MSG, ...) Assert(COND)
 #endif
-#define Panic(FMT, ...) AssertMsg(false, FMT, ##__VA_ARGS__)
 
 #define Stringify_(S) (#S)
 #define Stringify(S) Stringify_(S)
@@ -224,16 +217,6 @@
 #define Unreachable() Assert(false)
 
 #define DeferLoop(begin, end) for(u8 _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
-
-#define Not(A) (~(A))
-#define And(A, B) ((A) & (B))
-#define Or(A, B) ((A) | (B))
-#define Nand(A, B) (~((A) && (B)))
-#define Nor(A, B) (~((A) || (B)))
-#define Xor(A, B) ((A) ^ (B))
-#define Xnor(A, B) (~(A) ^ (B))
-#define GetBit(NUM, I) ((NUM & (1 << I)) >> I)
-#define SetBit(NUM, I, BIT) (NUM | (1 << (BIT - 1)))
 
 #define memcopy(Dest, Src, Size) memcpy((Dest), (Src), (usize)(Size))
 #define memzero(Dest, Size)      memset((Dest), 0, (usize)(Size))
@@ -283,8 +266,8 @@ typedef uint32_t u32;
 typedef int64_t i64;
 typedef uint64_t u64;
 
-#if !CPP
-#  if __STDC_VERSION__ >= 199901L
+#if !CPP && !BOOL_DEFINED
+#  if defined(__STDC_VERSION__ ) && __STDC_VERSION__ >= 199901L
 #    include <stdbool.h>
 #  else
 typedef enum {false, true} bool;

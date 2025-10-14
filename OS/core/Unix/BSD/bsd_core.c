@@ -12,7 +12,7 @@ fn void* os_reserve_huge(isize size) {
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
   i32 access_flags = O_CREAT | unx_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
   i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
@@ -33,18 +33,18 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   return res;
 }
 
-fn bool fs_close(OS_Handle fd) {
+fn bool os_fs_close(OS_Handle fd) {
   bsd_filemap[fd.h[0]].str = 0;
   bsd_filemap[fd.h[0]].size = 0;
   return !close((i32)fd.h[0]);
 }
 
-fn String8 fs_path_from_handle(Arena *arena, OS_Handle fd) {
+fn String8 os_fs_path_from_handle(Arena *arena, OS_Handle fd) {
   Unused(arena);
   return bsd_filemap[fd.h[0]];
 }
 
-fn bool fs_copy(String8 source, String8 destination) {
+fn bool os_fs_copy(String8 source, String8 destination) {
   Scratch scratch = ScratchBegin(0, 0);
   i32 src = open(cstr_from_str8(scratch.arena, source), O_RDONLY, 0);
   i32 dest = open(cstr_from_str8(scratch.arena, destination),
@@ -89,12 +89,12 @@ i32 main(i32 argc, char **argv) {
 #endif
 
   unx_state.info.hostname = unx_gethostname();
-  unx_state.arena = ArenaBuild();
+  unx_state.arena = arena_build();
 
   CmdLine cli = {0};
   cli.count = argc - 1;
   cli.exe = str8_from_cstr(argv[0]);
-  cli.args = New(unx_state.arena, String8, argc - 1);
+  cli.args = arena_push_many(unx_state.arena, String8, argc - 1);
   for (isize i = 1; i < argc; ++i) {
     cli.args[i - 1] = str8_from_cstr(argv[i]);
   }

@@ -1,7 +1,7 @@
-global X11Gl_State x11gl_state = {};
+global X11Gl_State x11gl_state = {0};
 
 fn void rhi_init(void) {
-  x11gl_state.arena = ArenaBuild();
+  x11gl_state.arena = arena_build();
   x11gl_state.egl_display = eglGetDisplay((EGLNativeDisplayType)x11_state.xdisplay);
   Assert(x11gl_state.egl_display != EGL_NO_DISPLAY);
   EGLBoolean init_result = eglInitialize(x11gl_state.egl_display, 0, 0);
@@ -56,7 +56,7 @@ fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
     memzero(rhi_window, sizeof (*rhi_window));
     QueuePop(x11gl_state.freequeue_first);
   } else {
-    rhi_window = New(x11gl_state.arena, X11Gl_Window);
+    rhi_window = arena_push(x11gl_state.arena, X11Gl_Window);
   }
   Assert(rhi_window);
 
@@ -69,11 +69,13 @@ fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
   eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
                  rhi_window->egl_surface, x11gl_state.egl_context);
 
-  RHI_Handle res = {(u64)rhi_window};
+  RHI_Handle res = {{(u64)rhi_window}};
   return res;
 }
 
-fn void rhi_gl_window_deinit(RHI_Handle handle) {}
+fn void rhi_gl_window_deinit(RHI_Handle handle) {
+  Unused(handle);
+}
 
 fn void rhi_gl_window_make_current(RHI_Handle handle) {
   X11Gl_Window *rhi_window = (X11Gl_Window *)handle.h[0];
@@ -88,4 +90,8 @@ fn void rhi_gl_window_commit(RHI_Handle handle) {
   eglSwapBuffers(x11gl_state.egl_display, rhi_window->egl_surface);
 }
 
-internal void rhi_gl_window_resize(RHI_Handle context, u32 width, u32 height) {}
+internal void rhi_gl_window_resize(RHI_Handle context, u32 width, u32 height) {
+  Unused(context);
+  Unused(width);
+  Unused(height);
+}

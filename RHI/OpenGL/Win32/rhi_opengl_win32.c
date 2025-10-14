@@ -1,7 +1,7 @@
 global W32Gl_State w32gl_state = {};
 
 fn void rhi_init(void) {
-  w32gl_state.arena = ArenaBuild();
+  w32gl_state.arena = arena_build();
 
   WNDCLASSA window_class = {
     .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
@@ -58,7 +58,7 @@ fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
     memzero(rhi_window, sizeof (*rhi_window));
     QueuePop(w32gl_state.freequeue_first);
   } else {
-    rhi_window = New(w32gl_state.arena, W32Gl_Window);
+    rhi_window = arena_push(w32gl_state.arena, W32Gl_Window);
   }
   rhi_window->os_window = os_window;
 

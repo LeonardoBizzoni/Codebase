@@ -11,7 +11,7 @@ fn UNX_Primitive* unx_primitive_alloc(UNX_PrimitiveType type) {
     StackPop(unx_state.primitive_freelist);
     memzero(res, sizeof(UNX_Primitive));
   } else {
-    res = New(unx_state.arena, UNX_Primitive);
+    res = arena_push(unx_state.arena, UNX_Primitive);
   }
   pthread_mutex_unlock(&unx_state.primitive_lock);
 
@@ -27,7 +27,7 @@ fn void unx_primitive_free(UNX_Primitive *ptr) {
 
 fn void* unx_thread_entry(void *args) {
   UNX_Primitive *wrap_args = (UNX_Primitive *)args;
-  ThreadFunc *func = (ThreadFunc *)wrap_args->thread.func;
+  Func_Thread *func = (Func_Thread *)wrap_args->thread.func;
   func(wrap_args->thread.args);
   return 0;
 }
@@ -97,7 +97,7 @@ fn void unx_sharedmem_resize(SharedMem *shm, isize size) {
   munmap(shm->content, (usize)shm->prop.size);
   shm->content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE,
                            MAP_SHARED, (i32)shm->file_handle.h[0], 0);
-  AssertMsg(shm->content != MAP_FAILED, "sharedmem resize mmap failed");
+  Assert(shm->content != MAP_FAILED);
   shm->prop.size = size;
 }
 
@@ -215,7 +215,11 @@ fn OS_Handle os_timer_start(void) {
   return res;
 }
 
-fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
+fn void os_timer_free(OS_Handle handle) {
+  unx_primitive_free((UNX_Primitive*)handle.h[0]);
+}
+
+fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end, OS_TimerGranularity unit) {
   struct timespec tstart = ((UNX_Primitive *)start.h[0])->timer;
   struct timespec tend = ((UNX_Primitive *)end.h[0])->timer;
   u64 diff_nanos = (u64)(tend.tv_sec - tstart.tv_sec) * (u64)1e9 +
@@ -237,10 +241,6 @@ fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_
     } break;
   }
   return res;
-}
-
-fn void os_timer_free(OS_Handle handle) {
-  unx_primitive_free((UNX_Primitive*)handle.h[0]);
 }
 
 // =============================================================================
@@ -271,7 +271,7 @@ fn void os_decommit(void *base, isize size) {
 
 // =============================================================================
 // Threads & Processes stuff
-fn OS_Handle os_thread_start(ThreadFunc *thread_main, void *args) {
+fn OS_Handle os_thread_start(Func_Thread *thread_main, void *args) {
   Assert(thread_main);
 
   UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Thread);
@@ -350,7 +350,7 @@ fn void os_exit(u8 status_code) {
   exit(status_code);
 }
 
-fn void os_atexit(VoidFunc *callback) {
+fn void os_atexit(Func_Void *callback) {
   atexit(callback);
 }
 
@@ -566,9 +566,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
       }
     } break;
     case OS_SemaphoreKind_Process: {
-      AssertMsg(name.size > 0,
-                "Semaphores sharable between processes must be named.");
-
+      Assert(name.size > 0);
       Scratch scratch = ScratchBegin(0, 0);
       char *path = cstr_from_str8(scratch.arena, name);
       (void)sem_unlink(path);
@@ -637,10 +635,10 @@ fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags) {
 
   i32 access_flags = unx_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
-  res.file_handle.h[0] = (u64)shm_open(cstr_from_str8(scratch.arena, name),
-                                       access_flags,
-                                       S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-  AssertMsg(res.file_handle.h[0] >= 0, "shm_open failed");
+  i32 shm_fd = shm_open(cstr_from_str8(scratch.arena, name), access_flags,
+                        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+  if (shm_fd < 0) { return res; }
+  res.file_handle.h[0] = (u64)shm_fd;
   ScratchEnd(scratch);
 
   Assert(size >= 0);
@@ -666,16 +664,16 @@ fn OS_Handle os_lib_open(String8 path) {
   Scratch scratch = ScratchBegin(0, 0);
   void *handle = dlopen(cstr_from_str8(scratch.arena, path),
                         RTLD_NOW | RTLD_GLOBAL);
-  AssertMsg(handle, dlerror());
+  Assert(handle);
   ScratchEnd(scratch);
   return result;
 }
 
-fn VoidFunc *os_lib_lookup(OS_Handle lib, String8 symbol) {
+fn Func_Void *os_lib_lookup(OS_Handle lib, String8 symbol) {
   void *handle = (void*)lib.h[0];
   Scratch scratch = ScratchBegin(0, 0);
-  VoidFunc *result = (VoidFunc*)(u64)dlsym(handle, cstr_from_str8(scratch.arena, symbol));
-  /* AssertMsg(result, dlerror()); */
+  Func_Void *result = (Func_Void*)(u64)dlsym(handle, cstr_from_str8(scratch.arena, symbol));
+  /* Assert(result, dlerror()); */
   ScratchEnd(scratch);
   return result;
 }
@@ -690,7 +688,7 @@ fn i32 os_lib_close(OS_Handle lib) {
 fn String8 os_currentDir(Arena *arena) {
   char *wd = getcwd(0, 0);
   isize size = str8_len(wd);
-  u8 *copy = New(arena, u8, size);
+  u8 *copy = arena_push_many(arena, u8, size);
   memcopy(copy, wd, size);
   free(wd);
   String8 res = str8(copy, size);
@@ -710,10 +708,10 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
     if (!(ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6))
       { continue; }
 
-    NetInterface *inter = New(arena, NetInterface);
+    NetInterface *inter = arena_push(arena, NetInterface);
 
     String8 interface = str8_from_cstr(ifa->ifa_name);
-    inter->name.str = New(arena, u8, interface.size);
+    inter->name.str = arena_push_many(arena, u8, interface.size);
     inter->name.size = interface.size;
     memcopy(inter->name.str, interface.str, interface.size);
 
@@ -728,7 +726,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
       char cstrip[INET_ADDRSTRLEN];
       inet_ntop(AF_INET, &addr->sin_addr, cstrip, INET_ADDRSTRLEN);
       String8 strip = str8_from_cstr(cstrip);
-      inter->strip.str = New(arena, u8, strip.size);
+      inter->strip.str = arena_push_many(arena, u8, strip.size);
       inter->strip.size = strip.size;
       memcopy(inter->strip.str, strip.str, strip.size);
     } else if (ifa->ifa_addr->sa_family == AF_INET6) {
@@ -742,7 +740,7 @@ fn NetInterfaceList os_net_interfaces(Arena *arena) {
       char cstrip[INET6_ADDRSTRLEN];
       inet_ntop(AF_INET6, &addr->sin6_addr, cstrip, INET6_ADDRSTRLEN);
       String8 strip = str8_from_cstr(cstrip);
-      inter->strip.str = New(arena, u8, strip.size);
+      inter->strip.str = arena_push_many(arena, u8, strip.size);
       inter->strip.size = strip.size;
       memcopy(inter->strip.str, strip.str, strip.size);
     }
@@ -815,7 +813,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
-      Panic("Invalid server address.");
+      Assert(false);
     }
   }
   switch (protocol) {
@@ -826,7 +824,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
       ctype = SOCK_DGRAM;
     } break;
     default: {
-      Panic("Invalid transport protocol.");
+      Assert(false);
     }
   }
 
@@ -892,7 +890,7 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
 }
 
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
-  u8 *res = New(arena, u8, buffer_size);
+  u8 *res = arena_push_many(arena, u8, buffer_size);
   UNX_Primitive *prim = (UNX_Primitive*)client->handle.h[0];
   (void)read(prim->socket.fd, res, buffer_size);
   return res;
@@ -925,7 +923,7 @@ fn void os_socket_connect(OS_Socket *server) {
   }
 }
 
-fn void os_socket_send_str8(OS_Socket *socket, String8 msg) {
+fn void os_socket_send(OS_Socket *socket, String8 msg) {
   UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), (usize)msg.size, 0);
@@ -941,14 +939,14 @@ fn void os_socket_close(OS_Socket *socket) {
 
 // =============================================================================
 // File reading and writing/appending
-fn String8 fs_read(Arena *arena, OS_Handle file) {
+fn String8 os_fs_read(Arena *arena, OS_Handle file) {
   int fd = (i32)file.h[0];
   String8 result = {0};
   if(!fd) { return result; }
 
   struct stat file_stat;
   if (!fstat(fd, &file_stat)) {
-    u8 *buffer = New(arena, u8, file_stat.st_size);
+    u8 *buffer = arena_push_many(arena, u8, file_stat.st_size);
     if(pread(fd, buffer, (usize)file_stat.st_size, 0) >= 0) {
       result.str = buffer;
       result.size = file_stat.st_size;
@@ -958,12 +956,12 @@ fn String8 fs_read(Arena *arena, OS_Handle file) {
   return result;
 }
 
-fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
   int fd = (i32)file.h[0];
   String8 result = {0};
   if(!fd) { return result; }
 
-  u8 *buffer = New(arena, u8, size);
+  u8 *buffer = arena_push_many(arena, u8, size);
   if(pread(fd, buffer, size, 0) >= 0) {
     result.str = buffer;
     result.size = str8_len((char *)buffer);
@@ -972,13 +970,13 @@ fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
   return result;
 }
 
-fn bool fs_write(OS_Handle file, String8 content) {
+fn bool os_fs_write(OS_Handle file, String8 content) {
   if(!file.h[0]) { return false; }
   return write((i32)file.h[0], content.str, (usize)content.size)
          == content.size;
 }
 
-fn FS_Properties fs_get_properties(OS_Handle file) {
+fn FS_Properties os_fs_get_properties(OS_Handle file) {
   FS_Properties result = {0};
   if(!file.h[0]) { return result; }
 
@@ -989,9 +987,9 @@ fn FS_Properties fs_get_properties(OS_Handle file) {
   return result;
 }
 
-fn String8 fs_readlink(Arena *arena, String8 path) {
+fn String8 os_fs_readlink(Arena *arena, String8 path) {
   String8 res = {0};
-  res.str = New(arena, u8, PATH_MAX);
+  res.str = arena_push_many(arena, u8, PATH_MAX);
   res.size = readlink((char *)path.str, (char *)res.str, PATH_MAX);
   if (res.size <= 0) {
     res.str = 0;
@@ -1004,50 +1002,61 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 
 // =============================================================================
 // Memory mapping files for easier and faster handling
-fn File fs_fopen(Arena *arena, OS_Handle fd) {
-  File file = {0};
+fn void* os_fs_map(OS_Handle fd, i32 offset, isize length) {
+  Assert(offset >= 0);
+  Assert(length > 0);
+
   i32 flags = fcntl((i32)fd.h[0], F_GETFL);
-  if (flags < 0) { return file; }
+  if (flags < 0) { return NULL; }
   flags &= O_ACCMODE;
   if (!flags) {
     flags = PROT_READ;
   } else {
     flags = PROT_READ | PROT_WRITE;
   }
+  void *res = mmap(0, (usize)length, flags, MAP_SHARED, (i32)fd.h[0], offset);
+  return res;
+}
 
+fn bool os_fs_unmap(void *fmap, isize length) {
+  return !munmap(fmap, (usize)length);
+}
+
+fn File os_fs_fopen(Arena *arena, OS_Handle fd) {
+  Unused(arena);
+  File file = {0};
   file.file_handle = fd;
-  file.path = fs_path_from_handle(arena, fd);
-  file.prop = fs_get_properties(file.file_handle);
-  file.content = (u8 *)mmap(0, (usize)ClampBot(file.prop.size, 1),
-                            flags, MAP_SHARED, (i32)fd.h[0], 0);
+  file.path = os_fs_path_from_handle(arena, fd);
+  file.prop = os_fs_get_properties(file.file_handle);
+  file.content = (u8 *)os_fs_map(fd, 0, file.prop.size);
   file.mmap_handle.h[0] = (u64)file.content;
-
   return file;
 }
 
-fn File fs_fopen_tmp(Arena *arena) {
+fn File os_fs_fopen_tmp(Arena *arena) {
   char path[] = "/tmp/base-XXXXXX";
   i32 fd = mkstemp(path);
 
-  String8 pathstr = str8(New(arena, u8, Arrsize(path)), Arrsize(path));
+  String8 pathstr = str8(arena_push_many(arena, u8, Arrsize(path)),
+                         Arrsize(path));
   memcopy(pathstr.str, path, Arrsize(path));
 
   File file = {0};
   file.file_handle.h[0] = (u64)fd;
   file.path = pathstr;
-  file.prop = fs_get_properties(file.file_handle);
+  file.prop = os_fs_get_properties(file.file_handle);
   file.content = (u8*)mmap(0, (usize)ClampBot(file.prop.size, 1),
                            PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   file.mmap_handle.h[0] = (u64)file.content;
   return file;
 }
 
-fn bool fs_fclose(File *file) {
-  return !munmap((void *)file->mmap_handle.h[0], (usize)file->prop.size) &&
-         fs_close(file->file_handle);
+fn bool os_fs_fclose(File *file) {
+  return os_fs_unmap((void*)file->mmap_handle.h[0], file->prop.size) &&
+         os_fs_close(file->file_handle);
 }
 
-fn bool fs_fresize(File *file, isize size) {
+fn bool os_fs_fresize(File *file, isize size) {
   Assert(size >= 0);
   if (ftruncate((i32)file->file_handle.h[0], size) < 0) {
     return false;
@@ -1060,24 +1069,24 @@ fn bool fs_fresize(File *file, isize size) {
   return file->content != MAP_FAILED;
 }
 
-fn bool fs_file_has_changed(File *file) {
-  FS_Properties prop = fs_get_properties(file->file_handle);
+fn bool os_fs_file_has_changed(File *file) {
+  FS_Properties prop = os_fs_get_properties(file->file_handle);
   return (file->prop.last_access_time != prop.last_access_time) ||
          (file->prop.last_modification_time != prop.last_modification_time) ||
          (file->prop.last_status_change_time != prop.last_status_change_time);
 }
 
-fn bool fs_fdelete(File *file) {
-  return unlink((char *) file->path.str) >= 0 && fs_fclose(file);
+fn bool os_fs_fdelete(File *file) {
+  return unlink((char *) file->path.str) >= 0 && os_fs_fclose(file);
 }
 
-fn bool fs_frename(File *file, String8 to) {
+fn bool os_fs_frename(File *file, String8 to) {
   return rename((char *) file->path.str, (char *) to.str) >= 0;
 }
 
 // =============================================================================
 // Misc operation on the filesystem
-fn bool fs_delete(String8 filepath) {
+fn bool os_fs_delete(String8 filepath) {
   Assert(filepath.size != 0);
   Scratch scratch = ScratchBegin(0, 0);
   i32 res = unlink(cstr_from_str8(scratch.arena, filepath));
@@ -1085,23 +1094,23 @@ fn bool fs_delete(String8 filepath) {
   return res >= 0;
 }
 
-fn bool fs_rename(String8 filepath, String8 to) {
+fn bool os_fs_rename(String8 filepath, String8 to) {
   Assert(filepath.size != 0 && to.size != 0);
   return rename((char *)filepath.str, (char *)to.str) >= 0;
 }
 
-fn bool fs_mkdir(String8 path) {
+fn bool os_fs_mkdir(String8 path) {
   Assert(path.size != 0);
   return mkdir((char *)path.str,
                S_IRWXU | (S_IRGRP | S_IXGRP) | (S_IROTH | S_IXOTH)) >= 0;
 }
 
-fn bool fs_rmdir(String8 path) {
+fn bool os_fs_rmdir(String8 path) {
   Assert(path.size != 0);
   return rmdir((char *)path.str) >= 0;
 }
 
-fn String8 fs_filename_from_path(Arena *arena, String8 path) {
+fn String8 os_fs_filename_from_path(Arena *arena, String8 path) {
   Scratch scratch = ScratchBegin(&arena, 1);
   char *fullname = basename(cstr_from_str8(scratch.arena, path));
   ScratchEnd(scratch);
@@ -1115,8 +1124,8 @@ fn String8 fs_filename_from_path(Arena *arena, String8 path) {
 
 // =============================================================================
 // File iteration
-fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
-  OS_FileIter *os_iter = New(arena, OS_FileIter);
+fn OS_FileIter* os_fs_iter_begin(Arena *arena, String8 path) {
+  OS_FileIter *os_iter = arena_push(arena, OS_FileIter);
   UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   iter->path = path;
   Scratch scratch = ScratchBegin(&arena, 1);
@@ -1126,7 +1135,7 @@ fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   return os_iter;
 }
 
-fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) {
+fn bool os_fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) {
   local const String8 currdir = StrlitInit(".");
   local const String8 parentdir = StrlitInit("..");
 
@@ -1154,13 +1163,13 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_out) 
   } while (os_iter->filter_allowed && !(info_out->properties.type & os_iter->filter_allowed));
 
   info_out->name.size = str.size;
-  info_out->name.str = New(arena, u8, str.size);
+  info_out->name.str = arena_push_many(arena, u8, str.size);
   memcopy(info_out->name.str, str.str, str.size);
   ScratchEnd(scratch);
   return true;
 }
 
-fn void fs_iter_end(OS_FileIter *os_iter) {
+fn void os_fs_iter_end(OS_FileIter *os_iter) {
   UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
   if (iter->dir) { closedir(iter->dir); }
 }

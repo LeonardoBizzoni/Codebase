@@ -64,7 +64,7 @@ typedef struct UNX_Primitive {
     } condvar;
     struct {
       pthread_t handle;
-      ThreadFunc *func;
+      Func_Thread *func;
       void *args;
     } thread;
     struct {

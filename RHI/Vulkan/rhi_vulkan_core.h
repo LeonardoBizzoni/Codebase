@@ -6,7 +6,7 @@
 #define rhi_vk_get_array(Arena, Func, BufferType, BufferName, LengthVar, ...) \
 do {                                                                          \
   Func(__VA_ARGS__);                                                          \
-  BufferName = New(Arena, BufferType, LengthVar);                             \
+  BufferName = arena_push_many(Arena, BufferType, LengthVar);                 \
   Func(__VA_ARGS__);                                                          \
 } while (0)
 

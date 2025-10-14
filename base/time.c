@@ -115,7 +115,7 @@ fn time64 time64_from_unix(u64 timestamp) {
 
 fn u64 unix_from_datetime(DateTime *dt) {
   if (dt->year < 1970) { return 0; }
-  u64 unix_time = ((dt->day - 1) * UNIX_DAY) +
+  u64 unix_time = (u64)((dt->day - 1) * UNIX_DAY) +
                   (dt->hour * UNIX_HOUR) +
                   (dt->minute * UNIX_MINUTE) +
                   (dt->second);

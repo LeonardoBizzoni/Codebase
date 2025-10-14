@@ -24,36 +24,30 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
   ScratchEnd(scratch);
 }
 
-fn void fs_fwrite(File *file, String8 content) {
+fn void os_fs_fwrite(File *file, String8 content) {
   if (file->prop.size < content.size) {
-    fs_fresize(file, content.size);
+    os_fs_fresize(file, content.size);
   }
   memzero(file->content + content.size, ClampBot(0, (isize)file->prop.size -
                                                     (isize)content.size));
   (void)memcopy(file->content, content.str, content.size);
 }
 
-fn bool os_timer_elapsed_time(OS_TimerGranularity unit, OS_Handle timer,
-                                     u64 how_much) {
+fn u64 os_timer_elapsed(OS_Handle start, OS_TimerGranularity unit) {
   OS_Handle now = os_timer_start();
-  u64 elapsed = os_timer_elapsed_start2end(unit, timer, now);
+  u64 elapsed = os_timer_elapsed_between(start, now, unit);
   os_timer_free(now);
-  return elapsed >= how_much;
+  return elapsed;
 }
 
-fn OS_FileIter* fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed) {
-  OS_FileIter *os_iter = fs_iter_begin(arena, path);
+fn bool os_timer_reached(OS_Handle timer, u64 how_much, OS_TimerGranularity unit) {
+  return os_timer_elapsed(timer, unit) >= how_much;
+}
+
+fn OS_FileIter* os_fs_iter_begin_filtered(Arena *arena, String8 path, OS_FileType allowed) {
+  OS_FileIter *os_iter = os_fs_iter_begin(arena, path);
   os_iter->filter_allowed = allowed;
   return os_iter;
-}
-
-fn void os_socket_send_format(OS_Socket *socket, char *format, ...) {
-  Scratch scratch = ScratchBegin(0, 0);
-  va_list args;
-  va_start(args, format);
-  os_socket_send_str8(socket, _str8_format(scratch.arena, format, args));
-  va_end(args);
-  ScratchEnd(scratch);
 }
 
 fn NetInterface os_net_interface_lookup(String8 interface) {

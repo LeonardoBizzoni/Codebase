@@ -1,14 +1,39 @@
-inline fn bool is_power_of_two(isize value) {
+fn bool is_power_of_two(isize value) {
   return !(value & (value - 1));
 }
 
-inline fn isize align_forward(isize ptr, isize align) {
+fn isize align_forward(isize ptr, isize align) {
   Assert(is_power_of_two(align));
   isize mod = ptr & (align - 1);
   return (mod ? ptr = ptr + align - mod : ptr);
 }
 
-fn Arena *_arena_build(ArenaArgs args) {
+fn void arena_pop(Arena *arena, isize bytes) {
+  arena->head = (usize)ClampBot((isize)arena->head - bytes, 0);
+  isize pages2decommit = (isize)ceil((f64)bytes / (f64)arena->commit_size);
+  if (pages2decommit) {
+    arena->commits = ClampBot(arena->commits - pages2decommit, 0);
+    os_decommit((void *)align_forward((isize)((u8*)arena->base + arena->head),
+                                      arena->commit_size),
+                pages2decommit * arena->commit_size);
+  }
+}
+
+fn void arena_free(Arena *arena) {
+  os_release((void *)((usize)arena->base - sizeof(Arena)), arena->reserve_size);
+}
+
+fn Scratch tmp_begin(Arena *arena) {
+  Scratch scratch = { arena, arena->head };
+  return scratch;
+}
+
+fn void tmp_end(Scratch tmp) {
+  arena_pop(tmp.arena, (isize)(tmp.arena->head - tmp.pos));
+  tmp.arena->head = tmp.pos;
+}
+
+internal Arena *_arena_build(ArenaArgs args) {
   void *mem = 0;
   isize reserve, commit;
 
@@ -21,7 +46,7 @@ fn Arena *_arena_build(ArenaArgs args) {
   }
 #endif
 
-  if (args.flags & Arena_UseHugePage) {
+  if (args.flags & ArenaFlags_UseHugePage) {
     reserve = align_forward(args.reserve_size, os_sysinfo()->hugepage_size);
     commit = align_forward(args.commit_size, os_sysinfo()->hugepage_size);
     mem = os_reserve_huge(reserve);
@@ -44,22 +69,7 @@ fn Arena *_arena_build(ArenaArgs args) {
   return arena;
 }
 
-inline fn void arena_pop(Arena *arena, isize bytes) {
-  arena->head = (usize)ClampBot((isize)arena->head - bytes, 0);
-  isize pages2decommit = (isize)ceil((f64)bytes / (f64)arena->commit_size);
-  if (pages2decommit) {
-    arena->commits = ClampBot(arena->commits - pages2decommit, 0);
-    os_decommit((void *)align_forward((isize)((u8*)arena->base + arena->head),
-                                      arena->commit_size),
-                pages2decommit * arena->commit_size);
-  }
-}
-
-inline fn void arena_free(Arena *arena) {
-  os_release((void *)((usize)arena->base - sizeof(Arena)), arena->reserve_size);
-}
-
-fn void *arena_push(Arena *arena, isize size, isize align) {
+internal void *_arena_push(Arena *arena, isize size, isize align) {
   if (!align) { align = DefaultAlignment; }
   isize res = align_forward((isize)((u8*)arena->base + arena->head), align);
   isize offset = res - (isize)((u8*)arena->base + arena->head);
@@ -67,20 +77,20 @@ fn void *arena_push(Arena *arena, isize size, isize align) {
 
   if (new_head > arena->reserve_size) {
     if (arena->next) {
-      return arena_push(arena->next, size, align);
-    } else if (arena->flags & Arena_Growable) {
+      return _arena_push(arena->next, size, align);
+    } else if (arena->flags & ArenaFlags_Growable) {
       Warn("Resizing arena.");
       isize reserve_size = arena->reserve_size;
       if (size + (isize)sizeof(Arena) >= reserve_size) {
         reserve_size *= 2;
       }
-      Arena *next = ArenaBuild(.commit_size = arena->commit_size,
-                               .reserve_size = reserve_size,
-                               .flags = arena->flags);
+      Arena *next = arena_build(.commit_size = arena->commit_size,
+                                .reserve_size = reserve_size,
+                                .flags = arena->flags);
       Assert(next);
       arena->next = next;
       next->prev = arena;
-      return arena_push(next, size, align);
+      return _arena_push(next, size, align);
     } else {
       return 0;
     }
@@ -97,14 +107,4 @@ fn void *arena_push(Arena *arena, isize size, isize align) {
   arena->head = (usize)new_head;
   memzero((void*)res, size);
   return (void*)res;
-}
-
-inline fn Scratch tmp_begin(Arena *arena) {
-  Scratch scratch = { arena, arena->head };
-  return scratch;
-}
-
-inline fn void tmp_end(Scratch tmp) {
-  arena_pop(tmp.arena, (isize)(tmp.arena->head - tmp.pos));
-  tmp.arena->head = tmp.pos;
 }

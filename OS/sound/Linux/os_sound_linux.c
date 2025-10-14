@@ -23,7 +23,7 @@ fn void _lnx_snd_player(void *args) {
   UNX_Primitive *prim = (UNX_Primitive *)args;
   Assert(prim->sound.file.prop.size > 0);
   for (usize offset = 0;;) {
-    OS_MutexScope(prim->sound.pausexit_mutex) {
+    os_mutex_scope(prim->sound.pausexit_mutex) {
       if (prim->sound.should_exit) { return; }
       while (prim->sound.paused) {
         os_cond_wait(prim->sound.pausexit_condvar,
@@ -31,7 +31,7 @@ fn void _lnx_snd_player(void *args) {
       }
     }
 
-    OS_MutexScope(prim->sound.player_mutex) {
+    os_mutex_scope(prim->sound.player_mutex) {
       offset = prim->sound.player_offset;
     }
     if (offset >= (usize)prim->sound.file.prop.size) {return;}
@@ -45,7 +45,7 @@ fn void _lnx_snd_player(void *args) {
                          : writable;
         pa_stream_write(prim->sound.stream, &prim->sound.file.content[offset],
                         to_write, 0, 0, PA_SEEK_RELATIVE);
-        OS_MutexScope(prim->sound.player_mutex) {
+        os_mutex_scope(prim->sound.player_mutex) {
           prim->sound.player_offset += to_write;
         }
       }
@@ -93,10 +93,10 @@ fn OS_Handle os_snd_load(String8 path, char *name) {
   }
 
   Scratch scratch = ScratchBegin(0, 0);
-  prim->sound.file = fs_fopen(scratch.arena, fs_open(path, OS_acfRead));
+  prim->sound.file = os_fs_fopen(scratch.arena, os_fs_open(path, OS_acfRead));
   if (!name) {
     name = cstr_from_str8(scratch.arena,
-                          fs_filename_from_path(scratch.arena, path));
+                          os_fs_filename_from_path(scratch.arena, path));
   }
 
   DeferLoop(pa_threaded_mainloop_lock(lnx_snd_state.m), pa_threaded_mainloop_unlock(lnx_snd_state.m))
@@ -127,7 +127,7 @@ fn void os_snd_start(OS_Handle handle) {
 fn void os_snd_stop(OS_Handle handle) {
   UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   Assert(prim->type == UNX_Primitive_Sound);
-  OS_MutexScope(prim->sound.pausexit_mutex) {
+  os_mutex_scope(prim->sound.pausexit_mutex) {
     prim->sound.should_exit = true;
   }
 
@@ -140,7 +140,7 @@ fn void os_snd_skip(OS_Handle handle, i64 ms) {
   u64 byte_inc = 0;
   TrackByteOffset_from_ms(prim->sound, (f64)ms, byte_inc);
 
-  OS_MutexScope(prim->sound.player_mutex) {
+  os_mutex_scope(prim->sound.player_mutex) {
     prim->sound.player_offset += byte_inc;
   }
 }
@@ -149,7 +149,7 @@ fn void os_snd_goto(OS_Handle handle, u64 ms) {
   UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   Assert(prim->type == UNX_Primitive_Sound);
 
-  OS_MutexScope(prim->sound.player_mutex) {
+  os_mutex_scope(prim->sound.player_mutex) {
     TrackByteOffset_from_ms(prim->sound, (f64)ms, prim->sound.player_offset);
   }
 }
@@ -162,7 +162,7 @@ fn void os_snd_until_end(OS_Handle handle) {
   pa_stream_disconnect(prim->sound.stream);
   pa_stream_unref(prim->sound.stream);
 
-  fs_fclose(&prim->sound.file);
+  os_fs_fclose(&prim->sound.file);
   os_mutex_free(prim->sound.pausexit_mutex);
   os_cond_free(prim->sound.pausexit_condvar);
   unx_primitive_free(prim);
@@ -171,7 +171,7 @@ fn void os_snd_until_end(OS_Handle handle) {
 fn void os_snd_pause(OS_Handle handle) {
   UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   Assert(prim->type == UNX_Primitive_Sound);
-  OS_MutexScope(prim->sound.pausexit_mutex) {
+  os_mutex_scope(prim->sound.pausexit_mutex) {
     prim->sound.paused = true;
   }
 }
@@ -179,7 +179,7 @@ fn void os_snd_pause(OS_Handle handle) {
 fn void os_snd_resume(OS_Handle handle) {
   UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
   Assert(prim->type == UNX_Primitive_Sound);
-  OS_MutexScope(prim->sound.pausexit_mutex) {
+  os_mutex_scope(prim->sound.pausexit_mutex) {
     prim->sound.paused = false;
     os_cond_signal(prim->sound.pausexit_condvar);
   }

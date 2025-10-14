@@ -145,7 +145,8 @@ fn OS_Handle os_timer_start(void) {
   return res;
 }
 
-fn u64 os_timer_elapsed_start2end(OS_TimerGranularity unit, OS_Handle start, OS_Handle end) {
+fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
+                                OS_TimerGranularity unit) {
   W32_Primitive *start_prim = (W32_Primitive*)start.h[0];
   W32_Primitive *end_prim = (W32_Primitive*)end.h[0];
 
@@ -211,14 +212,14 @@ fn void os_decommit(void *base, isize size) {
 
 // =============================================================================
 // Threads & Processes stuff
-fn OS_Handle os_thread_start(ThreadFunc *func, void *arg) {
+fn OS_Handle os_thread_start(Func_Thread *func, void *arg) {
   W32_Primitive *primitive = w32_primitive_alloc(W32_Primitive_Thread);
   HANDLE handle = CreateThread(0, 0, w32_thread_entry_point, primitive, 0,
                                &primitive->thread.tid);
   primitive->thread.func = func;
   primitive->thread.arg = arg;
   primitive->thread.handle = handle;
-  OS_MutexScope(w32_state.thread_list.mutex) {
+  os_mutex_scope(w32_state.thread_list.mutex) {
     DLLPushBack(w32_state.thread_list.first,
                 w32_state.thread_list.last, primitive);
   }
@@ -228,7 +229,7 @@ fn OS_Handle os_thread_start(ThreadFunc *func, void *arg) {
 
 fn void os_thread_kill(OS_Handle handle) {
   W32_Primitive *primitive = (W32_Primitive*)handle.h[0];
-  OS_MutexScope(w32_state.thread_list.mutex) {
+  os_mutex_scope(w32_state.thread_list.mutex) {
     DLLDelete(w32_state.thread_list.first,
               w32_state.thread_list.last, primitive);
   }
@@ -241,7 +242,7 @@ fn void os_thread_cancel(OS_Handle handle) {
   primitive->thread.should_quit = true;
   WaitForSingleObject(primitive->thread.handle, INFINITE);
   CloseHandle(primitive->thread.handle);
-  OS_MutexScope(w32_state.thread_list.mutex) {
+  os_mutex_scope(w32_state.thread_list.mutex) {
     DLLDelete(w32_state.thread_list.first,
               w32_state.thread_list.last, primitive);
   }
@@ -252,7 +253,7 @@ fn bool os_thread_join(OS_Handle handle) {
   W32_Primitive *primitive = (W32_Primitive*)handle.h[0];
   DWORD wait = WaitForSingleObject(primitive->thread.handle, INFINITE);
   CloseHandle(primitive->thread.handle);
-  OS_MutexScope(w32_state.thread_list.mutex) {
+  os_mutex_scope(w32_state.thread_list.mutex) {
     DLLDelete(w32_state.thread_list.first,
               w32_state.thread_list.last, primitive);
   }
@@ -310,7 +311,7 @@ fn void os_exit(u8 status_code) {
   ExitProcess(status_code);
 }
 
-fn void os_atexit(VoidFunc *callback) {
+fn void os_atexit(Func_Void *callback) {
   _crt_atexit(callback);
 }
 
@@ -563,12 +564,12 @@ fn OS_Handle os_lib_open(String8 path) {
   return result;
 }
 
-fn VoidFunc* os_lib_lookup(OS_Handle lib, String8 symbol) {
+fn Func_Void* os_lib_lookup(OS_Handle lib, String8 symbol) {
   if (!lib.h[0]) { return 0; }
   HMODULE module = (HMODULE)lib.h[0];
   Scratch scratch = ScratchBegin(0,0);
   char *symbol_cstr = cstr_from_str8(scratch.arena, symbol);
-  VoidFunc *result = (VoidFunc*)GetProcAddress(module, symbol_cstr);
+  Func_Void *result = (Func_Void*)GetProcAddress(module, symbol_cstr);
   ScratchEnd(scratch);
   return result;
 }
@@ -583,7 +584,7 @@ fn i32 os_lib_close(OS_Handle lib) {
 // Misc
 fn String8 os_currentDir(Arena *arena) {
   String8 res = {};
-  res.str = New(arena, u8, MAX_PATH);
+  res.str = arena_push_many(arena, u8, MAX_PATH);
   res.size = GetCurrentDirectoryA(MAX_PATH, (LPSTR)res.str);
   arena_pop(arena, MAX_PATH - res.size);
   return res;
@@ -754,7 +755,7 @@ fn void os_socket_connect(OS_Socket *server) {
 }
 
 fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
-  u8 *res = New(arena, u8, buffer_size);
+  u8 *res = arena_push_many(arena, u8, buffer_size);
   W32_Primitive *prim = (W32_Primitive*)client->handle.h[0];
   recv(prim->socket.handle, (char*)res, (int)buffer_size, MSG_WAITALL);
   return res;
@@ -775,12 +776,12 @@ fn void os_socket_close(OS_Socket *socket) {
 
 ////////////////////////////////
 //- km: File operations
-fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
   W32_Primitive *prim = w32_primitive_alloc(W32_Primitive_File);
   prim->file.flags = flags;
 
   Scratch scratch = ScratchBegin(0, 0);
-  String16 path = UTF16From8(scratch.arena, filepath);
+  String16 path = str16_from_str8(scratch.arena, filepath);
   SECURITY_ATTRIBUTES security_attributes = {sizeof(SECURITY_ATTRIBUTES), 0, 0};
   DWORD access_flags = 0;
   DWORD share_mode = 0;
@@ -815,14 +816,14 @@ fn OS_Handle fs_open(String8 filepath, OS_AccessFlags flags) {
   return result;
 }
 
-fn bool fs_close(OS_Handle fd) {
+fn bool os_fs_close(OS_Handle fd) {
   W32_Primitive *prim = (W32_Primitive*)fd.h[0];
   if (!prim) { return false; }
   BOOL res = CloseHandle(prim->file.handle);
   return res;
 }
 
-fn String8 fs_read(Arena *arena, OS_Handle handle) {
+fn String8 os_fs_read(Arena *arena, OS_Handle handle) {
   String8 result = {};
 
   W32_Primitive *prim = (W32_Primitive*)handle.h[0];
@@ -835,7 +836,7 @@ fn String8 fs_read(Arena *arena, OS_Handle handle) {
 
   u64 to_read = file_size.QuadPart;
   u64 total_read = 0;
-  u8 *ptr = New(arena, u8, to_read);
+  u8 *ptr = arena_push_many(arena, u8, to_read);
 
   for (;total_read < to_read;) {
     u64 amount64 = to_read - total_read;
@@ -856,11 +857,11 @@ fn String8 fs_read(Arena *arena, OS_Handle handle) {
 
 // TODO(lb): i don't know if there are some location on the Windows
 //           FS that contain files with size=0.
-fn String8 fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
-  return fs_read(arena, file);
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
+  return os_fs_read(arena, file);
 }
 
-fn bool fs_write(OS_Handle handle, String8 content) {
+fn bool os_fs_write(OS_Handle handle, String8 content) {
   bool result = false;
 
   HANDLE file = ((W32_Primitive*)handle.h[0])->file.handle;
@@ -884,7 +885,7 @@ fn bool fs_write(OS_Handle handle, String8 content) {
   return result;
 }
 
-fn bool fs_copy(String8 src, String8 dest) {
+fn bool os_fs_copy(String8 src, String8 dest) {
   Scratch scratch = ScratchBegin(0, 0);
   BOOL res = CopyFile(cstr_from_str8(scratch.arena, src),
                       cstr_from_str8(scratch.arena, dest),
@@ -896,7 +897,7 @@ fn bool fs_copy(String8 src, String8 dest) {
   return res;
 }
 
-fn FS_Properties fs_get_properties(OS_Handle file) {
+fn FS_Properties os_fs_get_properties(OS_Handle file) {
   FS_Properties properties = {0};
   if (!file.h[0]) { return properties; }
 
@@ -950,9 +951,9 @@ fn FS_Properties fs_get_properties(OS_Handle file) {
   return properties;
 }
 
-fn String8 fs_path_from_handle(Arena *arena, OS_Handle handle) {
+fn String8 os_fs_path_from_handle(Arena *arena, OS_Handle handle) {
   String8 res = {};
-  res.str = New(arena, u8, MAX_PATH);
+  res.str = arena_push_many(arena, u8, MAX_PATH);
   res.size = GetFinalPathNameByHandleA(((W32_Primitive*)handle.h[0])->file.handle,
                                        (LPSTR)res.str,
                                        MAX_PATH, FILE_NAME_NORMALIZED);
@@ -964,9 +965,9 @@ fn String8 fs_path_from_handle(Arena *arena, OS_Handle handle) {
   return res;
 }
 
-fn String8 fs_readlink(Arena *arena, String8 path) {
+fn String8 os_fs_readlink(Arena *arena, String8 path) {
   String8 res = {};
-  res.str = New(arena, u8, MAX_PATH);
+  res.str = arena_push_many(arena, u8, MAX_PATH);
   Scratch scratch = ScratchBegin(&arena, 1);
   HANDLE pathfd = CreateFileA(cstr_from_str8(scratch.arena, path),
                               GENERIC_READ, FILE_SHARE_READ, 0,
@@ -985,7 +986,7 @@ fn String8 fs_readlink(Arena *arena, String8 path) {
 
 // =============================================================================
 // Memory mapping files
-fn File fs_fopen(Arena *arena, OS_Handle file) {
+fn File os_fs_fopen(Arena *arena, OS_Handle file) {
   File result = {0};
   W32_Primitive *prim = (W32_Primitive*)file.h[0];
   Assert(prim);
@@ -1003,7 +1004,7 @@ fn File fs_fopen(Arena *arena, OS_Handle file) {
   char path[MAX_PATH];
   result.path.size = GetFinalPathNameByHandleA((HANDLE)prim->file.handle, path,
                                                MAX_PATH, FILE_NAME_NORMALIZED);
-  result.path.str = New(arena, u8, result.path.size);
+  result.path.str = arena_push_many(arena, u8, result.path.size);
   memcopy(result.path.str, path, result.path.size);
   if (result.path.str[0] == '\\') {
     result.path.str += 4;
@@ -1052,11 +1053,11 @@ fn File fs_fopen(Arena *arena, OS_Handle file) {
   result.content = (u8*)MapViewOfFile((HANDLE)result.mmap_handle.h[0],
                                       access_flags, 0, 0, 0);
 
-  result.prop = fs_get_properties(file);
+  result.prop = os_fs_get_properties(file);
   return result;
 }
 
-fn File fs_fopen_tmp(Arena *arena) {
+fn File os_fs_fopen_tmp(Arena *arena) {
   char tmpdir_path[MAX_PATH] = {};
   isize tmpdir_path_size = GetTempPath2A(MAX_PATH, tmpdir_path);
   Assert(tmpdir_path_size > 0 && tmpdir_path_size < MAX_PATH);
@@ -1066,18 +1067,18 @@ fn File fs_fopen_tmp(Arena *arena) {
 
   String8 tmpfile = {};
   tmpfile.size = strlen(tmpfile_name);
-  tmpfile.str = New(arena, u8, tmpfile.size);
+  tmpfile.str = arena_push_many(arena, u8, tmpfile.size);
   memcopy(tmpfile.str, tmpfile_name, tmpfile.size);
-  return fs_fopen(arena, fs_open(tmpfile, OS_acfRead | OS_acfWrite));
+  return os_fs_fopen(arena, os_fs_open(tmpfile, OS_acfRead | OS_acfWrite));
 }
 
-fn bool fs_fclose(File *file) {
+fn bool os_fs_fclose(File *file) {
   return UnmapViewOfFile(file->content) &&
          CloseHandle((HANDLE)((W32_Primitive*)file->file_handle.h[0])->file.handle) &&
          CloseHandle((HANDLE)file->mmap_handle.h[0]);
 }
 
-fn bool fs_fresize(File *file, isize size) {
+fn bool os_fs_fresize(File *file, isize size) {
   Assert(size >= 0);
   W32_Primitive *prim = (W32_Primitive*)file->file_handle.h[0];
   LARGE_INTEGER lsize = { .QuadPart = (LONGLONG)size };
@@ -1135,7 +1136,7 @@ fn bool fs_fresize(File *file, isize size) {
                                              access_flags, 0, 0, size)) != 0;
 }
 
-fn bool fs_file_has_changed(File *file) {
+fn bool os_fs_file_has_changed(File *file) {
   FILETIME new_mtime = {};
   Scratch scratch = ScratchBegin(0, 0);
   HANDLE new_handle = CreateFileA(cstr_from_str8(scratch.arena, file->path),
@@ -1152,15 +1153,15 @@ fn bool fs_file_has_changed(File *file) {
   return mtime > file->prop.last_modification_time;
 }
 
-fn bool fs_fdelete(File *file) {
+fn bool os_fs_fdelete(File *file) {
   Scratch scratch = ScratchBegin(0, 0);
-  bool res = fs_fclose(file) &&
+  bool res = os_fs_fclose(file) &&
     !_unlink(cstr_from_str8(scratch.arena, file->path));
   ScratchEnd(scratch);
   return res;
 }
 
-fn bool fs_frename(File *file, String8 to) {
+fn bool os_fs_frename(File *file, String8 to) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = MoveFileEx(cstr_from_str8(scratch.arena, file->path),
                         cstr_from_str8(scratch.arena, to),
@@ -1172,14 +1173,14 @@ fn bool fs_frename(File *file, String8 to) {
 
 // =============================================================================
 // Misc operation on the filesystem
-fn bool fs_delete(String8 filepath) {
+fn bool os_fs_delete(String8 filepath) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = DeleteFileA(cstr_from_str8(scratch.arena, filepath));
   ScratchEnd(scratch);
   return res;
 }
 
-fn bool fs_rename(String8 filepath, String8 to) {
+fn bool os_fs_rename(String8 filepath, String8 to) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = MoveFileEx(cstr_from_str8(scratch.arena, filepath),
                         cstr_from_str8(scratch.arena, to),
@@ -1189,21 +1190,21 @@ fn bool fs_rename(String8 filepath, String8 to) {
   return res;
 }
 
-fn bool fs_mkdir(String8 path) {
+fn bool os_fs_mkdir(String8 path) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = _mkdir(cstr_from_str8(scratch.arena, path));
   ScratchEnd(scratch);
   return res;
 }
 
-fn bool fs_rmdir(String8 path) {
+fn bool os_fs_rmdir(String8 path) {
   Scratch scratch = ScratchBegin(0, 0);
   bool res = _rmdir(cstr_from_str8(scratch.arena, path));
   ScratchEnd(scratch);
   return res;
 }
 
-fn String8 fs_filename_from_path(Arena *arena, String8 path) {
+fn String8 os_fs_filename_from_path(Arena *arena, String8 path) {
   String8 res = {};
   Scratch scratch = ScratchBegin(0, 0);
   StringStream ss = str8_split(scratch.arena, path, '/');
@@ -1213,7 +1214,7 @@ fn String8 fs_filename_from_path(Arena *arena, String8 path) {
     if (ss.last->value.str[i] == '.') { last_dot = i; }
   }
   res.size = last_dot;
-  res.str = New(arena, u8, res.size);
+  res.str = arena_push_many(arena, u8, res.size);
   memcopy(res.str, ss.last->value.str, res.size);
   ScratchEnd(scratch);
   return res;
@@ -1221,7 +1222,7 @@ fn String8 fs_filename_from_path(Arena *arena, String8 path) {
 
 ////////////////////////////////
 //- km: File iterator
-fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
+fn OS_FileIter* os_fs_iter_begin(Arena *arena, String8 path) {
   Scratch scratch = ScratchBegin(&arena, 1);
   StringStream list = {0};
 
@@ -1229,19 +1230,19 @@ fn OS_FileIter* fs_iter_begin(Arena *arena, String8 path) {
   strstream_append_str(scratch.arena, &list, Strlit("\\*"));
   path = str8_from_stream(scratch.arena, list);
 
-  String16 path16 = UTF16From8(scratch.arena, path);
+  String16 path16 = str16_from_str8(scratch.arena, path);
   WIN32_FIND_DATAW file_data = {0};
 
-  W32_FileIter *iter = New(arena, W32_FileIter);
+  W32_FileIter *iter = arena_push(arena, W32_FileIter);
   iter->handle = FindFirstFileW((WCHAR*)path16.str, &file_data);
   iter->file_data = file_data;
 
-  OS_FileIter *result = New(arena, OS_FileIter);
+  OS_FileIter *result = arena_push(arena, OS_FileIter);
   memcopy(result->memory, iter, sizeof(W32_FileIter));
   return result;
 }
 
-fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) {
+fn bool os_fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) {
   W32_FileIter *w32_iter = (W32_FileIter*)iter->memory;
   for (;!w32_iter->done;) {
     WCHAR *file_name = w32_iter->file_data.cFileName;
@@ -1258,11 +1259,11 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) {
     }
 
     if (!valid) { continue; }
-    info_out->name = UTF8From16(arena, str16_cstr((u16*)data.cFileName));
+    info_out->name = str8_from_str16(arena, str16_from_cstr16((u16*)data.cFileName));
 
-    OS_Handle file = fs_open(info_out->name, OS_acfRead);
-    info_out->properties = fs_get_properties(file);
-    fs_close(file);
+    OS_Handle file = os_fs_open(info_out->name, OS_acfRead);
+    info_out->properties = os_fs_get_properties(file);
+    os_fs_close(file);
     if (iter->filter_allowed &&
         !(info_out->properties.type & iter->filter_allowed)) {
       continue;
@@ -1273,7 +1274,7 @@ fn bool fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) {
   return false;
 }
 
-fn void fs_iter_end(OS_FileIter *iter) {
+fn void os_fs_iter_end(OS_FileIter *iter) {
   W32_FileIter *w32_iter = (W32_FileIter*)iter->memory;
   FindClose(w32_iter->handle);
 }
@@ -1295,7 +1296,7 @@ fn void dbg_print(const char *fmt, ...) {
 // Win32 specific
 fn DWORD w32_thread_entry_point(void *ptr) {
   W32_Primitive *primitive = (W32_Primitive*)ptr;
-  ThreadFunc *func = primitive->thread.func;
+  Func_Thread *func = primitive->thread.func;
   func(primitive->thread.arg);
   return 0;
 }
@@ -1307,7 +1308,7 @@ fn W32_Primitive* w32_primitive_alloc(W32_PrimitiveType kind) {
     StackPop(w32_state.free_list);
     memzero(result, sizeof(*result));
   } else {
-    result = New(w32_state.arena, W32_Primitive);
+    result = arena_push(w32_state.arena, W32_Primitive);
   }
   result->kind = kind;
   LeaveCriticalSection(&w32_state.mutex);
@@ -1381,7 +1382,7 @@ fn void w32_setup(void) {
   w32_state.info.page_size = sys_info.dwPageSize;
   w32_state.info.hugepage_size = GetLargePageMinimum();
 
-  w32_state.arena = ArenaBuild(.reserve_size = GB(1));
+  w32_state.arena = arena_build(.reserve_size = GB(1));
   InitializeCriticalSection(&w32_state.mutex);
   QueryPerformanceFrequency(&w32_state.perf_freq);
 
@@ -1392,15 +1393,15 @@ fn void w32_setup(void) {
 }
 
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
-  Arena *args_arena = ArenaBuild();
-  CmdLine *cmdln = New(args_arena, CmdLine);
+  Arena *args_arena = arena_build();
+  CmdLine *cmdln = arena_push(args_arena, CmdLine);
   cmdln->count = argc - 1;
   if (cmdln->count) {
-    cmdln->exe = UTF8From16(args_arena, str16_cstr((u16*)wargv[0]));
+    cmdln->exe = str8_from_str16(args_arena, str16_from_cstr16((u16*)wargv[0]));
   }
   for (int i = 1; i < argc; ++i) {
-    cmdln->args[i - 1] = UTF8From16(args_arena,
-                                    str16_cstr((u16*)wargv[i]));
+    cmdln->args[i - 1] = str8_from_str16(args_arena,
+                                         str16_from_cstr16((u16*)wargv[i]));
   }
   start(cmdln);
   DeleteCriticalSection(&w32_state.mutex);

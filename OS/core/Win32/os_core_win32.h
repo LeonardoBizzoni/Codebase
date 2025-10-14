@@ -33,7 +33,7 @@ typedef struct W32_Primitive {
     struct {
       HANDLE handle;
       DWORD tid;
-      ThreadFunc *func;
+      Func_Thread *func;
       void *arg;
       volatile bool should_quit;
     } thread;

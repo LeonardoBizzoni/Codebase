@@ -2,7 +2,7 @@ global W32_GfxState w32_gfxstate = {0};
 
 fn void w32_gfx_init(HINSTANCE instance) {
   timeBeginPeriod(1);
-  w32_gfxstate.arena = ArenaBuild();
+  w32_gfxstate.arena = arena_build();
   w32_gfxstate.instance = instance;
   w32_gfxstate.event_freelist.mutex = os_mutex_alloc();
   // TODO(lb): what about non-xinput gamepads like the dualshock
@@ -75,7 +75,7 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   }
 
   if (event) {
-    OS_MutexScope(window->eventlist.mutex) {
+    os_mutex_scope(window->eventlist.mutex) {
       QueuePush(window->eventlist.first, window->eventlist.last, event);
       os_cond_signal(window->eventlist.condvar);
     }
@@ -86,13 +86,13 @@ fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
 
 fn W32_WindowEvent* w32_alloc_windowevent(void) {
   W32_WindowEvent *event = 0;
-  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+  os_mutex_scope(w32_gfxstate.event_freelist.mutex) {
     event = w32_gfxstate.event_freelist.first;
     if (event) {
       memzero(event, sizeof(W32_WindowEvent));
       QueuePop(w32_gfxstate.event_freelist.first);
     } else {
-      event = New(w32_gfxstate.arena, W32_WindowEvent);
+      event = arena_push(w32_gfxstate.arena, W32_WindowEvent);
     }
   }
   Assert(event);
@@ -156,7 +156,7 @@ fn void w32_window_task(void *args_) {
           os_input_device.gamepad[controller_idx].active = 0;
           W32_WindowEvent *event = w32_alloc_windowevent();
           event->value.type = OS_EventType_GamepadDisconnected;
-          OS_MutexScope(args->window->eventlist.mutex) {
+          os_mutex_scope(args->window->eventlist.mutex) {
             QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
             os_cond_signal(args->window->eventlist.condvar);
           }
@@ -167,7 +167,7 @@ fn void w32_window_task(void *args_) {
         os_input_device.gamepad[controller_idx].active = 1;
         W32_WindowEvent *event = w32_alloc_windowevent();
         event->value.type = OS_EventType_GamepadConnected;
-        OS_MutexScope(args->window->eventlist.mutex) {
+        os_mutex_scope(args->window->eventlist.mutex) {
           QueuePush(args->window->eventlist.first, args->window->eventlist.last, event);
           os_cond_signal(args->window->eventlist.condvar);
         }
@@ -230,11 +230,11 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
     memzero(window, sizeof(W32_Window));
     StackPop(w32_gfxstate.freelist_window);
   } else {
-    window = New(w32_gfxstate.arena, W32_Window);
+    window = arena_push(w32_gfxstate.arena, W32_Window);
   }
   DLLPushBack(w32_gfxstate.first_window, w32_gfxstate.last_window, window);
 
-  W32_WindowInitArgs *args = New(w32_gfxstate.arena, W32_WindowInitArgs);
+  W32_WindowInitArgs *args = arena_push(w32_gfxstate.arena, W32_WindowInitArgs);
   args->name = name;
   args->width = width;
   args->height = height;
@@ -268,14 +268,14 @@ fn OS_Event os_window_get_event(OS_Handle window_) {
   OS_Event res = {0};
 
   W32_WindowEvent *event = 0;
-  OS_MutexScope(window->eventlist.mutex) {
+  os_mutex_scope(window->eventlist.mutex) {
     event = window->eventlist.first;
     if (event) { QueuePop(window->eventlist.first); }
   }
   if (!event) { return res; }
   memcopy(&res, &event->value, sizeof(OS_Event));
   event->next = 0;
-  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+  os_mutex_scope(w32_gfxstate.event_freelist.mutex) {
     QueuePush(w32_gfxstate.event_freelist.first,
               w32_gfxstate.event_freelist.last, event);
   }
@@ -287,7 +287,7 @@ fn OS_Event os_window_wait_event(OS_Handle window_) {
   OS_Event res = {0};
 
   W32_WindowEvent *event = 0;
-  OS_MutexScope(window->eventlist.mutex) {
+  os_mutex_scope(window->eventlist.mutex) {
     event = window->eventlist.first;
     for (; !event; event = window->eventlist.first) {
       os_cond_wait(window->eventlist.condvar, window->eventlist.mutex, 0);
@@ -296,7 +296,7 @@ fn OS_Event os_window_wait_event(OS_Handle window_) {
   }
   Assert(event);
   memcopy(&res, &event->value, sizeof(OS_Event));
-  OS_MutexScope(w32_gfxstate.event_freelist.mutex) {
+  os_mutex_scope(w32_gfxstate.event_freelist.mutex) {
     event->next = 0;
     QueuePush(w32_gfxstate.event_freelist.first,
               w32_gfxstate.event_freelist.last, event);
@@ -318,7 +318,7 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   }
 
   local isize max_keyname_size = 50;
-  String8 res = str8(New(arena, u8, 50), max_keyname_size);
+  String8 res = str8(arena_push_many(arena, u8, 50), max_keyname_size);
   GetKeyNameText(lparam, (char*)res.str, res.size);
   res.size = str8_len((char*)res.str);
   arena_pop(arena, max_keyname_size - res.size);

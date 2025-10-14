@@ -7,7 +7,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
     memzero(window, sizeof(X11_Window));
     StackPop(x11_state.freelist_window);
   } else {
-    window = New(x11_state.arena, X11_Window);
+    window = arena_push(x11_state.arena, X11_Window);
   }
   DLLPushBack(x11_state.first_window, x11_state.last_window, window);
 
@@ -35,7 +35,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
   ScratchEnd(scratch);
   XFlush(x11_state.xdisplay);
 
-  OS_Handle res = {(u64)window};
+  OS_Handle res = {{(u64)window}};
   return res;
 }
 
@@ -100,7 +100,7 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
 // =============================================================================
 // Platform specific definitions
 fn void unx_gfx_init(void) {
-  x11_state.arena = ArenaBuild();
+  x11_state.arena = arena_build();
   x11_state.xdisplay = XOpenDisplay(0);
   x11_state.xroot = RootWindow(x11_state.xdisplay, x11_state.xscreen);
   XSynchronize(x11_state.xdisplay, True);

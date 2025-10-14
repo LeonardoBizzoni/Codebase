@@ -6,7 +6,7 @@
 // `size` and `cstr` are to be considered immutable
 // =============================================================================
 // Unicode codepoint
-fn Codepoint decodeUTF8(u8 *glyph_start) {
+fn Codepoint utf8_decode(u8 *glyph_start) {
   Codepoint res = {0};
 
   if ((*glyph_start & 0x80) == 0) {
@@ -34,34 +34,7 @@ fn Codepoint decodeUTF8(u8 *glyph_start) {
   return res;
 }
 
-fn Codepoint decodeUTF16(u16 *glyph_start) {
-  Codepoint res = {0};
-
-  if (glyph_start[0] <= 0xD7FF ||
-      (glyph_start[0] >= 0xE000 && glyph_start[0] <= 0xFFFF)) {
-    res.size = 1;
-    res.codepoint = *glyph_start;
-  } else if ((glyph_start[0] >= 0xD800 && glyph_start[0] <= 0xDBFF) &&
-             (glyph_start[1] >= 0xDC00 && glyph_start[1] <= 0xDFFF)) {
-    res.size = 2;
-    res.codepoint = (u32)
-      ((glyph_start[0] - 0xD800) << 10) + (glyph_start[1] - 0xDC00) + 0x10000;
-  } else {
-    Assert(false);
-  }
-
-  return res;
-}
-
-inline fn Codepoint decodeUTF32(u32 *glyph_start) {
-  Codepoint res = {
-    .codepoint = *glyph_start,
-    .size = 1,
-  };
-  return res;
-}
-
-fn u8 encodeUTF8(u8 *res, Codepoint cp) {
+fn u8 utf8_encode(u8 *res, Codepoint cp) {
   if (cp.codepoint <= 0x7F) {
     res[0] = (u8)cp.codepoint;
     return 1;
@@ -86,7 +59,25 @@ fn u8 encodeUTF8(u8 *res, Codepoint cp) {
   }
 }
 
-fn u8 encodeUTF16(u16 *res, Codepoint cp) {
+fn Codepoint utf16_decode(u16 *glyph_start) {
+  Codepoint res = {0};
+
+  if (glyph_start[0] <= 0xD7FF || glyph_start[0] >= 0xE000) {
+    res.size = 1;
+    res.codepoint = *glyph_start;
+  } else if ((glyph_start[0] >= 0xD800 && glyph_start[0] <= 0xDBFF) &&
+             (glyph_start[1] >= 0xDC00 && glyph_start[1] <= 0xDFFF)) {
+    res.size = 2;
+    res.codepoint = (u32)
+      ((glyph_start[0] - 0xD800) << 10) + (glyph_start[1] - 0xDC00) + 0x10000;
+  } else {
+    Assert(false);
+  }
+
+  return res;
+}
+
+fn u8 utf16_encode(u16 *res, Codepoint cp) {
   if (cp.codepoint <= 0xD7FF ||
       (cp.codepoint >= 0xE000 && cp.codepoint <= 0xFFFF)) {
     res[0] = (u16)cp.codepoint;
@@ -101,7 +92,15 @@ fn u8 encodeUTF16(u16 *res, Codepoint cp) {
   }
 }
 
-fn u8 encodeUTF32(u32 *res, Codepoint cp) {
+fn Codepoint utf32_decode(u32 *glyph_start) {
+  Codepoint res = {
+    .codepoint = *glyph_start,
+    .size = 1,
+  };
+  return res;
+}
+
+fn u8 utf32_encode(u32 *res, Codepoint cp) {
   res[0] = cp.codepoint;
   return 1;
 }
@@ -111,7 +110,7 @@ fn u8 encodeUTF32(u32 *res, Codepoint cp) {
 fn void strstream_append_str(Arena *arena, StringStream *strlist, String8 other) {
   strlist->node_count += 1;
   strlist->total_size += other.size;
-  StringNode *str = New(arena, StringNode);
+  StringNode *str = arena_push(arena, StringNode);
   str->value = other;
   DLLPushBack(strlist->first, strlist->last, str);
 }
@@ -124,8 +123,9 @@ fn void strstream_append_stream(StringStream *strlist, StringStream other) {
 }
 
 fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
-  String8 res = str8(New(arena, u8, (u32)
-                         (strlist.total_size + strlist.node_count - 1)),
+  String8 res = str8(arena_push_many(arena, u8, (u32)
+                                     (strlist.total_size +
+                                      strlist.node_count - 1)),
                      strlist.total_size + strlist.node_count - 1);
 
   isize i = 0;
@@ -142,8 +142,9 @@ fn String8 strstream_join_char(Arena *arena, StringStream strlist, char ch) {
 }
 
 fn String8 strstream_join_str(Arena *arena, StringStream strlist, String8 str) {
-  String8 res = str8(New(arena, u8, (u32)(strlist.total_size +
-                                          str.size * (strlist.node_count - 1))),
+  String8 res = str8(arena_push_many(arena, u8,
+                                     (u32)(strlist.total_size +
+                                           str.size * (strlist.node_count - 1))),
                      strlist.total_size + str.size * (strlist.node_count - 1));
 
   isize i = 0;
@@ -172,7 +173,7 @@ fn String8 str8(u8 *chars, isize len) {
 }
 
 fn String8 str8_from_stream(Arena *arena, StringStream stream) {
-  u8 *str = New(arena, u8, (u32)stream.total_size);
+  u8 *str = arena_push_many(arena, u8, (u32)stream.total_size);
   u8 *ptr = str;
   for (StringNode *curr = stream.first; curr; curr = curr->next) {
     memcopy(ptr, curr->value.str, (u32)curr->value.size);
@@ -183,7 +184,7 @@ fn String8 str8_from_stream(Arena *arena, StringStream stream) {
 }
 
 fn String8 str8_from_char(Arena *arena, char ch) {
-  String8 res = str8(New(arena, u8), 1);
+  String8 res = str8(arena_push(arena, u8), 1);
   res.str[0] = (u8)ch;
   return res;
 }
@@ -199,7 +200,7 @@ fn String8 str8_from_i64(Arena *arena, i64 n) {
   }
 
   isize i = 0, approx = 30;
-  u8 *str = New(arena, u8, approx);
+  u8 *str = arena_push_many(arena, u8, approx);
   for (; n > 0; ++i, n /= 10) {
     str[i] = (u8)(n % 10) + '0';
   }
@@ -220,9 +221,9 @@ fn String8 str8_from_i64(Arena *arena, i64 n) {
 
 fn String8 str8_from_u64(Arena *arena, u64 n) {
   isize i = 0, approx = 30;
-  u8 *str = New(arena, u8, (usize)approx);
+  u8 *str = arena_push_many(arena, u8, (usize)approx);
   for (; n > 0; ++i, n /= 10) {
-    str[i] = n % 10 + '0';
+    str[i] = (u8)(n % 10) + '0';
   }
 
   for (isize j = 0, k = i - 1; j < k; ++j, --k) {
@@ -237,10 +238,10 @@ fn String8 str8_from_u64(Arena *arena, u64 n) {
 
 fn String8 str8_from_f64(Arena *arena, f64 n) {
   isize approx = 100, size = 0;
-  u8 *str = New(arena, u8, (usize)approx);
+  u8 *str = arena_push_many(arena, u8, (usize)approx);
 
   // TODO: maybe implement `sprintf`?
-  size = sprintf((char *)str, "%f", n);
+  size = snprintf((char *)str, (usize)approx, "%f", n);
   arena_pop(arena, approx - size);
 
   return str8(str, size);
@@ -295,7 +296,7 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
   isize n = s2.size + 1;
 
   Table c = {0};
-  c.x = New(arena, isize, (usize)(m * n));
+  c.x = arena_push_many(arena, isize, (usize)(m * n));
   c.m = m;
   c.n = n;
 
@@ -310,7 +311,7 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
   }
 
   isize size = at(c,m-1,n-1);
-  u8 *str = New(arena, u8, (usize)size);
+  u8 *str = arena_push_many(arena, u8, (usize)size);
   isize idx = size - 1;
   for(isize i = m - 1, j = n - 1; i > 0 && j > 0;) {
     if(at(c,i,j) == at(c,i-1,j)) {
@@ -329,7 +330,7 @@ fn String8 str8_lcs(Arena *arena, String8 s1, String8 s2) {
 }
 
 fn String8 str8_to_upper(Arena *arena, String8 s) {
-  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
+  String8 res = str8(arena_push_many(arena, u8, (usize)s.size), s.size);
 
   for (isize i = 0; i < s.size; ++i) {
     res.str[i] = char_to_upper(s.str[i]);
@@ -339,7 +340,7 @@ fn String8 str8_to_upper(Arena *arena, String8 s) {
 }
 
 fn String8 str8_to_lower(Arena *arena, String8 s) {
-  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
+  String8 res = str8(arena_push_many(arena, u8, (usize)s.size), s.size);
 
   for (isize i = 0; i < s.size; ++i) {
     res.str[i] = char_to_lower(s.str[i]);
@@ -349,7 +350,7 @@ fn String8 str8_to_lower(Arena *arena, String8 s) {
 }
 
 fn String8 str8_to_capitalized(Arena *arena, String8 s) {
-  String8 res = str8(New(arena, u8, (usize)s.size), s.size);
+  String8 res = str8(arena_push_many(arena, u8, (usize)s.size), s.size);
 
   res.str[0] = char_to_upper(s.str[0]);
   for (isize i = 1; i < s.size; ++i) {
@@ -399,14 +400,14 @@ fn String8 str8_format(Arena *arena, const char *fmt, ...) {
   return res;
 }
 
-fn String8 _str8_format(Arena *arena, const char *fmt, va_list args) {
+internal String8 _str8_format(Arena *arena, const char *fmt, va_list args) {
   va_list args2;
   va_copy(args2, args);
   i32 needed_bytes = vsnprintf(0, 0, fmt, args2) + 1;
   Assert(needed_bytes > 0);
 
   String8 res;
-  res.str = New(arena, u8, (u32)needed_bytes);
+  res.str = arena_push_many(arena, u8, (u32)needed_bytes);
   res.size = vsnprintf((char *)res.str, (u32)needed_bytes, fmt, args);
   res.str[res.size] = 0;
 
@@ -581,7 +582,7 @@ fn bool str8_is_numerical(String8 s) {
 }
 
 fn char* cstr_from_str8(Arena *arena, String8 str) {
-  char *res = New(arena, char, (usize)(str.size + 1));
+  char *res = arena_push_many(arena, char, (usize)(str.size + 1));
   memcopy(res, str.str, (usize)str.size);
   res[str.size] = 0;
   return res;
@@ -668,57 +669,49 @@ fn u8 path_separator(void) {
 
 // =============================================================================
 // Other UTF strings
-bool str16Eq(String16 s1, String16 s2) {
-  if (s1.size != s2.size) {
-    return false;
-  }
-
+bool str16_eq(String16 s1, String16 s2) {
+  if (s1.size != s2.size) { return false; }
   for (isize i = 0; i < s1.size; ++i) {
     if (s1.str[i] != s2.str[i]) {
       return false;
     }
   }
-
   return true;
 }
 
-fn usize cstring16_length(u16 *str){
+fn usize cstr16_length(u16 *str) {
   u16 *p = str;
   for(; *p; ++p);
   return (usize)(p - str);
 }
 
-fn String16 str16_cstr(u16 *str){
-  String16 result = { str, (isize)cstring16_length(str) };
+fn String16 str16_from_cstr16(u16 *str) {
+  String16 result = { str, (isize)cstr16_length(str) };
   return result;
 }
 
-fn bool str32Eq(String32 s1, String32 s2) {
-  if (s1.size != s2.size) {
-    return false;
-  }
-
+fn bool str32_eq(String32 s1, String32 s2) {
+  if (s1.size != s2.size) {return false; }
   for (isize i = 0; i < s1.size; ++i) {
     if (s1.str[i] != s2.str[i]) {
       return false;
     }
   }
-
   return true;
 }
 
 // =============================================================================
 // UTF string conversion
-fn String8 UTF8From16(Arena *arena, String16 in) {
+fn String8 str8_from_str16(Arena *arena, String16 in) {
   isize res_size = 0, approx_size = in.size * 4;
-  u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
+  u8 *bytes = arena_push_many(arena, u8, approx_size), *res_offset = bytes;
 
   Codepoint codepoint = {0};
   for (u16 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
-    codepoint = decodeUTF16(start);
+    codepoint = utf16_decode(start);
 
-    u8 utf8_codepoint_size = encodeUTF8(res_offset, codepoint);
+    u8 utf8_codepoint_size = utf8_encode(res_offset, codepoint);
     res_size += utf8_codepoint_size;
     res_offset += utf8_codepoint_size;
   }
@@ -727,16 +720,16 @@ fn String8 UTF8From16(Arena *arena, String16 in) {
   return str8(bytes, (isize)res_size);
 }
 
-fn String8 UTF8From32(Arena *arena, String32 in) {
+fn String8 str8_from_str32(Arena *arena, String32 in) {
   isize res_size = 0, approx_size = in.size * 4;
-  u8 *bytes = New(arena, u8, approx_size), *res_offset = bytes;
+  u8 *bytes = arena_push_many(arena, u8, approx_size), *res_offset = bytes;
 
   Codepoint codepoint = {0};
   for (u32 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
-    codepoint = decodeUTF32(start);
+    codepoint = utf32_decode(start);
 
-    u8 utf8_codepoint_size = encodeUTF8(res_offset, codepoint);
+    u8 utf8_codepoint_size = utf8_encode(res_offset, codepoint);
     res_size += utf8_codepoint_size;
     res_offset += utf8_codepoint_size;
   }
@@ -745,16 +738,16 @@ fn String8 UTF8From32(Arena *arena, String32 in) {
   return str8(bytes, (isize)res_size);
 }
 
-fn String16 UTF16From8(Arena *arena, String8 in) {
+fn String16 str16_from_str8(Arena *arena, String8 in) {
   isize res_size = 0, approx_size = in.size * 2;
-  u16 *words = New(arena, u16, approx_size), *res_offset = words;
+  u16 *words = arena_push_many(arena, u16, approx_size), *res_offset = words;
 
   Codepoint codepoint = {0};
   for (u8 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
-    codepoint = decodeUTF8(start);
+    codepoint = utf8_decode(start);
 
-    u8 utf16_codepoint_size = encodeUTF16(res_offset, codepoint);
+    u8 utf16_codepoint_size = utf16_encode(res_offset, codepoint);
     res_size += utf16_codepoint_size;
     res_offset += utf16_codepoint_size;
   }
@@ -764,16 +757,16 @@ fn String16 UTF16From8(Arena *arena, String8 in) {
   return res;
 }
 
-fn String16 UTF16From32(Arena *arena, String32 in) {
+fn String16 str16_from_str32(Arena *arena, String32 in) {
   isize res_size = 0, approx_size = in.size * 2;
-  u16 *words = New(arena, u16, approx_size), *res_offset = words;
+  u16 *words = arena_push_many(arena, u16, approx_size), *res_offset = words;
 
   Codepoint codepoint = {0};
   for (u32 *start = in.str, *end = in.str + in.size; start < end;
        start += codepoint.size) {
-    codepoint = decodeUTF32(start);
+    codepoint = utf32_decode(start);
 
-    u8 utf16_codepoint_size = encodeUTF16(res_offset, codepoint);
+    u8 utf16_codepoint_size = utf16_encode(res_offset, codepoint);
     res_size += utf16_codepoint_size;
     res_offset += utf16_codepoint_size;
   }
@@ -783,14 +776,14 @@ fn String16 UTF16From32(Arena *arena, String32 in) {
   return res;
 }
 
-fn String32 UTF32From8(Arena *arena, String8 in) {
+fn String32 str32_from_str8(Arena *arena, String8 in) {
   isize res_size = 0, approx_size = in.size * 2;
-  u32 *dwords = New(arena, u32, approx_size), *res_offset = dwords;
+  u32 *dwords = arena_push_many(arena, u32, approx_size), *res_offset = dwords;
 
   Codepoint cp = {0};
   for (u8 *start = in.str, *end = in.str + in.size; start < end;
        start += cp.size, ++res_size) {
-    cp = decodeUTF8(start);
+    cp = utf8_decode(start);
     *res_offset++ = cp.codepoint;
   }
 
@@ -799,14 +792,14 @@ fn String32 UTF32From8(Arena *arena, String8 in) {
   return res;
 }
 
-fn String32 UTF32From16(Arena *arena, String16 in) {
+fn String32 str32_from_str16(Arena *arena, String16 in) {
   isize res_size = 0, approx_size = in.size * 2;
-  u32 *dwords = New(arena, u32, approx_size), *res_offset = dwords;
+  u32 *dwords = arena_push_many(arena, u32, approx_size), *res_offset = dwords;
 
   Codepoint cp = {0};
   for (u16 *start = in.str, *end = in.str + in.size; start < end;
        start += cp.size, ++res_size) {
-    cp = decodeUTF16(start);
+    cp = utf16_decode(start);
     *res_offset++ = cp.codepoint;
   }
 

@@ -1,7 +1,7 @@
 global RHI_VK_State rhi_vk_state = {0};
 
 fn void rhi_init(void) {
-  rhi_vk_state.arena = ArenaBuild();
+  rhi_vk_state.arena = arena_build();
 
   VkApplicationInfo app_info = {
     .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -27,8 +27,9 @@ fn void rhi_init(void) {
     Scratch scratch = ScratchBegin(0, 0);
     u32 retrieved_layer_count = 0;
     vkEnumerateInstanceLayerProperties(&retrieved_layer_count, 0);
-    VkLayerProperties *retrieved_layers = New(scratch.arena, VkLayerProperties,
-                                              retrieved_layer_count);
+    VkLayerProperties *retrieved_layers = arena_push_many(scratch.arena,
+                                                          VkLayerProperties,
+                                                          retrieved_layer_count);
     vkEnumerateInstanceLayerProperties(&retrieved_layer_count, retrieved_layers);
     for (usize i = 0; i < Arrsize(rhi_vk_layers); ++i) {
       bool layer_found = false;
@@ -72,8 +73,9 @@ fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
     struct PhysicalDeviceRating *prev;
   };
   struct PhysicalDeviceRating *phydevices_orderedlist_buffer =
-    New(scratch_physical_device.arena, struct PhysicalDeviceRating,
-        phydevices_len);
+    arena_push_many(scratch_physical_device.arena,
+                    struct PhysicalDeviceRating,
+                    phydevices_len);
   struct PhysicalDeviceRating *phydevices_orderedlist_first = 0;
   struct PhysicalDeviceRating *phydevices_orderedlist_last = 0;
 
@@ -216,7 +218,8 @@ fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
     }
     if (!unique) { continue; }
     struct Vk_UniqueQueueFamily_Node *node =
-      New(scratch_queue_family.arena, struct Vk_UniqueQueueFamily_Node);
+      arena_push(scratch_queue_family.arena,
+                 struct Vk_UniqueQueueFamily_Node);
     node->value = i;
     QueuePush(queue_family_list.first, queue_family_list.last, node);
     queue_family_list.count += 1;
@@ -224,8 +227,9 @@ fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
 
   f32 graphics_queue_idx_prio = 1.0f;
   VkDeviceQueueCreateInfo *create_devqueue_info =
-    New(scratch_queue_family.arena, VkDeviceQueueCreateInfo,
-        queue_family_list.count);
+    arena_push_many(scratch_queue_family.arena,
+                    VkDeviceQueueCreateInfo,
+                    queue_family_list.count);
   for (u32 i = 0; i < queue_family_list.count; ++i) {
     struct Vk_UniqueQueueFamily_Node *node = queue_family_list.first;
     QueuePop(queue_family_list.first);
@@ -355,8 +359,8 @@ rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
 
   vkGetSwapchainImagesKHR(rhi_device.virtual, res.swapchain,
                           (u32*)&res.image_count, 0);
-  res.images = New(arena, VkImage, res.image_count);
-  res.image_views = New(arena, VkImageView, res.image_count);
+  res.images = arena_push_many(arena, VkImage, res.image_count);
+  res.image_views = arena_push_many(arena, VkImageView, res.image_count);
   vkGetSwapchainImagesKHR(rhi_device.virtual, res.swapchain,
                           (u32*)&res.image_count, res.images);
   for (i32 i = 0; i < res.image_count; ++i) {
@@ -408,8 +412,9 @@ fn VkFramebuffer*
 rhi_vk_framebuffers_create(Arena *arena, RHI_VK_Device *rhi_device,
                            RHI_VK_Swapchain *rhi_swapchain,
                            VkRenderPass renderpass) {
-  VkFramebuffer *framebuffers = New(arena, VkFramebuffer,
-                                    rhi_swapchain->image_count);
+  VkFramebuffer *framebuffers = arena_push_many(arena,
+                                                VkFramebuffer,
+                                                rhi_swapchain->image_count);
   for (i32 i = 0; i < rhi_swapchain->image_count; ++i) {
     VkFramebufferCreateInfo create_framebuffer_info = {
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -490,7 +495,7 @@ rhi_vk_semaphore_create(Arena *arena, RHI_VK_Device device, i32 count,
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     .flags = flags,
   };
-  VkSemaphore *res = New(arena, VkSemaphore, (u32)count);
+  VkSemaphore *res = arena_push_many(arena, VkSemaphore, (u32)count);
   for (i32 i = 0; i < count; ++i) {
     rhi_vk_create(vkCreateSemaphore, device.virtual,
                   &create_semaphore_info, 0, res + i);
@@ -506,7 +511,7 @@ rhi_vk_fence_create(Arena *arena, RHI_VK_Device device, i32 count,
     .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
     .flags = flags,
   };
-  VkFence *res = New(arena, VkFence, count);
+  VkFence *res = arena_push_many(arena, VkFence, count);
   for (i32 i = 0; i < count; ++i) {
     rhi_vk_create(vkCreateFence, device.virtual,
                   &create_fence_info, 0, res + i);
@@ -633,9 +638,9 @@ fn RHI_VK_Shader
 rhi_vk_shader_from_file(RHI_ShaderType type, RHI_VK_Device rhi_device,
                         String8 shader_source_path) {
   Scratch scratch = ScratchBegin(0, 0);
-  OS_Handle file_handle = fs_open(shader_source_path, OS_acfRead);
-  String8 bytecode = fs_read(scratch.arena, file_handle);
-  fs_close(file_handle);
+  OS_Handle file_handle = os_fs_open(shader_source_path, OS_acfRead);
+  String8 bytecode = os_fs_read(scratch.arena, file_handle);
+  os_fs_close(file_handle);
   RHI_VK_Shader res = rhi_vk_shader_from_bytes(type, rhi_device,
                                                bytecode.size, bytecode.str);
   ScratchEnd(scratch);
@@ -762,7 +767,7 @@ rhi_vk_device_properties_print(VkPhysicalDeviceProperties *props) {
   case VK_PHYSICAL_DEVICE_TYPE_CPU: {
     device_type_string = "CPU";
   } break;
-  default: Panic("invalid vulkan device type");
+  default: Assert(false && "invalid vulkan device type");
   }
   u32 vk_major = VK_VERSION_MAJOR(props->apiVersion);
   u32 vk_minor = VK_VERSION_MINOR(props->apiVersion);
