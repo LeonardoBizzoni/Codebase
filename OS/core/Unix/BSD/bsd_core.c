@@ -70,7 +70,7 @@ fn bool os_fs_copy(String8 source, String8 destination) {
 }
 
 // =============================================================================
-i32 main(i32 argc, char **argv) {
+fn void os_env_setup(void) {
   i32 mib[2] = { CTL_HW, HW_NCPU };
   usize len = sizeof(unx_state.info.core_count);
   sysctl(mib, 2, &unx_state.info.core_count, &len, 0, 0);
@@ -91,6 +91,21 @@ i32 main(i32 argc, char **argv) {
   unx_state.info.hostname = unx_gethostname();
   unx_state.arena = arena_build();
 
+  struct timespec tms;
+  struct tm lt = {0};
+  (void)clock_gettime(CLOCK_REALTIME, &tms);
+  (void)localtime_r(&tms.tv_sec, &lt);
+  unx_state.unix_utc_offset = (u64)lt.tm_gmtoff;
+
+#if OS_GUI
+  unx_gfx_init();
+#endif
+}
+
+#ifndef CBUILD_H
+i32 main(i32 argc, char **argv) {
+  os_env_setup();
+
   CmdLine cli = {0};
   cli.count = argc - 1;
   cli.exe = str8_from_cstr(argv[0]);
@@ -99,16 +114,6 @@ i32 main(i32 argc, char **argv) {
     cli.args[i - 1] = str8_from_cstr(argv[i]);
   }
 
-  struct timespec tms;
-  struct tm lt = {0};
-
-  (void)clock_gettime(CLOCK_REALTIME, &tms);
-  (void)localtime_r(&tms.tv_sec, &lt);
-  unx_state.unix_utc_offset = (u64)lt.tm_gmtoff;
-
-#if OS_GUI
-  unx_gfx_init();
-#endif
-
   start(&cli);
 }
+#endif

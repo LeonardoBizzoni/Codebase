@@ -1374,7 +1374,7 @@ fn SYSTEMTIME w32_system_time_from_time64(time64 in) {
   return res;
 }
 
-fn void w32_setup(void) {
+fn void os_env_setup(void) {
   SYSTEM_INFO sys_info = {0};
   GetSystemInfo(&sys_info);
 

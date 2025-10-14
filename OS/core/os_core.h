@@ -213,6 +213,7 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
 
 // =============================================================================
 // Main entry point
+fn void os_env_setup(void);
 fn void start(CmdLine *cmdln);
 
 // =============================================================================

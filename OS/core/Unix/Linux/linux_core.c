@@ -129,7 +129,7 @@ fn void lnx_signal_wait(i32 signal) {
 }
 
 // =============================================================================
-i32 main(i32 argc, char **argv) {
+fn void os_env_setup(void) {
   srand((u32)time(0));
   unx_state.info.core_count = (u8)get_nprocs();
   unx_state.info.page_size = getpagesize();
@@ -138,14 +138,6 @@ i32 main(i32 argc, char **argv) {
   unx_state.arena = arena_build();
   pthread_mutex_init(&unx_state.primitive_lock, 0);
   lnx_parseMeminfo();
-
-  CmdLine cli = {0};
-  cli.count = argc - 1;
-  cli.exe = str8_from_cstr(argv[0]);
-  cli.args = arena_push_many(unx_state.arena, String8, argc - 1);
-  for (isize i = 1; i < argc; ++i) {
-    cli.args[i - 1] = str8_from_cstr(argv[i]);
-  }
 
   struct timespec tms;
   struct tm lt = {0};
@@ -159,6 +151,20 @@ i32 main(i32 argc, char **argv) {
 #if OS_SOUND
   lnx_snd_init();
 #endif
+}
+
+#ifndef CBUILD_H
+i32 main(i32 argc, char **argv) {
+  os_env_setup();
+
+  CmdLine cli = {0};
+  cli.count = argc - 1;
+  cli.exe = str8_from_cstr(argv[0]);
+  cli.args = arena_push_many(unx_state.arena, String8, argc - 1);
+  for (isize i = 1; i < argc; ++i) {
+    cli.args[i - 1] = str8_from_cstr(argv[i]);
+  }
 
   start(&cli);
 }
+#endif
