@@ -11,14 +11,6 @@ typedef struct X11_Window {
   Window xwindow;
   GC xgc;
 
-  struct {
-    OS_Event *first;
-    OS_Event *last;
-    OS_Handle lock;
-  } eventlist;
-  OS_Handle eventlistener;
-  GFX_Handle gfx_context;
-
   struct X11_Window *next;
   struct X11_Window *prev;
 } X11_Window;
@@ -37,10 +29,9 @@ typedef struct {
   u64 xatom_close;
 } X11_State;
 
-fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event,
-                                     XPointer arg);
-fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent);
-
 fn void unx_gfx_init(void);
+fn void unx_gfx_deinit(void);
+
+internal X11_Window* lnx_window_from_xwindow(Window xwindow);
 
 #endif

@@ -3,8 +3,6 @@
 
 #define MAX_SUPPORTED_GAMEPAD 4
 
-typedef OS_Handle GFX_Handle;
-
 typedef u32 OS_EventType;
 enum {
   OS_EventType_None,
@@ -37,8 +35,12 @@ enum {
   OS_PtrButton_Task,
 };
 
-typedef struct {
+typedef struct OS_Event {
+  struct OS_Event *next;
+  struct OS_Event *last;
+
   OS_EventType type;
+  OS_Handle window;
 
   union {
     struct {
@@ -61,6 +63,14 @@ typedef struct {
     Vec2f32 pointer;
   };
 } OS_Event;
+
+typedef struct OS_EventList {
+  struct OS_Event *first;
+  struct OS_Event *last;
+
+  OS_Event event;
+  isize count;
+} OS_EventList;
 
 typedef struct {
   i32 half_transitions; // from pressed to release or viceversa discarding the transition back
@@ -105,13 +115,14 @@ typedef struct {
   OS_Gamepad gamepad[MAX_SUPPORTED_GAMEPAD];
 } OS_InputDeviceState;
 
+fn void update(i32 width, i32 height);
+
 fn OS_Handle os_window_open(String8 name, i32 width, i32 height);
 fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
 fn void os_window_close(OS_Handle window);
 
-fn OS_Event os_window_get_event(OS_Handle window);
-fn OS_Event os_window_wait_event(OS_Handle window);
+fn OS_EventList os_get_events(Arena *arena, bool wait);
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
 

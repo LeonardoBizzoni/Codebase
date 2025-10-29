@@ -1,10 +1,8 @@
 #ifndef OS_CORE_WIN32_H
 #define OS_CORE_WIN32_H
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <aclapi.h>
-#include <ws2def.h>
 #include <ws2tcpip.h>
 
 #define CONDITION_VARIABLE_LOCKMODE_EXCLUSIVE 0

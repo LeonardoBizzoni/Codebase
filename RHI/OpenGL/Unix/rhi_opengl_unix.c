@@ -1,10 +1,10 @@
-global X11Gl_State x11gl_state = {0};
+global LNX_GL_State lnx_gl_state = {0};
 
 fn void rhi_init(void) {
-  x11gl_state.arena = arena_build();
-  x11gl_state.egl_display = eglGetDisplay((EGLNativeDisplayType)x11_state.xdisplay);
-  Assert(x11gl_state.egl_display != EGL_NO_DISPLAY);
-  EGLBoolean init_result = eglInitialize(x11gl_state.egl_display, 0, 0);
+  lnx_gl_state.arena = arena_build();
+  lnx_gl_state.egl_display = eglGetDisplay((EGLNativeDisplayType)x11_state.xdisplay);
+  Assert(lnx_gl_state.egl_display != EGL_NO_DISPLAY);
+  EGLBoolean init_result = eglInitialize(lnx_gl_state.egl_display, 0, 0);
   Assert(init_result == EGL_TRUE);
 
   i32 num_config;
@@ -17,81 +17,81 @@ fn void rhi_init(void) {
     EGL_DEPTH_SIZE, 24,
     EGL_NONE
   };
-  EGLBoolean choose_config_result = eglChooseConfig(x11gl_state.egl_display, attr,
-                                                    &x11gl_state.egl_config, 1,
-                                                    &num_config);
+  EGLBoolean choose_config_result =
+    eglChooseConfig(lnx_gl_state.egl_display, attr,
+                    &lnx_gl_state.egl_config, 1, &num_config);
   Assert(choose_config_result == EGL_TRUE && num_config == 1);
 
   EGLint visual_id;
-  eglGetConfigAttrib(x11gl_state.egl_display, x11gl_state.egl_config,
+  eglGetConfigAttrib(lnx_gl_state.egl_display, lnx_gl_state.egl_config,
                      EGL_NATIVE_VISUAL_ID, &visual_id);
 
   XVisualInfo visual_template;
   visual_template.visualid = (VisualID)visual_id;
   i32 visual_num;
-  XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay,
-                                        VisualIDMask, &visual_template, &visual_num);
+  XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualIDMask,
+                                        &visual_template, &visual_num);
   Assert(visuals && visual_num > 0);
   x11_state.xvisual = *visuals;
   XFree(visuals);
 
   local EGLint ctx_attr[] = {
-    EGL_CONTEXT_CLIENT_VERSION, 2,
+    EGL_CONTEXT_MAJOR_VERSION, 3,
+    EGL_CONTEXT_MINOR_VERSION, 3,
+    EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
     EGL_NONE
   };
-  eglBindAPI(EGL_OPENGL_ES_API);
-  x11gl_state.egl_context = eglCreateContext(x11gl_state.egl_display,
-                                             x11gl_state.egl_config,
+  eglBindAPI(EGL_OPENGL_API);
+  lnx_gl_state.egl_context = eglCreateContext(lnx_gl_state.egl_display,
+                                             lnx_gl_state.egl_config,
                                              EGL_NO_CONTEXT, ctx_attr);
-  Assert(x11gl_state.egl_context != EGL_NO_CONTEXT);
+  Assert(lnx_gl_state.egl_context != EGL_NO_CONTEXT);
+}
+
+fn void rhi_deinit(void) {
+  eglDestroyContext(lnx_gl_state.egl_display, lnx_gl_state.egl_context);
+  eglTerminate(lnx_gl_state.egl_display);
 }
 
 // =============================================================================
 // API dependent code
-fn RHI_Handle rhi_gl_window_init(OS_Handle window_) {
-  X11_Window *os_window = (X11_Window*)window_.h[0];
+fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
+  X11_Window *os_window = (X11_Window*)window.h[0];
 
-  X11Gl_Window *rhi_window = x11gl_state.freequeue_first;
-  if (rhi_window) {
-    memzero(rhi_window, sizeof (*rhi_window));
-    QueuePop(x11gl_state.freequeue_first);
+  LNX_GL_Context *ctx = lnx_gl_state.ctx_freequeue.first;
+  if (ctx) {
+    QueuePop(lnx_gl_state.ctx_freequeue.first);
+    memzero(ctx, sizeof (*ctx));
   } else {
-    rhi_window = arena_push(x11gl_state.arena, X11Gl_Window);
+    ctx = arena_push(lnx_gl_state.arena, LNX_GL_Context);
   }
-  Assert(rhi_window);
+  Assert(ctx);
 
-  rhi_window->os_window = os_window;
-  rhi_window->egl_surface = eglCreateWindowSurface(x11gl_state.egl_display,
-                                                   x11gl_state.egl_config,
+  ctx->os_window = os_window;
+  ctx->egl_surface = eglCreateWindowSurface(lnx_gl_state.egl_display,
+                                                   lnx_gl_state.egl_config,
                                                    os_window->xwindow, 0);
-  Assert(rhi_window->egl_surface != EGL_NO_SURFACE);
+  Assert(ctx->egl_surface != EGL_NO_SURFACE);
+  eglMakeCurrent(lnx_gl_state.egl_display, ctx->egl_surface,
+                 ctx->egl_surface, lnx_gl_state.egl_context);
+  rhi_opengl_vao_setup();
 
-  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
-                 rhi_window->egl_surface, x11gl_state.egl_context);
-
-  RHI_Handle res = {{(u64)rhi_window}};
+  RHI_Handle res = {{(u64)ctx}};
   return res;
 }
 
-fn void rhi_gl_window_deinit(RHI_Handle handle) {
-  Unused(handle);
+fn void rhi_opengl_context_destroy(RHI_Handle handle) {
+  LNX_GL_Context *ctx = (LNX_GL_Context *)handle.h[0];
+  eglDestroySurface(lnx_gl_state.egl_display, ctx->egl_surface);
 }
 
-fn void rhi_gl_window_make_current(RHI_Handle handle) {
-  X11Gl_Window *rhi_window = (X11Gl_Window *)handle.h[0];
-  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
-                 rhi_window->egl_surface, x11gl_state.egl_context);
+fn void rhi_opengl_context_set_active(RHI_Handle handle) {
+  LNX_GL_Context *ctx = (LNX_GL_Context *)handle.h[0];
+  eglMakeCurrent(lnx_gl_state.egl_display, ctx->egl_surface,
+                 ctx->egl_surface, lnx_gl_state.egl_context);
 }
 
-fn void rhi_gl_window_commit(RHI_Handle handle) {
-  X11Gl_Window *rhi_window = (X11Gl_Window *)handle.h[0];
-  eglMakeCurrent(x11gl_state.egl_display, rhi_window->egl_surface,
-                 rhi_window->egl_surface, x11gl_state.egl_context);
-  eglSwapBuffers(x11gl_state.egl_display, rhi_window->egl_surface);
-}
-
-internal void rhi_gl_window_resize(RHI_Handle context, u32 width, u32 height) {
-  Unused(context);
-  Unused(width);
-  Unused(height);
+fn void rhi_opengl_context_commit(RHI_Handle handle) {
+  LNX_GL_Context *ctx = (LNX_GL_Context *)handle.h[0];
+  eglSwapBuffers(lnx_gl_state.egl_display, ctx->egl_surface);
 }

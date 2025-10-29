@@ -12,5 +12,6 @@ enum {
 };
 
 fn void rhi_init(void);
+fn void rhi_deinit(void);
 
 #endif

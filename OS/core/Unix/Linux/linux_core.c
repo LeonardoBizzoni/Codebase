@@ -169,5 +169,7 @@ i32 main(i32 argc, char **argv) {
   }
 
   start(&cli);
+  rhi_deinit();
+  unx_gfx_deinit();
 }
 #endif

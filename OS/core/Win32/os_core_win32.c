@@ -1,3 +1,5 @@
+#pragma comment(lib, "ws2_32.lib")
+
 global W32_State w32_state = {};
 
 fn OS_SystemInfo* os_sysinfo(void) {
@@ -459,7 +461,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
   W32_Primitive *prim = w32_primitive_alloc(W32_Primitive_Semaphore);
 
   Scratch scratch = ScratchBegin(0, 0);
-  StringStream ss = {0};
+  StringBuilder ss = {0};
   switch (kind) {
   case OS_SemaphoreKind_Thread: {
     if (name.size == 0) { goto skip_semname; }
@@ -519,7 +521,7 @@ fn SharedMem os_sharedmem_open(String8 name, isize size,
   if (flags & OS_acfAppend)  { access_flags |= FILE_APPEND_DATA; }
 
   Scratch scratch = ScratchBegin(0, 0);
-  StringStream ss = {0};
+  StringBuilder ss = {0};
   strstream_append_str(scratch.arena, &ss, Strlit("Global\\\\"));
   strstream_append_str(scratch.arena, &ss, name);
   res.path = str8_from_stream(scratch.arena, ss);
@@ -1207,7 +1209,7 @@ fn bool os_fs_rmdir(String8 path) {
 fn String8 os_fs_filename_from_path(Arena *arena, String8 path) {
   String8 res = {};
   Scratch scratch = ScratchBegin(0, 0);
-  StringStream ss = str8_split(scratch.arena, path, '/');
+  StringBuilder ss = str8_split(scratch.arena, path, '/');
 
   usize last_dot = 0;
   for (usize i = 0; i < ss.last->value.size; ++i) {
@@ -1224,7 +1226,7 @@ fn String8 os_fs_filename_from_path(Arena *arena, String8 path) {
 //- km: File iterator
 fn OS_FileIter* os_fs_iter_begin(Arena *arena, String8 path) {
   Scratch scratch = ScratchBegin(&arena, 1);
-  StringStream list = {0};
+  StringBuilder list = {0};
 
   strstream_append_str(scratch.arena, &list, path);
   strstream_append_str(scratch.arena, &list, Strlit("\\*"));
@@ -1392,6 +1394,7 @@ fn void os_env_setup(void) {
   WSAStartup(MAKEWORD(2, 2), &wsa_data);
 }
 
+#ifndef CBUILD_H
 fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
   Arena *args_arena = arena_build();
   CmdLine *cmdln = arena_push(args_arena, CmdLine);
@@ -1407,18 +1410,17 @@ fn void w32_call_entrypoint(int argc, WCHAR **wargv) {
   DeleteCriticalSection(&w32_state.mutex);
 }
 
-#if !NO_MAIN
 #  if OS_GUI
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance,
                     PWSTR cmdln, int cmd_show) {
-  w32_setup();
+  os_env_setup();
   w32_gfx_init(instance);
   w32_call_entrypoint(__argc, (WCHAR **)__argv);
   return 0;
 }
 #  else
 int wmain(int argc, WCHAR **argv) {
-  w32_setup();
+  os_env_setup();
   w32_call_entrypoint(argc, argv);
   return 0;
 }

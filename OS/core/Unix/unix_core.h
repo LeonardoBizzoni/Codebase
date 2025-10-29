@@ -28,12 +28,12 @@
 #  include <pulse/pulseaudio.h>
 #endif
 
-#if NDEBUG
-#  define dbg_println(fmt, ...)
-#  define dbg_print(fmt, ...)
-#else
+#if DEBUG
 #  define dbg_println(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 #  define dbg_print(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#else
+#  define dbg_println(fmt, ...)
+#  define dbg_print(fmt, ...)
 #endif
 
 typedef u64 UNX_PrimitiveType;

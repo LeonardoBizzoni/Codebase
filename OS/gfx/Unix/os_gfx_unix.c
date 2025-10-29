@@ -61,32 +61,6 @@ fn void os_window_close(OS_Handle window_) {
 
   DLLDelete(x11_state.first_window, x11_state.last_window, window);
   StackPush(x11_state.freelist_window, window);
-  if (!x11_state.first_window) {
-    XAutoRepeatOn(x11_state.xdisplay);
-    XCloseDisplay(x11_state.xdisplay);
-  }
-}
-
-fn OS_Event os_window_get_event(OS_Handle window_) {
-  X11_Window *window = (X11_Window*)window_.h[0];
-  OS_Event res = {0};
-
-  XEvent xevent;
-  if (XCheckIfEvent(x11_state.xdisplay, &xevent,
-                    x11_window_event_for_xwindow, (XPointer)&window->xwindow)) {
-    res = x11_handle_xevent(window, &xevent);
-  }
-
-  return res;
-}
-
-fn OS_Event os_window_wait_event(OS_Handle window_) {
-  X11_Window *window = (X11_Window*)window_.h[0];
-
-  XEvent xevent;
-  XIfEvent(x11_state.xdisplay, &xevent,
-           x11_window_event_for_xwindow, (XPointer)&window->xwindow);
-  return x11_handle_xevent(window, &xevent);
 }
 
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
@@ -94,6 +68,57 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   String8 res = {0};
   res.str = (u8*)XKeysymToString(event.key.keycode);
   if (res.str) { res.size = str8_len((char*)res.str); }
+  return res;
+}
+
+fn OS_EventList os_get_events(Arena *arena, bool wait) {
+  i32 repeated_expose_events = 0;
+
+  OS_EventList res = {0};
+  for (; XPending(x11_state.xdisplay) || (wait && res.count == 0); ) {
+    XEvent xevent = {0};
+    XNextEvent(x11_state.xdisplay, &xevent);
+    X11_Window *target_window = lnx_window_from_xwindow(xevent.xany.window);
+    if (!target_window) { continue; }
+
+    OS_Event *event = arena_push(arena, OS_Event);
+    event->window.h[0] = (u64)target_window;
+
+    switch (xevent.type) {
+    case Expose: {
+      if (repeated_expose_events) {
+        repeated_expose_events -= 1;
+      } else {
+        XWindowAttributes gwa;
+        XGetWindowAttributes(x11_state.xdisplay, xevent.xany.window, &gwa);
+        event->type = OS_EventType_Expose;
+        event->expose.width = gwa.width;
+        Assert(event->expose.width != 0);
+        event->expose.height = gwa.height;
+        Assert(event->expose.height != 0);
+        repeated_expose_events = xevent.xexpose.count;
+      }
+    } break;
+    case KeyRelease:
+    case KeyPress: {
+      XKeyEvent *xkey = &xevent.xkey;
+      event->type = xevent.type == KeyPress
+                    ? OS_EventType_KeyDown : OS_EventType_KeyUp;
+      event->key.scancode = xkey->keycode;
+      event->key.keycode =
+        (u32)XkbKeycodeToKeysym(x11_state.xdisplay, (KeyCode)xkey->keycode, 0,
+                                xkey->state & ShiftMask ? 1 : 0);
+    } break;
+    case ClientMessage: {
+      if ((Atom)xevent.xclient.data.l[0] == x11_state.xatom_close) {
+        event->type = OS_EventType_Kill;
+      }
+    } break;
+    }
+
+    QueuePush(res.first, res.last, event);
+  }
+
   return res;
 }
 
@@ -114,45 +139,18 @@ fn void unx_gfx_init(void) {
   Assert(visuals && visuals_count > 0);
   x11_state.xvisual = *visuals;
   XFree(visuals);
+
   rhi_init();
 }
 
-fn Bool x11_window_event_for_xwindow(Display *_display, XEvent *event,
-                                     XPointer arg) {
-  Unused(_display);
-  return event->xany.window == *(Window*)arg;
+fn void unx_gfx_deinit(void) {
+  XAutoRepeatOn(x11_state.xdisplay);
+  XCloseDisplay(x11_state.xdisplay);
 }
 
-fn OS_Event x11_handle_xevent(X11_Window *window, XEvent *xevent) {
-  OS_Event res = {0};
-  local i32 repeated_expose_events = 0;
-  switch (xevent->type) {
-  case Expose: {
-    if (repeated_expose_events) {
-      repeated_expose_events -= 1;
-      return res;
-    }
-    XWindowAttributes gwa;
-    XGetWindowAttributes(x11_state.xdisplay, window->xwindow, &gwa);
-    res.type = OS_EventType_Expose;
-    Assert((res.expose.width = gwa.width) != 0);
-    Assert((res.expose.height = gwa.height) != 0);
-    repeated_expose_events = xevent->xexpose.count;
-  } break;
-  case KeyRelease:
-  case KeyPress: {
-    XKeyEvent *xkey = &xevent->xkey;
-    res.type = xevent->type == KeyPress ? OS_EventType_KeyDown
-                                        : OS_EventType_KeyUp;
-    res.key.scancode = xkey->keycode;
-    res.key.keycode = (u32)XkbKeycodeToKeysym(x11_state.xdisplay, (KeyCode)xkey->keycode, 0,
-                                              xkey->state & ShiftMask ? 1 : 0);
-  } break;
-  case ClientMessage: {
-    if ((Atom)xevent->xclient.data.l[0] == x11_state.xatom_close) {
-      res.type = OS_EventType_Kill;
-    }
-  } break;
+internal X11_Window* lnx_window_from_xwindow(Window xwindow) {
+  for (X11_Window *curr = x11_state.first_window; curr; curr = curr->next) {
+    if (curr->xwindow == xwindow) { return curr; }
   }
-  return res;
+  return 0;
 }
