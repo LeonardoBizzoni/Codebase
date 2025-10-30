@@ -3,6 +3,75 @@
 
 #include <vulkan/vulkan.h>
 
+typedef struct {
+  VkInstance instance;
+} RHI_Vulkan_State;
+
+typedef struct {
+  VkDevice virtual;
+  VkPhysicalDevice physical;
+  VkPhysicalDeviceMemoryProperties memory_properties;
+  union {
+    VkQueue values[3];
+    struct {
+      VkQueue graphics;
+      VkQueue present;
+      VkQueue transfer;
+    };
+  } queue;
+  union {
+    u32 values[3];
+    struct {
+      u32 present;
+      u32 graphics;
+      u32 transfer;
+    };
+  } queue_idx;
+} RHI_Vulkan_Device;
+
+typedef struct {
+  VkSurfaceKHR surface;
+  RHI_Vulkan_Device device;
+} RHI_Vulkan_Context;
+
+typedef struct {
+  union {
+    VkPipelineShaderStageCreateInfo values[2];
+    struct {
+      VkPipelineShaderStageCreateInfo vertex;
+      VkPipelineShaderStageCreateInfo pixel;
+    };
+  };
+  i32 count;
+} RHI_Vulkan_Shader;
+
+typedef struct {
+  VkBuffer handle;
+  VkDeviceMemory memory;
+} RHI_Vulkan_Buffer;
+
+typedef struct {
+  VkSwapchainKHR swapchain;
+  VkSurfaceFormatKHR surface_format;
+  VkPresentModeKHR present_mode;
+  VkExtent2D extent;
+  VkViewport viewport;
+  VkRect2D scissor;
+  VkImage *images;
+  VkImageView *image_views;
+  i32 image_count;
+} RHI_Vulkan_Swapchain;
+
+// Implemented per platform
+internal VkSurfaceKHR rhi_vulkan_surface_create(OS_Handle os_window);
+internal void rhi_vulkan_surface_destroy(VkSurfaceKHR surface);
+
+// Platform independent
+internal void rhi_vulkan_device_init(RHI_Vulkan_Context *context);
+
+internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device);
+
+#if 0
 #define rhi_vk_get_array(Arena, Func, BufferType, BufferName, LengthVar, ...) \
 do {                                                                          \
   Func(__VA_ARGS__);                                                          \
@@ -95,14 +164,6 @@ typedef struct {
   VkDeviceMemory memory;
 } RHI_VK_MemoryPool;
 
-typedef struct {
-  Arena *arena;
-  VkInstance instance;
-} RHI_VK_State;
-
-fn VkSurfaceKHR rhi_vk_surface_create(OS_Handle os_window);
-fn void rhi_vk_surface_destroy(VkSurfaceKHR surface);
-
 fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface);
 
 fn RHI_VK_Swapchain
@@ -186,5 +247,6 @@ _rhi_vk_fence_reset(RHI_VK_Device device, VkFence *fences, u32 count);
 
 internal void
 rhi_vk_device_properties_print(VkPhysicalDeviceProperties *props);
+#endif
 
 #endif

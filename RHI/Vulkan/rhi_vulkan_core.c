@@ -1,8 +1,148 @@
-global RHI_VK_State rhi_vk_state = {0};
+global RHI_Vulkan_State rhi_vulkan_state = {0};
 
-fn void rhi_init(void) {
-  rhi_vk_state.arena = arena_build();
+fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
+  RHI_Vulkan_Context *context = arena_push(arena, RHI_Vulkan_Context);
+  Assert(context);
 
+  context->surface = rhi_vulkan_surface_create(window);
+  rhi_vulkan_device_init(context);
+
+  RHI_Handle res = {{ (usize)context }};
+  return res;
+}
+
+fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
+                                   String8 vertex_shader_path,
+                                   String8 pixel_shader_path) {
+  RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
+  RHI_Vulkan_Shader *shader = arena_push(arena, RHI_Vulkan_Shader);
+  shader->count = 2;
+  shader->vertex.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shader->vertex.stage = VK_SHADER_STAGE_VERTEX_BIT;
+  shader->vertex.pName = "main";
+  shader->pixel.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shader->pixel.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shader->pixel.pName = "main";
+
+  OS_Handle vertex_file = os_fs_open(vertex_shader_path, OS_acfRead);
+  OS_Handle pixel_file = os_fs_open(pixel_shader_path, OS_acfRead);
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    String8 vertex_bytecode = os_fs_read(scratch.arena, vertex_file);
+    String8 pixel_bytecode = os_fs_read(scratch.arena, pixel_file);
+
+    VkShaderModuleCreateInfo create_shadermodule_info = {0};
+    create_shadermodule_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_shadermodule_info.codeSize = (usize)vertex_bytecode.size;
+    create_shadermodule_info.pCode = (const u32*)vertex_bytecode.str;
+    VkResult create_shadermodule_result = vkCreateShaderModule(context->device.virtual, &create_shadermodule_info, 0, &shader->vertex.module);
+    Assert(create_shadermodule_result == VK_SUCCESS);
+
+    create_shadermodule_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_shadermodule_info.codeSize = (usize)pixel_bytecode.size;
+    create_shadermodule_info.pCode = (const u32*)pixel_bytecode.str;
+    create_shadermodule_result = vkCreateShaderModule(context->device.virtual, &create_shadermodule_info, 0, &shader->pixel.module);
+    Assert(create_shadermodule_result == VK_SUCCESS);
+
+    ScratchEnd(scratch);
+  }
+  os_fs_close(vertex_file);
+  os_fs_close(pixel_file);
+
+  RHI_Handle res = {{ (usize)shader }};
+  return res;
+}
+
+fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
+                               i32 size, RHI_BufferType type) {
+  RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
+  RHI_Vulkan_Buffer *buffer = arena_push(arena, RHI_Vulkan_Buffer);
+  Assert(buffer);
+
+  VkBufferCreateInfo create_buffer_info = {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size = (u32)size,
+    .sharingMode = (context->device.queue_idx.transfer == context->device.queue_idx.graphics
+                    ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT),
+    .queueFamilyIndexCount = 2,
+    .pQueueFamilyIndices = (u32[]) {
+      context->device.queue_idx.transfer,
+      context->device.queue_idx.graphics
+    },
+  };
+
+  VkMemoryPropertyFlags memory_flags;
+  switch (type) {
+  case RHI_BufferType_Staging: {
+    create_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  } break;
+  case RHI_BufferType_Vertex: {
+    create_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  } break;
+  case RHI_BufferType_Index: {
+    create_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  } break;
+  }
+  VkResult create_buffer_result = vkCreateBuffer(context->device.virtual, &create_buffer_info, NULL, &buffer->handle);
+  Assert(create_buffer_result == VK_SUCCESS);
+
+  VkMemoryRequirements memory_requirements = {0};
+  vkGetBufferMemoryRequirements(context->device.virtual, buffer->handle, &memory_requirements);
+
+  VkMemoryAllocateInfo mem_alloc_info = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize = memory_requirements.size,
+    .memoryTypeIndex = U32_MAX,
+  };
+  for (u32 i = 0; i < context->device.memory_properties.memoryTypeCount; i++) {
+    if ((memory_requirements.memoryTypeBits & (1 << i)) &&
+        (context->device.memory_properties.memoryTypes[i].propertyFlags & memory_flags)) {
+      mem_alloc_info.memoryTypeIndex = i;
+      break;
+    }
+  }
+  Assert(mem_alloc_info.memoryTypeIndex != U32_MAX);
+  VkResult mem_alloc_result = vkAllocateMemory(context->device.virtual, &mem_alloc_info, NULL, &buffer->memory);
+  Assert(mem_alloc_result == VK_SUCCESS);
+  vkBindBufferMemory(context->device.virtual, buffer->handle, buffer->memory, 0);
+
+  RHI_Handle res = {{ (usize)buffer }};
+  return res;
+}
+
+fn void rhi_buffer_host_send(RHI_Handle hcontext, RHI_Handle hbuffer,
+                             const void *data, i32 size) {
+  RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
+  RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)hbuffer.h[0];
+
+  void *buffer_data = 0;
+  vkMapMemory(context->device.virtual, buffer->memory, 0, (u64)size, 0, &buffer_data);
+  Assert(buffer_data);
+  memcopy(buffer_data, data, size);
+  vkUnmapMemory(context->device.virtual, buffer->memory);
+}
+
+fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle target_buffer,
+                        RHI_Handle source_buffer, i32 size) {
+  Unused(hcontext);
+  Unused(target_buffer);
+  Unused(source_buffer);
+  Unused(size);
+}
+
+internal void _rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer,
+                                     RHI_BufferElement *layout, u32 layout_size) {
+  Unused(hcontext);
+  Unused(hbuffer);
+  Unused(layout);
+  Unused(layout_size);
+}
+
+
+internal void rhi_init(void) {
   VkApplicationInfo app_info = {
     .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
     .engineVersion = VK_MAKE_VERSION(1,0,0),
@@ -15,8 +155,8 @@ fn void rhi_init(void) {
     .enabledExtensionCount = Arrsize(rhi_vk_needed_extensions),
     .ppEnabledExtensionNames = rhi_vk_needed_extensions,
 #if DEBUG
-    .enabledLayerCount = Arrsize(rhi_vk_layers),
-    .ppEnabledLayerNames = rhi_vk_layers,
+    .enabledLayerCount = Arrsize(rhi_vulkan_layers_required),
+    .ppEnabledLayerNames = rhi_vulkan_layers_required,
 #else
     .enabledLayerCount = 0,
 #endif
@@ -31,10 +171,10 @@ fn void rhi_init(void) {
                                                           VkLayerProperties,
                                                           retrieved_layer_count);
     vkEnumerateInstanceLayerProperties(&retrieved_layer_count, retrieved_layers);
-    for (usize i = 0; i < Arrsize(rhi_vk_layers); ++i) {
+    for (usize i = 0; i < Arrsize(rhi_vulkan_layers_required); ++i) {
       bool layer_found = false;
       for (usize j = 0; j < retrieved_layer_count; ++j) {
-        if (cstr_eq(rhi_vk_layers[i], retrieved_layers[j].layerName)) {
+        if (cstr_eq(rhi_vulkan_layers_required[i], retrieved_layers[j].layerName)) {
           layer_found = true;
           break;
         }
@@ -45,227 +185,291 @@ fn void rhi_init(void) {
 #endif
   }
 
-  VkResult create_instance_result = vkCreateInstance(&create_instance_info,
-                                                     0, &rhi_vk_state.instance);
+  VkResult create_instance_result = vkCreateInstance(&create_instance_info, 0,
+                                                     &rhi_vulkan_state.instance);
   Assert(create_instance_result == VK_SUCCESS);
 }
 
-fn void rhi_deinit(void) {}
+internal void rhi_deinit(void) {}
 
-fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
-  RHI_VK_Device res = {0};
-
+internal void rhi_vulkan_device_init(RHI_Vulkan_Context *context) {
   local const char *device_extensions_required[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
+  Unused(device_extensions_required);
 
-  Scratch scratch_physical_device = ScratchBegin(0, 0);
-  u32 phydevices_len = 0;
-  VkPhysicalDevice *phydevices = 0;
-  rhi_vk_get_array(scratch_physical_device.arena,
-                   vkEnumeratePhysicalDevices, VkPhysicalDevice,
-                   phydevices, phydevices_len,
-                   rhi_vk_state.instance, &phydevices_len, phydevices);
-  Assert(phydevices && phydevices_len > 0);
-
-  struct PhysicalDeviceRating {
-    i32 rating;
-    VkPhysicalDevice *device;
-    struct PhysicalDeviceRating *next;
-    struct PhysicalDeviceRating *prev;
-  };
-  struct PhysicalDeviceRating *phydevices_orderedlist_buffer =
-    arena_push_many(scratch_physical_device.arena,
-                    struct PhysicalDeviceRating,
-                    phydevices_len);
-  struct PhysicalDeviceRating *phydevices_orderedlist_first = 0;
-  struct PhysicalDeviceRating *phydevices_orderedlist_last = 0;
-
-  // TODO(lb): test this on a system that has multiple GPUs where one is
-  //           clearly better then the other
-  for (u32 i = 0; i < phydevices_len; ++i) {
-    VkPhysicalDeviceProperties props = {0};
-    vkGetPhysicalDeviceProperties(phydevices[i], &props);
-    VkPhysicalDeviceFeatures features = {0};
-    vkGetPhysicalDeviceFeatures(phydevices[i], &features);
-
-#if DEBUG
-    rhi_vk_device_properties_print(&props);
-#endif
-
-    struct PhysicalDeviceRating *new_node = &phydevices_orderedlist_buffer[i];
-    new_node->device = &phydevices[i];
-    new_node->rating += props.limits.maxImageDimension2D;
-    new_node->rating += props.limits.maxComputeSharedMemorySize;
-    switch (props.deviceType) {
-    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: {
-      new_node->rating += 1000;
-    } break;
-    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: {
-      new_node->rating += 500;
-    } break;
-    default: break;
-    }
-
-    bool new_node_inserted = false;
-    for (struct PhysicalDeviceRating *curr = phydevices_orderedlist_first;
-         curr; curr = curr->next) {
-      if (curr->rating < new_node->rating) {
-        new_node_inserted = true;
-        new_node->prev = curr;
-        new_node->next = curr->next;
-        curr->next = new_node;
-        if (new_node->next) {
-          new_node->next->prev = new_node;
-        } else {
-          phydevices_orderedlist_last = new_node;
-        }
-        break;
-      }
-    }
-    if (!new_node_inserted) {
-      DLLPushBack(phydevices_orderedlist_first,
-                  phydevices_orderedlist_last, new_node);
-    }
-    i += 0;
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    u32 phydevices_count = 0;
+    vkEnumeratePhysicalDevices(rhi_vulkan_state.instance, &phydevices_count, NULL);
+    Assert(phydevices_count > 0);
+    VkPhysicalDevice *phydevices = arena_push_many(scratch.arena, VkPhysicalDevice, phydevices_count);
+    Assert(phydevices);
+    vkEnumeratePhysicalDevices(rhi_vulkan_state.instance, &phydevices_count, phydevices);
+    // TODO(lb): handle multiple GPUs
+    context->device.physical = phydevices[0];
+    ScratchEnd(scratch);
   }
 
-  bool device_optimal_found = false;
-  for (u32 i = 0; i < phydevices_len; ++i) {
-    VkPhysicalDevice *device = phydevices_orderedlist_first->device;
-    phydevices_orderedlist_first = phydevices_orderedlist_first->next;
+#if DEBUG
+  rhi_vulkan_device_print(&context->device);
+#endif
 
-    u32 device_extensions_detected_len = 0;
-    VkExtensionProperties *device_extensions_detected = 0;
-    rhi_vk_get_array(scratch_physical_device.arena,
-                     vkEnumerateDeviceExtensionProperties,
-                     VkExtensionProperties, device_extensions_detected,
-                     device_extensions_detected_len, *device, 0,
-                     &device_extensions_detected_len,
-                     device_extensions_detected);
-    Assert(device_extensions_detected && device_extensions_detected_len > 0);
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    u32 device_extensions_detected_count = 0;
+    vkEnumerateDeviceExtensionProperties(context->device.physical, NULL, &device_extensions_detected_count, NULL);
+    Assert(device_extensions_detected_count > 0);
+    VkExtensionProperties *device_extensions_found = arena_push_many(scratch.arena, VkExtensionProperties, device_extensions_detected_count);
+    Assert(device_extensions_found);
+    vkEnumerateDeviceExtensionProperties(context->device.physical, NULL, &device_extensions_detected_count, device_extensions_found);
+
     u32 device_extensions_found_count = 0;
     for (u32 i = 0; i < Arrsize(device_extensions_required); ++i) {
-      for (u32 j = 0; j < device_extensions_detected_len; ++j) {
-        if (cstr_eq(device_extensions_detected[j].extensionName,
-                    device_extensions_required[i])) {
+      for (u32 j = 0; j < device_extensions_detected_count; ++j) {
+        if (cstr_eq(device_extensions_found[j].extensionName, device_extensions_required[i])) {
           device_extensions_found_count += 1;
           break;
         }
       }
     }
-    if (device_extensions_found_count == Arrsize(device_extensions_required)) {
-      memcopy(&res.physical, device, sizeof (*device));
-      device_optimal_found = true;
-      break;
-    }
+    AssertAlways(device_extensions_found_count == Arrsize(device_extensions_required));
+    ScratchEnd(scratch);
   }
-  ScratchEnd(scratch_physical_device);
-  Assert(device_optimal_found);
 
-#if DEBUG
-  VkPhysicalDeviceProperties props = {0};
-  vkGetPhysicalDeviceProperties(res.physical, &props);
-  dbg_print("Optimal ");
-  rhi_vk_device_properties_print(&props);
-#endif
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    u32 queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(context->device.physical, &queue_family_count, NULL);
+    Assert(queue_family_count > 0);
+    VkQueueFamilyProperties *queue_families = arena_push_many(scratch.arena, VkQueueFamilyProperties, queue_family_count);
+    Assert(queue_families);
+    vkGetPhysicalDeviceQueueFamilyProperties(context->device.physical, &queue_family_count, queue_families);
 
-  struct Vk_UniqueQueueFamily_Node {
-    struct Vk_UniqueQueueFamily_Node *next;
-    u32 value;
-  };
-  struct Vk_UniqueQueueFamily_List {
-    struct Vk_UniqueQueueFamily_Node *first;
-    struct Vk_UniqueQueueFamily_Node *last;
-    u32 count;
-  };
+    u32 queue_families_idx[3] = {0};
+    u32 queue_families_candidate_count = 3;
+    for (u32 i = 0; i < queue_family_count; ++i) {
+      bool present = false, graphics = false, transfer = false;
+      VkBool32 support_present = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(context->device.physical, i, context->surface, &support_present);
+      if (support_present)                                      { present  = true; }
+      if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { graphics = true; }
+      if (queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) { transfer = true; }
 
-  Scratch scratch_queue_family = ScratchBegin(0, 0);
-  u32 queue_family_count = 0;
-  VkQueueFamilyProperties *queue_families = 0;
-  rhi_vk_get_array(scratch_queue_family.arena,
-                   vkGetPhysicalDeviceQueueFamilyProperties,
-                   VkQueueFamilyProperties, queue_families, queue_family_count,
-                   res.physical, &queue_family_count, queue_families);
-  Assert(queue_families && queue_family_count > 0);
-  memset(res.queue_idx.values, -1, 2 * sizeof(i32));
-  struct Vk_UniqueQueueFamily_List queue_family_list = {0};
-  for (u32 i = 0, queues_set = 0; i < queue_family_count; ++i, queues_set = 0) {
-    if (res.queue_idx.graphics == U32_MAX &&
-        queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      res.queue_idx.graphics = i;
-      queues_set += 1;
-    }
-    if (res.queue_idx.transfer == U32_MAX &&
-        queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
-      res.queue_idx.transfer = i;
-      queues_set += 1;
-    }
-    VkBool32 support_present = false;
-    vkGetPhysicalDeviceSurfaceSupportKHR(res.physical, i, vk_surface,
-                                         &support_present);
-    if (res.queue_idx.present == U32_MAX && support_present) {
-      res.queue_idx.present = i;
-      queues_set += 1;
-    }
-
-    if (!queues_set) { continue; }
-    bool unique = true;
-    for (struct Vk_UniqueQueueFamily_Node *curr = queue_family_list.first;
-         curr; curr = curr->next) {
-      if (curr->value == i) {
-        unique = false;
+      if (graphics && present && transfer) {
+        queue_families_candidate_count = 1;
+        context->device.queue_idx.present = context->device.queue_idx.graphics = context->device.queue_idx.transfer = queue_families_idx[0] = i;
+        break;
+      } else if (graphics && present) {
+        queue_families_candidate_count = 2;
+        context->device.queue_idx.present = context->device.queue_idx.graphics = queue_families_idx[0] = i;
+        for (u32 j = 0; j < queue_family_count; ++j) {
+          if (j == i) { continue; }
+          vkGetPhysicalDeviceSurfaceSupportKHR(context->device.physical, i, context->surface, &support_present);
+          if (support_present) {
+            context->device.queue_idx.transfer = queue_families_idx[1] = j;
+            break;
+          }
+        }
         break;
       }
     }
-    if (!unique) { continue; }
-    struct Vk_UniqueQueueFamily_Node *node =
-      arena_push(scratch_queue_family.arena,
-                 struct Vk_UniqueQueueFamily_Node);
-    node->value = i;
-    QueuePush(queue_family_list.first, queue_family_list.last, node);
-    queue_family_list.count += 1;
+    if (queue_families_candidate_count == 3) {
+      for (u32 i = 0; i < queue_family_count; ++i) {
+        VkBool32 support_present = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(context->device.physical, i, context->surface, &support_present);
+        if (support_present) {
+          context->device.queue_idx.present = queue_families_idx[0] = i;
+        } else if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+          context->device.queue_idx.graphics = queue_families_idx[1] = i;
+        } else if (queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+          context->device.queue_idx.transfer = queue_families_idx[2] = i;
+        }
+      }
+    }
+
+    f32 queue_idx_prio = 1.0f;
+    VkDeviceQueueCreateInfo *create_devqueue_info = arena_push_many(scratch.arena, VkDeviceQueueCreateInfo, queue_families_candidate_count);
+    for (u32 i = 0; i < queue_families_candidate_count; ++i) {
+      create_devqueue_info[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      create_devqueue_info[i].queueFamilyIndex = queue_families_idx[i];
+      create_devqueue_info[i].queueCount = 1;
+      create_devqueue_info[i].pQueuePriorities = &queue_idx_prio;
+    }
+
+    VkPhysicalDeviceFeatures devfeatures = {0};
+    VkDeviceCreateInfo create_device_info = {0};
+    create_device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_device_info.pQueueCreateInfos = create_devqueue_info;
+    create_device_info.queueCreateInfoCount = queue_families_candidate_count;
+    create_device_info.pEnabledFeatures = &devfeatures;
+    create_device_info.enabledLayerCount = Arrsize(rhi_vulkan_layers_required);
+    create_device_info.ppEnabledLayerNames = rhi_vulkan_layers_required;
+    create_device_info.enabledExtensionCount = Arrsize(device_extensions_required);
+    create_device_info.ppEnabledExtensionNames = device_extensions_required;
+    VkResult create_device_result = vkCreateDevice(context->device.physical, &create_device_info, NULL, &context->device.virtual);
+    Assert(create_device_result == VK_SUCCESS);
+
+    ScratchEnd(scratch);
   }
 
-  f32 graphics_queue_idx_prio = 1.0f;
-  VkDeviceQueueCreateInfo *create_devqueue_info =
-    arena_push_many(scratch_queue_family.arena,
-                    VkDeviceQueueCreateInfo,
-                    queue_family_list.count);
-  for (u32 i = 0; i < queue_family_list.count; ++i) {
-    struct Vk_UniqueQueueFamily_Node *node = queue_family_list.first;
-    QueuePop(queue_family_list.first);
-    create_devqueue_info[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    create_devqueue_info[i].queueFamilyIndex = node->value;
-    create_devqueue_info[i].queueCount = 1;
-    create_devqueue_info[i].pQueuePriorities = &graphics_queue_idx_prio;
+  vkGetPhysicalDeviceMemoryProperties(context->device.physical, &context->device.memory_properties);
+  vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.graphics, 0, &context->device.queue.graphics);
+  vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.present,  0, &context->device.queue.present);
+  vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.transfer, 0, &context->device.queue.transfer);
+}
+
+internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device) {
+  VkPhysicalDeviceProperties props = {0};
+  vkGetPhysicalDeviceProperties(device->physical, &props);
+  VkPhysicalDeviceFeatures features = {0};
+  vkGetPhysicalDeviceFeatures(device->physical, &features);
+
+  char *device_type_string = 0;
+  switch (props.deviceType) {
+  case VK_PHYSICAL_DEVICE_TYPE_OTHER: {
+    device_type_string = "Other";
+  } break;
+  case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: {
+    device_type_string = "Integrated GPU";
+  } break;
+  case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: {
+    device_type_string = "Discrete GPU";
+  } break;
+  case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: {
+    device_type_string = "Virtual GPU";
+  } break;
+  case VK_PHYSICAL_DEVICE_TYPE_CPU: {
+    device_type_string = "CPU";
+  } break;
+  default: Assert(false && "invalid vulkan device type");
   }
+  u32 vk_major = VK_VERSION_MAJOR(props.apiVersion);
+  u32 vk_minor = VK_VERSION_MINOR(props.apiVersion);
+  u32 vk_patch = VK_VERSION_PATCH(props.apiVersion);
+  u32 driver_major = VK_VERSION_MAJOR(props.driverVersion);
+  u32 driver_minor = VK_VERSION_MINOR(props.driverVersion);
+  u32 driver_patch = VK_VERSION_PATCH(props.driverVersion);
+  dbg_println("Device Name:     \t%s", props.deviceName);
+  dbg_println("  Type:          \t%s", device_type_string);
+  dbg_println("  Vendor ID:     \t%d", props.vendorID);
+  dbg_println("  Device ID:     \t%d", props.deviceID);
+  dbg_println("  API Version:   \tv%d.%d.%d", vk_major, vk_minor, vk_patch);
+  dbg_println("  Driver Version:\tv%d.%d.%d\n", driver_major, driver_minor,
+              driver_patch);
+}
 
-  VkPhysicalDeviceFeatures devfeatures = {0};
-  VkDeviceCreateInfo create_device_info = {0};
-  create_device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  create_device_info.pQueueCreateInfos = create_devqueue_info;
-  create_device_info.queueCreateInfoCount = queue_family_list.count;
-  create_device_info.pEnabledFeatures = &devfeatures;
-  create_device_info.enabledLayerCount = Arrsize(rhi_vk_layers);
-  create_device_info.ppEnabledLayerNames = rhi_vk_layers;
-  create_device_info.enabledExtensionCount =
-    Arrsize(device_extensions_required);
-  create_device_info.ppEnabledExtensionNames = device_extensions_required;
-  VkResult create_device_result = vkCreateDevice(res.physical,
-                                                 &create_device_info, 0,
-                                                 &res.virtual);
-  ScratchEnd(scratch_queue_family);
-  Assert(create_device_result == VK_SUCCESS);
+#if 0
+internal void
+rhi_vk_buffer_copy(RHI_VK_Device device, RHI_VK_Buffer dest, RHI_VK_Buffer src,
+                   VkCommandPool cmdpool, VkBufferCopy *buffer_copy_regions,
+                   u32 buffer_copy_region_count) {
+  Assert(dest.memory_requirements.size >= src.memory_requirements.size);
+  VkCommandBufferAllocateInfo alloc_cmdbuffer_info = {0};
+  alloc_cmdbuffer_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  alloc_cmdbuffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  alloc_cmdbuffer_info.commandPool = cmdpool;
+  alloc_cmdbuffer_info.commandBufferCount = 1;
 
-  vkGetPhysicalDeviceMemoryProperties(res.physical, &res.memory_properties);
-  vkGetDeviceQueue(res.virtual, res.queue_idx.graphics, 0, &res.queue.graphics);
-  vkGetDeviceQueue(res.virtual, res.queue_idx.present, 0, &res.queue.present);
-  vkGetDeviceQueue(res.virtual, res.queue_idx.transfer, 0, &res.queue.transfer);
+  VkCommandBuffer cmdbuff = {0};
+  vkAllocateCommandBuffers(device.virtual, &alloc_cmdbuffer_info, &cmdbuff);
+
+  VkCommandBufferBeginInfo cmdbuff_begin = {0};
+  cmdbuff_begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  cmdbuff_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  vkBeginCommandBuffer(cmdbuff, &cmdbuff_begin);
+
+  if (buffer_copy_regions) {
+    vkCmdCopyBuffer(cmdbuff, src.vkbuffer, dest.vkbuffer,
+                    buffer_copy_region_count, buffer_copy_regions);
+  } else {
+    VkBufferCopy buffer_copy_region = {0};
+    buffer_copy_region.size = src.memory_requirements.size;
+    buffer_copy_region.srcOffset = 0;
+    buffer_copy_region.dstOffset = 0;
+    vkCmdCopyBuffer(cmdbuff, src.vkbuffer, dest.vkbuffer,
+                    1, &buffer_copy_region);
+  }
+  vkEndCommandBuffer(cmdbuff);
+
+  VkSubmitInfo submit_info = {0};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &cmdbuff;
+  vkQueueSubmit(device.queue.transfer, 1, &submit_info, VK_NULL_HANDLE);
+  vkQueueWaitIdle(device.queue.transfer);
+  vkFreeCommandBuffers(device.virtual, cmdpool, 1, &cmdbuff);
+}
+
+internal RHI_VK_Buffer
+rhi_vk_memorypool_push(RHI_VK_Device device, RHI_VK_MemoryPool *pool, u32 size) {
+  size = (u32)align_forward(size, (isize)pool->buffer.memory_requirements.alignment);
+  RHI_VK_Buffer res = rhi_vk_buffer_create(device, size, pool->usage);
+  vkBindBufferMemory(device.virtual, res.vkbuffer, pool->memory, pool->offset);
+  res.memorypool_position = pool->offset;
+  pool->offset += res.memory_requirements.size;
   return res;
 }
 
-fn RHI_VK_Swapchain
+internal RHI_VK_MemoryPool
+rhi_vk_memorypool_build(RHI_VK_Device device, u32 size,
+                        VkBufferUsageFlags usage,
+                        VkMemoryPropertyFlags wanted_properties) {
+  RHI_VK_MemoryPool res = {0};
+  res.usage = usage;
+  res.buffer = rhi_vk_buffer_create(device, size, usage);
+  res.memory = rhi_vk_alloc(device, res.buffer.memory_requirements,
+                            wanted_properties);
+  vkBindBufferMemory(device.virtual, res.buffer.vkbuffer, res.memory, 0);
+  return res;
+}
+
+internal VkDeviceMemory
+rhi_vk_alloc(RHI_VK_Device device, VkMemoryRequirements memory_requirements,
+             VkMemoryPropertyFlags wanted_properties) {
+  VkDeviceMemory res = {0};
+  VkMemoryAllocateInfo mem_alloc_info = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize = memory_requirements.size,
+    .memoryTypeIndex = U32_MAX,
+  };
+  for (u32 i = 0; i < device.memory_properties.memoryTypeCount; i++) {
+    if ((memory_requirements.memoryTypeBits & (1 << i)) &&
+        (device.memory_properties.memoryTypes[i].propertyFlags &
+         wanted_properties)) {
+      mem_alloc_info.memoryTypeIndex = i;
+      break;
+    }
+  }
+
+  Assert(mem_alloc_info.memoryTypeIndex != (u32)-1);
+  rhi_vk_create(vkAllocateMemory, device.virtual, &mem_alloc_info, 0, &res);
+  return res;
+}
+
+internal RHI_VK_Buffer
+rhi_vk_buffer_create(RHI_VK_Device device, u32 size, VkBufferUsageFlags usage) {
+  RHI_VK_Buffer res = {0};
+  res.memorypool_position = U32_MAX;
+  VkBufferCreateInfo create_buffer_info = {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size = size,
+    .usage = usage,
+    .sharingMode = (device.queue_idx.transfer == device.queue_idx.graphics
+                    ? VK_SHARING_MODE_EXCLUSIVE
+                    : VK_SHARING_MODE_CONCURRENT),
+    .queueFamilyIndexCount = 2,
+    .pQueueFamilyIndices = (u32[]) { device.queue_idx.transfer,
+                                     device.queue_idx.graphics },
+  };
+  rhi_vk_create(vkCreateBuffer, device.virtual, &create_buffer_info, 0,
+                &res.vkbuffer);
+  vkGetBufferMemoryRequirements(device.virtual, res.vkbuffer,
+                                &res.memory_requirements);
+  return res;
+}
+
+internal RHI_VK_Swapchain
 rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
                         VkSurfaceKHR surface, i32 width, i32 height) {
   RHI_VK_Swapchain res = {0};
@@ -400,7 +604,7 @@ rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
   return res;
 }
 
-fn void
+internal void
 rhi_vk_swapchain_destroy(RHI_VK_Device *rhi_device,
                          RHI_VK_Swapchain *rhi_swapchain) {
   vkDeviceWaitIdle(rhi_device->virtual);
@@ -410,7 +614,7 @@ rhi_vk_swapchain_destroy(RHI_VK_Device *rhi_device,
   vkDestroySwapchainKHR(rhi_device->virtual, rhi_swapchain->swapchain, 0);
 }
 
-fn VkFramebuffer*
+internal VkFramebuffer*
 rhi_vk_framebuffers_create(Arena *arena, RHI_VK_Device *rhi_device,
                            RHI_VK_Swapchain *rhi_swapchain,
                            VkRenderPass renderpass) {
@@ -435,7 +639,7 @@ rhi_vk_framebuffers_create(Arena *arena, RHI_VK_Device *rhi_device,
   return framebuffers;
 }
 
-fn void
+internal void
 rhi_vk_framebuffers_destroy(RHI_VK_Device *rhi_device,
                             RHI_VK_Swapchain *rhi_swapchain,
                             VkFramebuffer *framebuffers) {
@@ -445,7 +649,7 @@ rhi_vk_framebuffers_destroy(RHI_VK_Device *rhi_device,
   }
 }
 
-fn VkDescriptorSet*
+internal VkDescriptorSet*
 rhi_vk_descriptorset_create(Arena *arena, RHI_VK_Device device,
                             VkDescriptorPool descriptor_pool,
                             i32 descriptor_count,
@@ -490,7 +694,7 @@ _rhi_vk_descriptorset_layout_create(RHI_VK_Device device,
   return res;
 }
 
-fn VkSemaphore*
+internal VkSemaphore*
 rhi_vk_semaphore_create(Arena *arena, RHI_VK_Device device, i32 count,
                         VkSemaphoreCreateFlags flags) {
   Assert(count > 0);
@@ -506,7 +710,7 @@ rhi_vk_semaphore_create(Arena *arena, RHI_VK_Device device, i32 count,
   return res;
 }
 
-fn VkFence*
+internal VkFence*
 rhi_vk_fence_create(Arena *arena, RHI_VK_Device device, i32 count,
                     VkFenceCreateFlags flags) {
   Assert(count > 0);
@@ -522,101 +726,12 @@ rhi_vk_fence_create(Arena *arena, RHI_VK_Device device, i32 count,
   return res;
 }
 
-fn RHI_VK_Buffer
-rhi_vk_buffer_create(RHI_VK_Device device, u32 size,
-                     VkBufferUsageFlags usage) {
-  RHI_VK_Buffer res = {0};
-  res.memorypool_position = U32_MAX;
-  VkBufferCreateInfo create_buffer_info = {
-    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .size = size,
-    .usage = usage,
-    .sharingMode = (device.queue_idx.transfer == device.queue_idx.graphics
-                    ? VK_SHARING_MODE_EXCLUSIVE
-                    : VK_SHARING_MODE_CONCURRENT),
-    .queueFamilyIndexCount = 2,
-    .pQueueFamilyIndices = (u32[]) { device.queue_idx.transfer,
-                                     device.queue_idx.graphics },
-  };
-  rhi_vk_create(vkCreateBuffer, device.virtual, &create_buffer_info, 0,
-                &res.vkbuffer);
-  vkGetBufferMemoryRequirements(device.virtual, res.vkbuffer,
-                                &res.memory_requirements);
-  return res;
-}
-
-fn void
-rhi_vk_buffer_copy(RHI_VK_Device device, RHI_VK_Buffer dest, RHI_VK_Buffer src,
-                   VkCommandPool cmdpool, VkBufferCopy *buffer_copy_regions,
-                   u32 buffer_copy_region_count) {
-  Assert(dest.memory_requirements.size >= src.memory_requirements.size);
-  VkCommandBufferAllocateInfo alloc_cmdbuffer_info = {0};
-  alloc_cmdbuffer_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  alloc_cmdbuffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  alloc_cmdbuffer_info.commandPool = cmdpool;
-  alloc_cmdbuffer_info.commandBufferCount = 1;
-
-  VkCommandBuffer cmdbuff = {0};
-  vkAllocateCommandBuffers(device.virtual, &alloc_cmdbuffer_info, &cmdbuff);
-
-  VkCommandBufferBeginInfo cmdbuff_begin = {0};
-  cmdbuff_begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  cmdbuff_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  vkBeginCommandBuffer(cmdbuff, &cmdbuff_begin);
-
-  if (buffer_copy_regions) {
-    vkCmdCopyBuffer(cmdbuff, src.vkbuffer, dest.vkbuffer,
-                    buffer_copy_region_count, buffer_copy_regions);
-  } else {
-    VkBufferCopy buffer_copy_region = {0};
-    buffer_copy_region.size = src.memory_requirements.size;
-    buffer_copy_region.srcOffset = 0;
-    buffer_copy_region.dstOffset = 0;
-    vkCmdCopyBuffer(cmdbuff, src.vkbuffer, dest.vkbuffer,
-                    1, &buffer_copy_region);
-  }
-  vkEndCommandBuffer(cmdbuff);
-
-  VkSubmitInfo submit_info = {0};
-  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit_info.commandBufferCount = 1;
-  submit_info.pCommandBuffers = &cmdbuff;
-  vkQueueSubmit(device.queue.transfer, 1, &submit_info, VK_NULL_HANDLE);
-  vkQueueWaitIdle(device.queue.transfer);
-  vkFreeCommandBuffers(device.virtual, cmdpool, 1, &cmdbuff);
-}
-
-fn void
+internal void
 rhi_vk_buffer_destroy(RHI_VK_Device device, RHI_VK_Buffer buffer) {
   vkDestroyBuffer(device.virtual, buffer.vkbuffer, 0);
 }
 
-fn RHI_VK_MemoryPool
-rhi_vk_memorypool_build(RHI_VK_Device device, u32 size,
-                        VkBufferUsageFlags usage,
-                        VkMemoryPropertyFlags wanted_properties) {
-  RHI_VK_MemoryPool res = {0};
-  res.usage = usage;
-  res.buffer = rhi_vk_buffer_create(device, size, usage);
-  res.memory = rhi_vk_alloc(device, res.buffer.memory_requirements,
-                            wanted_properties);
-  vkBindBufferMemory(device.virtual, res.buffer.vkbuffer, res.memory, 0);
-  return res;
-}
-
-fn RHI_VK_Buffer
-rhi_vk_memorypool_push(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
-                       u32 size) {
-  size = (u32)align_forward(size,
-                            (isize)pool->buffer.memory_requirements.alignment);
-  RHI_VK_Buffer res = rhi_vk_buffer_create(device, size, pool->usage);
-  vkBindBufferMemory(device.virtual, res.vkbuffer, pool->memory, pool->offset);
-  res.memorypool_position = pool->offset;
-  pool->offset += res.memory_requirements.size;
-  return res;
-}
-
-fn void*
+internal void*
 rhi_vk_memorypool_map(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
                       RHI_VK_Buffer buffer) {
   Assert(buffer.memorypool_position != (u32)-1);
@@ -626,69 +741,15 @@ rhi_vk_memorypool_map(RHI_VK_Device device, RHI_VK_MemoryPool *pool,
   return res;
 }
 
-fn void
+internal void
 rhi_vk_memorypool_unmap(RHI_VK_Device device, RHI_VK_MemoryPool *pool) {
   vkUnmapMemory(device.virtual, pool->memory);
 }
 
-fn void
+internal void
 rhi_vk_memorypool_destroy(RHI_VK_Device device, RHI_VK_MemoryPool pool) {
   vkDestroyBuffer(device.virtual, pool.buffer.vkbuffer, 0);
   vkFreeMemory(device.virtual, pool.memory, 0);
-}
-
-fn RHI_VK_Shader
-rhi_vk_shader_from_file(RHI_ShaderType type, RHI_VK_Device rhi_device,
-                        String8 shader_source_path) {
-  Scratch scratch = ScratchBegin(0, 0);
-  OS_Handle file_handle = os_fs_open(shader_source_path, OS_acfRead);
-  String8 bytecode = os_fs_read(scratch.arena, file_handle);
-  os_fs_close(file_handle);
-  RHI_VK_Shader res = rhi_vk_shader_from_bytes(type, rhi_device,
-                                               bytecode.size, bytecode.str);
-  ScratchEnd(scratch);
-  return res;
-}
-
-fn RHI_VK_Shader
-rhi_vk_shader_from_bytes(RHI_ShaderType type, RHI_VK_Device rhi_device,
-                         isize size, u8 *bytes) {
-  RHI_VK_Shader res = {0};
-  res.type = type;
-
-  VkShaderModuleCreateInfo create_shadermodule_info = {0};
-  create_shadermodule_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  create_shadermodule_info.codeSize = (usize)size;
-  create_shadermodule_info.pCode = (const u32*)bytes;
-  VkResult create_shadermodule_result =
-    vkCreateShaderModule(rhi_device.virtual, &create_shadermodule_info,
-                         0, &res.module);
-  Assert(create_shadermodule_result == VK_SUCCESS);
-  return res;
-}
-
-
-internal VkDeviceMemory
-rhi_vk_alloc(RHI_VK_Device device, VkMemoryRequirements memory_requirements,
-             VkMemoryPropertyFlags wanted_properties) {
-  VkDeviceMemory res = {0};
-  VkMemoryAllocateInfo mem_alloc_info = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-    .allocationSize = memory_requirements.size,
-    .memoryTypeIndex = U32_MAX,
-  };
-  for (u32 i = 0; i < device.memory_properties.memoryTypeCount; i++) {
-    if ((memory_requirements.memoryTypeBits & (1 << i)) &&
-        (device.memory_properties.memoryTypes[i].propertyFlags &
-         wanted_properties)) {
-      mem_alloc_info.memoryTypeIndex = i;
-      break;
-    }
-  }
-
-  Assert(mem_alloc_info.memoryTypeIndex != (u32)-1);
-  rhi_vk_create(vkAllocateMemory, device.virtual, &mem_alloc_info, 0, &res);
-  return res;
 }
 
 internal VkRenderPass
@@ -786,3 +847,4 @@ rhi_vk_device_properties_print(VkPhysicalDeviceProperties *props) {
   dbg_println("  Driver Version:\tv%d.%d.%d\n", driver_major, driver_minor,
               driver_patch);
 }
+#endif

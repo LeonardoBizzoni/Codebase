@@ -1,4 +1,4 @@
-fn VkSurfaceKHR rhi_vk_surface_create(OS_Handle os_window) {
+internal VkSurfaceKHR rhi_vulkan_surface_create(OS_Handle os_window) {
   VkSurfaceKHR res = {0};
   X11_Window *window = (X11_Window*)os_window.h[0];
   VkXlibSurfaceCreateInfoKHR create_surface_info = {
@@ -7,12 +7,12 @@ fn VkSurfaceKHR rhi_vk_surface_create(OS_Handle os_window) {
     .window = window->xwindow,
   };
   VkResult surface_create_result =
-    vkCreateXlibSurfaceKHR(rhi_vk_state.instance, &create_surface_info, 0, &res);
+    vkCreateXlibSurfaceKHR(rhi_vulkan_state.instance, &create_surface_info, 0, &res);
   Assert(surface_create_result == VK_SUCCESS);
   return res;
 }
 
 // TODO(lb): implement this
-fn void rhi_vk_surface_destroy(VkSurfaceKHR surface) {
+fn void rhi_vulkan_surface_destroy(VkSurfaceKHR surface) {
   Unused(surface);
 }

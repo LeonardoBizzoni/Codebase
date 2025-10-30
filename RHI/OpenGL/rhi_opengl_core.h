@@ -6,35 +6,22 @@ typedef u32 RHI_OpenglObj;
 typedef u8 RHI_OpenglPrimitiveType;
 enum {
   RHI_OpenglPrimitiveType_None,
+  RHI_OpenglPrimitiveType_Buffer,
   RHI_OpenglPrimitiveType_Index,
-  RHI_OpenglPrimitiveType_BufferLayout,
   RHI_OpenglPrimitiveType_COUNT,
-};
-
-struct RHI_OpenglPrimitive_BufferLayoutElement {
-  struct RHI_OpenglPrimitive_BufferLayoutElement *next;
-  u32 type;
-  i32 count;
-  u32 size;
-  bool to_normalize;
 };
 
 typedef struct {
   RHI_OpenglPrimitiveType type;
   union {
+    RHI_OpenglObj buffer;
     struct {
-      RHI_OpenglObj id;
+      RHI_OpenglObj buffer;
       i32 vertex_count;
     } index;
-    struct {
-      struct RHI_OpenglPrimitive_BufferLayoutElement *first;
-      struct RHI_OpenglPrimitive_BufferLayoutElement *last;
-      i32 stride;
-    } buffer_layout;
   };
 } RHI_OpenglPrimitive;
 
-fn RHI_Handle rhi_opengl_context_create(OS_Handle window);
 fn void rhi_opengl_context_set_active(RHI_Handle handle);
 fn void rhi_opengl_context_commit(RHI_Handle handle);
 fn void rhi_opengl_context_destroy(RHI_Handle handle);
@@ -67,6 +54,10 @@ internal RHI_OpenglObj
 rhi_opengl_shader_program_from_file(String8 filepath, RHI_ShaderType type);
 internal RHI_OpenglObj
 rhi_opengl_shader_program_from_str8(String8 source, RHI_ShaderType type);
+
+internal i32 rhi_opengl_size_from_shadertype(RHI_ShaderDataType type);
+internal u32 rhi_opengl_type_from_shadertype(RHI_ShaderDataType type);
+internal i32 rhi_opengl_count_from_shadertype(RHI_ShaderDataType type);
 
 internal void rhi_opengl_vao_setup(void);
 

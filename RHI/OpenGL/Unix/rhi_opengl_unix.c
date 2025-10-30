@@ -55,7 +55,8 @@ fn void rhi_deinit(void) {
 
 // =============================================================================
 // API dependent code
-fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
+fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
+  Unused(arena);
   X11_Window *os_window = (X11_Window*)window.h[0];
 
   LNX_GL_Context *ctx = lnx_gl_state.ctx_freequeue.first;
@@ -95,7 +96,7 @@ fn void rhi_opengl_context_set_active(RHI_Handle handle) {
                  ctx->egl_surface, lnx_gl_state.egl_context);
 }
 
-fn void rhi_opengl_context_commit(RHI_Handle handle) {
+fn void rhi_context_commit(RHI_Handle handle) {
   LNX_GL_Context *ctx = (LNX_GL_Context *)handle.h[0];
   eglSwapBuffers(lnx_gl_state.egl_display, ctx->egl_surface);
 }
