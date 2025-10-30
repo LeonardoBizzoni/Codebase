@@ -50,6 +50,8 @@ fn void rhi_init(void) {
   Assert(create_instance_result == VK_SUCCESS);
 }
 
+fn void rhi_deinit(void) {}
+
 fn RHI_VK_Device rhi_vk_device_create(VkSurfaceKHR vk_surface) {
   RHI_VK_Device res = {0};
 
@@ -386,9 +388,9 @@ rhi_vk_swapchain_create(Arena *arena, RHI_VK_Device rhi_device,
   }
 
   res.viewport.x = 0.0f;
-  res.viewport.y = 0.0f;
+  res.viewport.y = (f32)res.extent.height;
   res.viewport.width = (f32)res.extent.width;
-  res.viewport.height = (f32)res.extent.height;
+  res.viewport.height = -(f32)res.extent.height;
   res.viewport.minDepth = 0.0f;
   res.viewport.maxDepth = 1.0f;
   res.scissor.offset.x = 0;
