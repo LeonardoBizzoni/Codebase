@@ -197,12 +197,13 @@ typedef void Func_Signal(i32);
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define Log(STR, ...) os_print(OS_LogLevel_Log, __func__, __FILE__, __LINE__, STR, ##__VA_ARGS__)
 #if DEBUG
+#  define Log(STR, ...) os_print(OS_LogLevel_Log, __func__, __FILE__, __LINE__, STR, ##__VA_ARGS__)
 #  define Info(STR, ...) os_print(OS_LogLevel_Info, __func__, __FILE__, __LINE__, STR, ##__VA_ARGS__)
 #  define Warn(STR, ...) os_print(OS_LogLevel_Warn, __func__, __FILE__, __LINE__, STR, ##__VA_ARGS__)
 #  define Err(STR, ...) os_print(OS_LogLevel_Error, __func__, __FILE__, __LINE__, STR, ##__VA_ARGS__)
 #else
+#  define Log(STR, ...)
 #  define Info(STR, ...)
 #  define Warn(STR, ...)
 #  define Err(STR, ...)

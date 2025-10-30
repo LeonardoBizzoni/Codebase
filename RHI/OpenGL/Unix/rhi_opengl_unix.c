@@ -76,6 +76,10 @@ fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
                  ctx->egl_surface, lnx_gl_state.egl_context);
   rhi_opengl_vao_setup();
 
+  Info("OpenGL renderer: %s", glGetString(GL_RENDERER));
+  Info("OpenGL vendor: %s", glGetString(GL_VENDOR));
+  Info("OpenGL version: %s\n", glGetString(GL_VERSION));
+
   RHI_Handle res = {{(u64)ctx}};
   return res;
 }

@@ -1,6 +1,10 @@
-fn void rhi_opengl_draw(RHI_Handle index) {
+fn void rhi_opengl_draw(RHI_Handle vertex, RHI_Handle index, RHI_Handle shader) {
   RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive*)index.h[0];
   Assert(prim->type == RHI_OpenglPrimitiveType_Index);
+
+  rhi_opengl_buffer_bind(vertex);
+  rhi_opengl_index_bind(index);
+  rhi_opengl_shader_bind(shader);
   glDrawElements(GL_TRIANGLES, prim->index.vertex_count, GL_UNSIGNED_INT, 0);
 }
 
