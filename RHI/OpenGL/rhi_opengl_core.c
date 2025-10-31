@@ -111,65 +111,34 @@ fn void rhi_draw(RHI_Handle hcontext, RHI_Handle vertex,
   glDrawElements(GL_TRIANGLES, prim->index.vertex_count, GL_UNSIGNED_INT, 0);
 }
 
-internal void _rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer,
-                                     RHI_BufferElement *layout, u32 layout_size) {
+fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext,
+                                  RHI_Handle hshader, RHI_BufferLayout layout) {
+  Unused(arena);
+  Unused(hcontext);
+  Unused(hshader);
+  Unused(layout);
+  RHI_Handle res = {0};
+  return res;
+}
+
+internal void rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer, RHI_BufferLayout layout) {
   Unused(hcontext);
   rhi_opengl_buffer_bind(hbuffer);
 
   i32 stride = 0;
-  for (u32 i = 0; i < layout_size; ++i) {
-    stride += rhi_opengl_size_from_shadertype(layout[i].type);
+  for (u32 i = 0; i < (u32)layout.count; ++i) {
+    stride += rhi_shadertype_map_size[layout.elements[i].type];
   }
 
   isize offset = 0;
-  for (u32 i = 0; i < layout_size; ++i) {
+  for (u32 i = 0; i < (u32)layout.count; ++i) {
     glEnableVertexAttribArray(i);
-    glVertexAttribPointer(i, rhi_opengl_count_from_shadertype(layout[i].type),
-                          rhi_opengl_type_from_shadertype(layout[i].type),
-                          layout[i].to_normalize ? GL_TRUE : GL_FALSE,
+    glVertexAttribPointer(i, rhi_shadertype_map_element_count[layout.elements[i].type],
+                          rhi_opengl_type_from_shadertype(layout.elements[i].type),
+                          layout.elements[i].to_normalize ? GL_TRUE : GL_FALSE,
                           stride, (const void*)offset);
-    offset += rhi_opengl_size_from_shadertype(layout[i].type);
+    offset += rhi_shadertype_map_size[layout.elements[i].type];
   }
-}
-
-internal i32 rhi_opengl_size_from_shadertype(RHI_ShaderDataType type) {
-  switch (type) {
-  case RHI_ShaderDataType_Float: {
-    return sizeof(f32);
-  } break;
-  case RHI_ShaderDataType_Int: {
-    return sizeof(i32);
-  } break;
-  case RHI_ShaderDataType_Bool: {
-    return sizeof(bool);
-  } break;
-  case RHI_ShaderDataType_Vec2F32: {
-    return 2 * sizeof(f32);
-  } break;
-  case RHI_ShaderDataType_Vec2I32: {
-    return 2 * sizeof(i32);
-  } break;
-  case RHI_ShaderDataType_Vec3F32: {
-    return 3 * sizeof(f32);
-  } break;
-  case RHI_ShaderDataType_Vec3I32: {
-    return 3 * sizeof(i32);
-  } break;
-  case RHI_ShaderDataType_Vec4F32: {
-    return 4 * sizeof(f32);
-  } break;
-  case RHI_ShaderDataType_Vec4I32: {
-    return 4 * sizeof(i32);
-  } break;
-  case RHI_ShaderDataType_Mat3F32: {
-    return 3 * 3 * sizeof(f32);
-  } break;
-  case RHI_ShaderDataType_Mat4F32: {
-    return 4 * 4 * sizeof(f32);
-  } break;
-  }
-  Assert(false);
-  return 0;
 }
 
 internal u32 rhi_opengl_type_from_shadertype(RHI_ShaderDataType type) {
@@ -190,36 +159,6 @@ internal u32 rhi_opengl_type_from_shadertype(RHI_ShaderDataType type) {
   } break;
   case RHI_ShaderDataType_Bool: {
     return GL_BOOL;
-  } break;
-  }
-  Assert(false);
-  return 0;
-}
-
-internal i32 rhi_opengl_count_from_shadertype(RHI_ShaderDataType type) {
-  switch (type) {
-  case RHI_ShaderDataType_Vec4F32:
-  case RHI_ShaderDataType_Vec4I32: {
-    return 4;
-  } break;
-  case RHI_ShaderDataType_Mat4F32: {
-    return 4 * 4;
-  } break;
-  case RHI_ShaderDataType_Mat3F32: {
-    return 3 * 3;
-  } break;
-  case RHI_ShaderDataType_Vec3I32:
-  case RHI_ShaderDataType_Vec3F32: {
-    return 3;
-  } break;
-  case RHI_ShaderDataType_Vec2I32:
-  case RHI_ShaderDataType_Vec2F32: {
-    return 2;
-  } break;
-  case RHI_ShaderDataType_Float:
-  case RHI_ShaderDataType_Bool:
-  case RHI_ShaderDataType_Int: {
-    return 1;
   } break;
   }
   Assert(false);

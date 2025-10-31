@@ -55,9 +55,7 @@ rhi_opengl_shader_program_from_file(String8 filepath, RHI_ShaderType type);
 internal RHI_OpenglObj
 rhi_opengl_shader_program_from_str8(String8 source, RHI_ShaderType type);
 
-internal i32 rhi_opengl_size_from_shadertype(RHI_ShaderDataType type);
 internal u32 rhi_opengl_type_from_shadertype(RHI_ShaderDataType type);
-internal i32 rhi_opengl_count_from_shadertype(RHI_ShaderDataType type);
 
 internal void rhi_opengl_vao_setup(void);
 

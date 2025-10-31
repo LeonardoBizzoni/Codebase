@@ -73,6 +73,21 @@ typedef struct {
   i32 image_count;
 } RHI_Vulkan_Swapchain;
 
+// NOTE(lb): there isn't a format for matrices, they map to N vectors.
+global const VkFormat rhi_vulkan_shadertype_map_format[] = {
+  [RHI_ShaderDataType_Float]   = VK_FORMAT_R32_SFLOAT,
+  [RHI_ShaderDataType_Int]     = VK_FORMAT_R32_SINT,
+  [RHI_ShaderDataType_Bool]    = VK_FORMAT_R8_UINT,
+  [RHI_ShaderDataType_Vec2F32] = VK_FORMAT_R32G32_SFLOAT,
+  [RHI_ShaderDataType_Vec2I32] = VK_FORMAT_R32G32_SINT,
+  [RHI_ShaderDataType_Vec3F32] = VK_FORMAT_R32G32B32_SFLOAT,
+  [RHI_ShaderDataType_Vec3I32] = VK_FORMAT_R32G32B32_SINT,
+  [RHI_ShaderDataType_Vec4F32] = VK_FORMAT_R32G32B32A32_SFLOAT,
+  [RHI_ShaderDataType_Vec4I32] = VK_FORMAT_R32G32B32A32_SINT,
+  [RHI_ShaderDataType_Mat3F32] = VK_FORMAT_UNDEFINED,
+  [RHI_ShaderDataType_Mat4F32] = VK_FORMAT_UNDEFINED,
+};
+
 // Implemented per platform
 internal VkSurfaceKHR rhi_vulkan_surface_create(OS_Handle os_window);
 internal void rhi_vulkan_surface_destroy(VkSurfaceKHR surface);

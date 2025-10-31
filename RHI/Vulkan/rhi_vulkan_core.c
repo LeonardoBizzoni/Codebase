@@ -144,12 +144,83 @@ fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle target_buffer,
   Unused(size);
 }
 
-internal void _rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer,
-                                     RHI_BufferElement *layout, u32 layout_size) {
+fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader, RHI_BufferLayout layout) {
+  i32 actual_layout_count = layout.count;
+  VkVertexInputBindingDescription vertex_input_binding = {0};
+  vertex_input_binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+  for (i32 i = 0; i < layout.count; ++i) {
+    vertex_input_binding.stride += (u32)(rhi_shadertype_map_element_count[layout.elements[i].type] *
+                                         rhi_shadertype_map_size[layout.elements[i].type]);
+    if (layout.elements[i].type == RHI_ShaderDataType_Mat3F32) {
+      actual_layout_count += 2;
+    } else if (layout.elements[i].type == RHI_ShaderDataType_Mat4F32) {
+      actual_layout_count += 3;
+    }
+  }
+
+  {
+    Scratch scratch = ScratchBegin(&arena, 1);
+    VkVertexInputAttributeDescription *vertex_input_attributes = arena_push_many(scratch.arena, VkVertexInputAttributeDescription, actual_layout_count);
+    u32 offset = 0, location = 0;
+    for (i32 i = 0; i < layout.count; ++i) {
+      vertex_input_attributes[location].binding = 0;
+      vertex_input_attributes[location].location = location;
+      vertex_input_attributes[location].offset = offset;
+      if (layout.elements[i].type == RHI_ShaderDataType_Mat3F32 ||
+          layout.elements[i].type == RHI_ShaderDataType_Mat4F32) {
+        vertex_input_attributes[location].format = rhi_vulkan_shadertype_map_format[RHI_ShaderDataType_Vec3F32];
+        u32 repeat_for = (layout.elements[i].type == RHI_ShaderDataType_Mat3F32) ? 2 : 3;
+        for (u32 j = 0, inner_offset = offset; j < repeat_for; ++j) {
+          location += 1;
+          inner_offset += (u32)(rhi_shadertype_map_element_count[RHI_ShaderDataType_Vec3F32] *
+                                rhi_shadertype_map_size[RHI_ShaderDataType_Vec3F32]);
+          vertex_input_attributes[location].binding = 0;
+          vertex_input_attributes[location].location = location;
+          vertex_input_attributes[location].offset = inner_offset;
+          vertex_input_attributes[location].format = rhi_vulkan_shadertype_map_format[RHI_ShaderDataType_Vec3F32];
+        }
+      } else {
+        vertex_input_attributes[location].format = rhi_vulkan_shadertype_map_format[layout.elements[i].type];
+        location += 1;
+      }
+
+      offset += (u32)(rhi_shadertype_map_element_count[layout.elements[i].type] *
+                      rhi_shadertype_map_size[layout.elements[i].type]);
+    }
+
+    VkPipelineDynamicStateCreateInfo create_pipeline_dynamic_states_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+      .dynamicStateCount = 2,
+      .pDynamicStates = (VkDynamicState[]) {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+      },
+    };
+    VkPipelineVertexInputStateCreateInfo create_vertex_input_state_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = &vertex_input_binding,
+      .vertexAttributeDescriptionCount = (u32)actual_layout_count,
+      .pVertexAttributeDescriptions = vertex_input_attributes,
+    };
+
+    Unused(create_pipeline_dynamic_states_info);
+    Unused(create_vertex_input_state_info);
+    Unused(hcontext);
+    Unused(hshader);
+
+    ScratchEnd(scratch);
+  }
+
+  RHI_Handle res = {0};
+  return res;
+}
+
+
+fn void rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer, RHI_BufferLayout layout) {
   Unused(hcontext);
   Unused(hbuffer);
   Unused(layout);
-  Unused(layout_size);
 }
 
 internal void rhi_init(void) {
