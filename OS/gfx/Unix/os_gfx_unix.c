@@ -63,6 +63,14 @@ fn void os_window_close(OS_Handle window_) {
   StackPush(x11_state.freelist_window, window);
 }
 
+fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height) {
+  X11_Window *window = (X11_Window*)hwindow.h[0];
+  XWindowAttributes attribs = {0};
+  XGetWindowAttributes(x11_state.xdisplay, window->xwindow, &attribs);
+  *width = attribs.width;
+  *height = attribs.height;
+}
+
 fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   Unused(arena);
   String8 res = {0};

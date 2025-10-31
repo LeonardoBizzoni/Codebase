@@ -121,6 +121,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height);
 fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
 fn void os_window_close(OS_Handle window);
+fn void os_window_get_size(OS_Handle window, i32 *width, i32 *height);
 
 fn OS_EventList os_get_events(Arena *arena, bool wait);
 

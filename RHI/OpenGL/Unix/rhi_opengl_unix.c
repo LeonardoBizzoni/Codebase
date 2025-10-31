@@ -105,7 +105,7 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
   return res;
 }
 
-fn void rhi_opengl_context_destroy(RHI_Handle hcontext) {
+fn void rhi_context_destroy(RHI_Handle hcontext) {
   Unused(hcontext);
 }
 

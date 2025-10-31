@@ -44,6 +44,7 @@ typedef struct {
 } RHI_BufferElement;
 
 fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window);
+fn void rhi_context_destroy(RHI_Handle hcontext);
 
 fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
                                i32 size, RHI_BufferType type);

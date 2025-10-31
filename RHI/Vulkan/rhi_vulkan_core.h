@@ -5,6 +5,8 @@
 
 typedef struct {
   VkInstance instance;
+  VkPresentModeKHR   swapchain_present_mode;
+  VkSurfaceFormatKHR swapchain_surface_format;
 } RHI_Vulkan_State;
 
 typedef struct {
@@ -32,6 +34,15 @@ typedef struct {
 typedef struct {
   VkSurfaceKHR surface;
   RHI_Vulkan_Device device;
+  struct {
+    VkImage *images;
+    VkImageView *imageviews;
+    u32 image_count;
+    VkSwapchainKHR handle;
+    VkExtent2D extent;
+    VkViewport viewport;
+    VkRect2D scissor;
+  } swapchain;
 } RHI_Vulkan_Context;
 
 typedef struct {
@@ -68,8 +79,9 @@ internal void rhi_vulkan_surface_destroy(VkSurfaceKHR surface);
 
 // Platform independent
 internal void rhi_vulkan_device_init(RHI_Vulkan_Context *context);
-
 internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device);
+
+internal void rhi_vulkan_swapchain_init(Arena *arena, RHI_Vulkan_Context *context, OS_Handle hwindow);
 
 #if 0
 #define rhi_vk_get_array(Arena, Func, BufferType, BufferName, LengthVar, ...) \
