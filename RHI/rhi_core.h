@@ -93,6 +93,7 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext,
                                   RHI_Handle hshader, RHI_BufferLayout layout);
+fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline);
 
 internal void rhi_init(void);
 internal void rhi_deinit(void);

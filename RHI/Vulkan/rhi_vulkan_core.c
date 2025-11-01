@@ -145,6 +145,16 @@ fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle target_buffer,
 }
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader, RHI_BufferLayout layout) {
+  RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
+  RHI_Vulkan_Pipeline *pipeline = arena_push(arena, RHI_Vulkan_Pipeline);
+  Assert(pipeline);
+
+  VkPipelineLayoutCreateInfo create_pipeline_layout_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+  };
+  VkResult create_pipeline_layout_result = vkCreatePipelineLayout(context->device.virtual, &create_pipeline_layout_info, NULL, &pipeline->layout);
+  Assert(create_pipeline_layout_result == VK_SUCCESS);
+
   i32 actual_layout_count = layout.count;
   VkVertexInputBindingDescription vertex_input_binding = {0};
   vertex_input_binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
@@ -157,6 +167,74 @@ fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle 
       actual_layout_count += 3;
     }
   }
+
+  VkPipelineDynamicStateCreateInfo create_pipeline_dynamic_states_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    .dynamicStateCount = 2,
+    .pDynamicStates = (VkDynamicState[]) {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR,
+    },
+  };
+  VkPipelineViewportStateCreateInfo create_viewport_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+    .viewportCount = 1,
+    .pViewports = &context->swapchain.viewport,
+    .scissorCount = 1,
+    .pScissors = &context->swapchain.scissor,
+  };
+  VkPipelineVertexInputStateCreateInfo create_vertex_input_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount = 1,
+    .pVertexBindingDescriptions = &vertex_input_binding,
+    .vertexAttributeDescriptionCount = (u32)actual_layout_count,
+  };
+  VkPipelineInputAssemblyStateCreateInfo create_assembly_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    .primitiveRestartEnable = VK_FALSE,
+  };
+  VkPipelineRasterizationStateCreateInfo create_rasterization_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+    .depthClampEnable = VK_FALSE,
+    .rasterizerDiscardEnable = VK_FALSE,
+    .polygonMode = VK_POLYGON_MODE_FILL,
+    .lineWidth = 1.0f,
+    .cullMode = VK_CULL_MODE_BACK_BIT,
+    .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+    .depthBiasEnable = VK_FALSE,
+    .depthBiasConstantFactor = 0.0f,
+    .depthBiasClamp = 0.0f,
+    .depthBiasSlopeFactor = 0.0f,
+  };
+  VkPipelineMultisampleStateCreateInfo create_multisample_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+    .sampleShadingEnable = VK_FALSE,
+    .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    .minSampleShading = 1.0f,
+    .pSampleMask = 0,
+    .alphaToCoverageEnable = VK_FALSE,
+    .alphaToOneEnable = VK_FALSE,
+  };
+  VkPipelineColorBlendAttachmentState pipeline_colorblend_attachment = {
+    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .blendEnable = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .colorBlendOp = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .alphaBlendOp = VK_BLEND_OP_ADD,
+  };
+  VkPipelineColorBlendStateCreateInfo create_colorblend_state_info = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+    .logicOpEnable = VK_FALSE,
+    .logicOp = VK_LOGIC_OP_COPY,
+    .attachmentCount = 1,
+    .pAttachments = &pipeline_colorblend_attachment,
+    .blendConstants = { 0.0f, 0.0f, 0.0f, 0.0f },
+  };
 
   {
     Scratch scratch = ScratchBegin(&arena, 1);
@@ -188,32 +266,30 @@ fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle 
                       rhi_shadertype_map_size[layout.elements[i].type]);
     }
 
-    VkPipelineDynamicStateCreateInfo create_pipeline_dynamic_states_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = 2,
-      .pDynamicStates = (VkDynamicState[]) {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-      },
-    };
-    VkPipelineVertexInputStateCreateInfo create_vertex_input_state_info = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 1,
-      .pVertexBindingDescriptions = &vertex_input_binding,
-      .vertexAttributeDescriptionCount = (u32)actual_layout_count,
-      .pVertexAttributeDescriptions = vertex_input_attributes,
-    };
+    create_vertex_input_state_info.pVertexAttributeDescriptions = vertex_input_attributes,
 
     Unused(create_pipeline_dynamic_states_info);
-    Unused(create_vertex_input_state_info);
-    Unused(hcontext);
+    Unused(create_viewport_state_info);
+    Unused(create_assembly_state_info);
+    Unused(create_rasterization_state_info);
+    Unused(create_multisample_state_info);
+    Unused(create_colorblend_state_info);
     Unused(hshader);
+    // TODO(lb): finish pipeline creation
 
     ScratchEnd(scratch);
   }
 
   RHI_Handle res = {0};
   return res;
+}
+
+fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline) {
+  RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
+  RHI_Vulkan_Pipeline *pipeline = (RHI_Vulkan_Pipeline *)hpipeline.h[0];
+  Assert(context);
+  Assert(pipeline);
+  vkDestroyPipelineLayout(context->device.virtual, pipeline->layout, NULL);
 }
 
 

@@ -73,6 +73,11 @@ typedef struct {
   i32 image_count;
 } RHI_Vulkan_Swapchain;
 
+typedef struct {
+  VkPipeline handle;
+  VkPipelineLayout layout;
+} RHI_Vulkan_Pipeline;
+
 // NOTE(lb): there isn't a format for matrices, they map to N vectors.
 global const VkFormat rhi_vulkan_shadertype_map_format[] = {
   [RHI_ShaderDataType_Float]   = VK_FORMAT_R32_SFLOAT,
