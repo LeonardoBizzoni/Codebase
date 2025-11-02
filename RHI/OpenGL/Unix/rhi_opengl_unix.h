@@ -31,7 +31,11 @@ typedef struct {
   X(PFNGLSHADERSOURCEPROC, glShaderSource)                         \
   X(PFNGLCOMPILESHADERPROC, glCompileShader)                       \
   X(PFNGLUSEPROGRAMPROC, glUseProgram)                             \
-  X(PFNGLCREATEPROGRAMPROC, glCreateProgram)
+  X(PFNGLCREATEPROGRAMPROC, glCreateProgram)                       \
+                                                                   \
+  X(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)             \
+  X(PFNGLUNIFORM3FPROC, glUniform3f)                               \
+  X(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)
 
 #define X(Type, Name) global Type Name;
 GL_FUNCTIONS(X)

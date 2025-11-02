@@ -26,7 +26,8 @@ fn void rhi_opengl_context_set_active(RHI_Handle handle);
 fn void rhi_opengl_context_commit(RHI_Handle handle);
 fn void rhi_opengl_context_destroy(RHI_Handle handle);
 
-fn void rhi_opengl_draw(RHI_Handle vertex, RHI_Handle index, RHI_Handle shader);
+fn void rhi_opengl_draw(RHI_Handle hcontext, RHI_Handle vertex,
+                        RHI_Handle index, RHI_Handle shader);
 
 fn RHI_Handle rhi_opengl_shader_from_file(String8 vertex_shader_path,
                                           String8 fragment_shader_path);

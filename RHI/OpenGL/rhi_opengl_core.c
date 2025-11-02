@@ -99,8 +99,8 @@ fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle htarget_buffer,
   glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, size);
 }
 
-fn void rhi_draw(RHI_Handle hcontext, RHI_Handle vertex,
-                 RHI_Handle index, RHI_Handle shader) {
+fn void rhi_opengl_draw(RHI_Handle hcontext, RHI_Handle vertex,
+                        RHI_Handle index, RHI_Handle shader) {
   Unused(hcontext);
   RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive*)index.h[0];
   Assert(prim->type == RHI_OpenglPrimitiveType_Index);
@@ -187,6 +187,28 @@ internal RHI_Handle rhi_opengl_shader_from_str8(String8 vertex_shader_code,
 internal void rhi_opengl_shader_bind(RHI_Handle shader) {
   RHI_OpenglObj glshader = (RHI_OpenglObj)shader.h[0];
   glUseProgram(glshader);
+}
+
+internal void rhi_opengl_shader_set_vec3f32(RHI_Handle hshader, String8 uniform_name, Vec3F32 *vector) {
+  RHI_OpenglObj shader = (RHI_OpenglObj)hshader.h[0];
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    glUseProgram(shader);
+    i32 location = glGetUniformLocation(shader, cstr_from_str8(scratch.arena, uniform_name));
+    glUniform3f(location, vector->x, vector->y, vector->z);
+    ScratchEnd(scratch);
+  }
+}
+
+internal void rhi_opengl_shader_set_mat4f32(RHI_Handle hshader, String8 uniform_name, Mat4F32 *matrix) {
+  RHI_OpenglObj shader = (RHI_OpenglObj)hshader.h[0];
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    glUseProgram(shader);
+    i32 location = glGetUniformLocation(shader, cstr_from_str8(scratch.arena, uniform_name));
+    glUniformMatrix4fv(location, 1, GL_FALSE, matrix->arr);
+    ScratchEnd(scratch);
+  }
 }
 
 internal void rhi_opengl_buffer_bind(RHI_Handle hbuffer) {
