@@ -148,6 +148,9 @@ fn void os_env_setup(void) {
   (void)localtime_r(&tms.tv_sec, &lt);
   unx_state.unix_utc_offset = (u64)lt.tm_gmtoff;
 
+  clock_gettime(CLOCK_MONOTONIC, &tms);
+  unx_state.time_offset = tms.tv_sec * UNX_TIME_FREQ + tms.tv_nsec;
+
 #if OS_GUI
   unx_gfx_init();
 #endif

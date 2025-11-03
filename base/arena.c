@@ -61,15 +61,6 @@ internal Arena *_arena_build(ArenaArgs args) {
   void *mem = 0;
   isize reserve, commit;
 
-#if CPP
-  if (args.commit_size == 0) {
-    args.commit_size = ArenaDefaultCommitSize;
-  }
-  if (args.reserve_size == 0) {
-    args.reserve_size = ArenaDefaultReserveSize;
-  }
-#endif
-
   Assert(args.commit_size > 0);
   Assert(args.reserve_size > 0);
   if (args.flags & ArenaFlags_UseHugePage) {

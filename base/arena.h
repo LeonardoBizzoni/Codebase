@@ -11,13 +11,9 @@
                     (isize)(count) * (isize)sizeof(type), \
                     (isize)AlignOf(type))
 
-#if CPP
-#  define arena_build(...) _arena_build(ArenaArgs { __VA_ARGS__ })
-#else
-#  define arena_build(...) _arena_build((ArenaArgs) {.commit_size = ArenaDefaultCommitSize, \
-                                                     .reserve_size = ArenaDefaultReserveSize, \
-                                                     __VA_ARGS__})
-#endif
+#define arena_build(...) _arena_build((ArenaArgs) { .commit_size = ArenaDefaultCommitSize,   \
+                                                    .reserve_size = ArenaDefaultReserveSize, \
+                                                    __VA_ARGS__ })
 
 #define ArenaDefaultReserveSize MB(4)
 #define ArenaDefaultCommitSize KiB(4)

@@ -141,9 +141,9 @@ fn void unx_gfx_init(void) {
   x11_state.xatom_close = XInternAtom(x11_state.xdisplay, "WM_DELETE_WINDOW", False);
 
   i32 visuals_count = 0;
+  XVisualInfo xvisual = { .screen = x11_state.xscreen };
   XVisualInfo *visuals = XGetVisualInfo(x11_state.xdisplay, VisualScreenMask,
-                                        &(XVisualInfo){ .screen = x11_state.xscreen },
-                                        &visuals_count);
+                                        &xvisual, &visuals_count);
   Assert(visuals && visuals_count > 0);
   x11_state.xvisual = *visuals;
   XFree(visuals);

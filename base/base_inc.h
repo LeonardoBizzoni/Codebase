@@ -9,11 +9,6 @@
 #include "string.h"
 #include "vector.h"
 
-#if CPP
-#  include "array.hpp"
-#  include "hashmap.hpp"
-#endif
-
 // TODO(lb): find a place for this
 /* #ifndef PLATFORM_CODERBOT */
 /* #  include "../image.h" */

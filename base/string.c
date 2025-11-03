@@ -164,11 +164,7 @@ fn String8 sb_join_str(Arena *arena, StringBuilder strlist, String8 str) {
 // =============================================================================
 // UTF-8 string
 fn String8 str8(u8 *chars, isize len) {
-#if CPP
-  String8 res(chars, len);
-#else
   String8 res = {chars, len};
-#endif
   return res;
 }
 

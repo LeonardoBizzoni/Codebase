@@ -243,6 +243,18 @@ fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end, OS_TimerGranular
   return res;
 }
 
+fn f64 os_time_now(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (f64)((ts.tv_sec * UNX_TIME_FREQ + ts.tv_nsec) -
+               unx_state.time_offset) /
+         UNX_TIME_FREQ;
+}
+
+fn u64 os_time_update_frequency(void) {
+  return UNX_TIME_FREQ;
+}
+
 // =============================================================================
 // Memory allocation
 fn void* os_reserve(isize size) {

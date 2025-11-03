@@ -244,6 +244,9 @@ fn u64 os_timer_elapsed(OS_Handle start, OS_TimerGranularity unit);
 fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
                                 OS_TimerGranularity unit);
 
+fn f64 os_time_now(void);
+fn u64 os_time_update_frequency(void);
+
 // =============================================================================
 // Memory allocation
 fn void* os_reserve(isize size);

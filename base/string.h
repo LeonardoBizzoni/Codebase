@@ -30,19 +30,6 @@ fn u8 utf32_encode(u32 *res, Codepoint cp);
 typedef struct String8 {
   u8 *str;
   isize size;
-
-#if CPP
-    String8() = default;
-    template<isize N>
-    constexpr String8(const char (&s)[N]) :
-      str{(u8 *)s}, size{N-1} {}
-    constexpr String8(u8 *chars, isize size) :
-      str{chars}, size{size} {}
-
-  inline char operator[](usize idx) {
-    return (char)str[idx];
-  }
-#endif
 } String8;
 
 typedef struct StringBuilderNode {
@@ -56,15 +43,6 @@ typedef struct StringBuilder {
   StringBuilderNode *last;
   isize node_count;
   isize total_size;
-
-#if CPP
-  String8 operator[](usize i) {
-    StringNode *curr = first;
-    for (; curr && i > 0; curr = curr->next, --i);
-    Assert(curr);
-    return curr->value;
-  }
-#endif
 } StringBuilder;
 
 fn void sb_append_str(Arena *arena, StringBuilder *sb, String8 other);
@@ -132,19 +110,8 @@ fn u8 char_to_lower(u8 ch);
 
 fn u8 path_separator(void);
 
-#if CPP
-inline fn bool operator==(String8 s1, String8 s2) {
-  return str8_eq(s1, s2);
-}
-
-inline fn bool operator!=(String8 s1, String8 s2) {
-  return !str8_eq(s1, s2);
-}
-#endif
-
 // =============================================================================
 // Other UTF strings
-
 typedef struct {
   u16 *str;
   isize size;

@@ -36,6 +36,8 @@
 #  define dbg_print(fmt, ...)
 #endif
 
+#define UNX_TIME_FREQ 1000000000
+
 typedef u64 UNX_PrimitiveType;
 enum {
   UNX_Primitive_Process,
@@ -109,6 +111,7 @@ typedef struct {
   UNX_Primitive *primitive_freelist;
 
   u64 unix_utc_offset;
+  i64 time_offset;
 } UNX_State;
 
 fn void unx_sharedmem_resize(SharedMem *shm, isize size);
