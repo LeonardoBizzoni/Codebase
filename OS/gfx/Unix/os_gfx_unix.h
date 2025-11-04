@@ -32,6 +32,7 @@ typedef struct {
 fn void unx_gfx_init(void);
 fn void unx_gfx_deinit(void);
 
-internal X11_Window* lnx_window_from_xwindow(Window xwindow);
+internal X11_Window* unx_window_from_xwindow(Window xwindow);
+internal KeySym unx_keysym_from_os_key(OS_Key key);
 
 #endif

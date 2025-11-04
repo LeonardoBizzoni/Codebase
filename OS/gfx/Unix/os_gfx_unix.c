@@ -86,7 +86,7 @@ fn OS_EventList os_get_events(Arena *arena, bool wait) {
   for (; XPending(x11_state.xdisplay) || (wait && res.count == 0); ) {
     XEvent xevent = {0};
     XNextEvent(x11_state.xdisplay, &xevent);
-    X11_Window *target_window = lnx_window_from_xwindow(xevent.xany.window);
+    X11_Window *target_window = unx_window_from_xwindow(xevent.xany.window);
     if (!target_window) { continue; }
 
     OS_Event *event = arena_push(arena, OS_Event);
@@ -130,6 +130,14 @@ fn OS_EventList os_get_events(Arena *arena, bool wait) {
   return res;
 }
 
+fn bool os_key_is_down(OS_Key key) {
+  char bitarray[32] = {0};
+  XQueryKeymap(x11_state.xdisplay, bitarray);
+  KeySym keysym = unx_keysym_from_os_key(key);
+  KeyCode keycode = XKeysymToKeycode(x11_state.xdisplay, keysym);
+  return bitarray[keycode >> 3] & (1 << (keycode & 7));
+}
+
 // =============================================================================
 // Platform specific definitions
 fn void unx_gfx_init(void) {
@@ -156,9 +164,96 @@ fn void unx_gfx_deinit(void) {
   XCloseDisplay(x11_state.xdisplay);
 }
 
-internal X11_Window* lnx_window_from_xwindow(Window xwindow) {
+internal X11_Window* unx_window_from_xwindow(Window xwindow) {
   for (X11_Window *curr = x11_state.first_window; curr; curr = curr->next) {
     if (curr->xwindow == xwindow) { return curr; }
   }
   return 0;
+}
+
+internal KeySym unx_keysym_from_os_key(OS_Key key) {
+  switch (key) {
+  case OS_Key_Esc:          return XK_Escape;
+  case OS_Key_F1:           return XK_F1;
+  case OS_Key_F2:           return XK_F2;
+  case OS_Key_F3:           return XK_F3;
+  case OS_Key_F4:           return XK_F4;
+  case OS_Key_F5:           return XK_F5;
+  case OS_Key_F6:           return XK_F6;
+  case OS_Key_F7:           return XK_F7;
+  case OS_Key_F8:           return XK_F8;
+  case OS_Key_F9:           return XK_F9;
+  case OS_Key_F10:          return XK_F10;
+  case OS_Key_F11:          return XK_F11;
+  case OS_Key_F12:          return XK_F12;
+  case OS_Key_Tick:         return XK_grave;
+  case OS_Key_1:            return XK_1;
+  case OS_Key_2:            return XK_2;
+  case OS_Key_3:            return XK_3;
+  case OS_Key_4:            return XK_4;
+  case OS_Key_5:            return XK_5;
+  case OS_Key_6:            return XK_6;
+  case OS_Key_7:            return XK_7;
+  case OS_Key_8:            return XK_8;
+  case OS_Key_9:            return XK_9;
+  case OS_Key_0:            return XK_0;
+  case OS_Key_Minus:        return XK_minus;
+  case OS_Key_Equal:        return XK_equal;
+  case OS_Key_Backspace:    return XK_BackSpace;
+  case OS_Key_Tab:          return XK_Tab;
+  case OS_Key_Q:            return XK_q;
+  case OS_Key_W:            return XK_w;
+  case OS_Key_E:            return XK_e;
+  case OS_Key_R:            return XK_r;
+  case OS_Key_T:            return XK_t;
+  case OS_Key_Y:            return XK_y;
+  case OS_Key_U:            return XK_u;
+  case OS_Key_I:            return XK_i;
+  case OS_Key_O:            return XK_o;
+  case OS_Key_P:            return XK_p;
+  case OS_Key_LeftBracket:  return XK_bracketleft;
+  case OS_Key_RightBracket: return XK_bracketright;
+  case OS_Key_BackSlash:    return XK_backslash;
+  case OS_Key_CapsLock:     return XK_Caps_Lock;
+  case OS_Key_A:            return XK_a;
+  case OS_Key_S:            return XK_s;
+  case OS_Key_D:            return XK_d;
+  case OS_Key_F:            return XK_f;
+  case OS_Key_G:            return XK_g;
+  case OS_Key_H:            return XK_h;
+  case OS_Key_J:            return XK_j;
+  case OS_Key_K:            return XK_k;
+  case OS_Key_L:            return XK_l;
+  case OS_Key_Semicolon:    return XK_semicolon;
+  case OS_Key_Quote:        return XK_apostrophe;
+  case OS_Key_Return:       return XK_Return;
+  case OS_Key_Shift:        return XK_Shift_L;
+  case OS_Key_Z:            return XK_z;
+  case OS_Key_X:            return XK_x;
+  case OS_Key_C:            return XK_c;
+  case OS_Key_V:            return XK_v;
+  case OS_Key_B:            return XK_b;
+  case OS_Key_N:            return XK_n;
+  case OS_Key_M:            return XK_m;
+  case OS_Key_Comma:        return XK_comma;
+  case OS_Key_Period:       return XK_period;
+  case OS_Key_Slash:        return XK_slash;
+  case OS_Key_Ctrl:         return XK_Control_L;
+  case OS_Key_Alt:          return XK_Alt_L;
+  case OS_Key_Space:        return XK_space;
+  case OS_Key_ScrollLock:   return XK_Scroll_Lock;
+  case OS_Key_Pause:        return XK_Pause;
+  case OS_Key_Insert:       return XK_Insert;
+  case OS_Key_Home:         return XK_Home;
+  case OS_Key_Delete:       return XK_Delete;
+  case OS_Key_End:          return XK_End;
+  case OS_Key_PageUp:       return XK_Page_Up;
+  case OS_Key_PageDown:     return XK_Page_Down;
+  case OS_Key_Up:           return XK_Up;
+  case OS_Key_Left:         return XK_Left;
+  case OS_Key_Down:         return XK_Down;
+  case OS_Key_Right:        return XK_Right;
+  default:                  Unreachable();
+  }
+  return NoSymbol;
 }

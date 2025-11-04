@@ -48,6 +48,27 @@ typedef struct {
   i32 count;
 } RHI_BufferLayout;
 
+typedef struct {
+  Vec3F32 position;
+  Vec3F32 direction_front;
+  Vec3F32 direction_right;
+  Vec3F32 direction_up;
+  Vec3F32 direction_up_world;
+
+  f32 pitch;
+  f32 yaw;
+
+  f32 mouse_sensitivity;
+  f32 mouse_zoom_factor;
+
+  // NOTE(lb): for keyboard control
+  f32 speed_vertical;
+  f32 speed_movement;
+  f32 speed_rotation;
+} RHI_Camera;
+
+fn void rhi_camera_update(RHI_Camera *camera);
+
 global const i32 rhi_shadertype_map_size[] = {
   [RHI_ShaderDataType_Float]   = sizeof(f32),
   [RHI_ShaderDataType_Int]     = sizeof(i32),
