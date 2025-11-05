@@ -38,7 +38,7 @@ typedef struct W32_Primitive {
 
     struct {
       HANDLE handle;
-      OS_AccessFlags flags;
+      OS_AccessFlag flags;
     } file;
 
     struct {
@@ -66,7 +66,8 @@ typedef struct {
     W32_Primitive *last;
   } thread_list;
 
-  LARGE_INTEGER perf_freq;
+  u64 time_offset;
+  u64 perf_freq;
   CRITICAL_SECTION mutex;
 } W32_State;
 

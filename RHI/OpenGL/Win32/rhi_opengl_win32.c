@@ -1,50 +1,5 @@
 global W32Gl_State w32gl_state = {};
 
-#define GL_FUNCTIONS(X)                                            \
-  X(PFNGLGENBUFFERSPROC, glGenBuffers)                             \
-  X(PFNGLBINDBUFFERPROC, glBindBuffer)                             \
-  X(PFNGLBUFFERDATAPROC, glBufferData)                             \
-  X(PFNGLCREATEBUFFERSPROC, glCreateBuffers)                       \
-  X(PFNGLNAMEDBUFFERSTORAGEPROC, glNamedBufferStorage)             \
-                                                                   \
-  X(PFNGLGENVERTEXARRAYSPROC, glGenVertexArrays)                   \
-  X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                   \
-  X(PFNGLCREATEVERTEXARRAYSPROC, glCreateVertexArrays)             \
-  X(PFNGLVERTEXARRAYVERTEXBUFFERPROC, glVertexArrayVertexBuffer)   \
-  X(PFNGLVERTEXARRAYATTRIBFORMATPROC, glVertexArrayAttribFormat)   \
-  X(PFNGLENABLEVERTEXARRAYATTRIBPROC, glEnableVertexArrayAttrib)   \
-  X(PFNGLVERTEXARRAYATTRIBBINDINGPROC, glVertexArrayAttribBinding) \
-  X(PFNGLVERTEXATTRIBPOINTERPROC, glVertexAttribPointer)           \
-  X(PFNGLENABLEVERTEXATTRIBARRAYPROC, glEnableVertexAttribArray)   \
-                                                                   \
-  X(PFNGLCREATESHADERPROC, glCreateShader)                         \
-  X(PFNGLDELETESHADERPROC, glDeleteShader)                         \
-  X(PFNGLATTACHSHADERPROC, glAttachShader)                         \
-  X(PFNGLLINKPROGRAMPROC, glLinkProgram)                           \
-  X(PFNGLSHADERSOURCEPROC, glShaderSource)                         \
-  X(PFNGLCOMPILESHADERPROC, glCompileShader)                       \
-  X(PFNGLCREATESHADERPROGRAMVPROC, glCreateShaderProgramv)         \
-                                                                   \
-  X(PFNGLUSEPROGRAMPROC, glUseProgram)                             \
-  X(PFNGLCREATEPROGRAMPROC, glCreateProgram)                       \
-  X(PFNGLGETPROGRAMIVPROC, glGetProgramiv)                         \
-  X(PFNGLGETPROGRAMINFOLOGPROC, glGetProgramInfoLog)               \
-  X(PFNGLGENPROGRAMPIPELINESPROC, glGenProgramPipelines)           \
-  X(PFNGLUSEPROGRAMSTAGESPROC, glUseProgramStages)                 \
-  X(PFNGLBINDPROGRAMPIPELINEPROC, glBindProgramPipeline)           \
-  X(PFNGLPROGRAMUNIFORMMATRIX2FVPROC, glProgramUniformMatrix2fv)   \
-                                                                   \
-  X(PFNGLBINDTEXTUREUNITPROC, glBindTextureUnit)                   \
-  X(PFNGLCREATETEXTURESPROC, glCreateTextures)                     \
-  X(PFNGLTEXTUREPARAMETERIPROC, glTextureParameteri)               \
-  X(PFNGLTEXTURESTORAGE2DPROC, glTextureStorage2D)                 \
-  X(PFNGLTEXTURESUBIMAGE2DPROC, glTextureSubImage2D)               \
-  X(PFNGLDEBUGMESSAGECALLBACKPROC, glDebugMessageCallback)
-
-#define X(Type, Name) global Type Name;
-GL_FUNCTIONS(X)
-#undef X
-
 global PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
 global PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 
@@ -83,12 +38,10 @@ fn void rhi_init(void) {
   Assert(dummy_context);
   wglMakeCurrent(dummy_dc, dummy_context);
 
-  PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB =
-    (void*)wglGetProcAddress("wglGetExtensionsStringARB");
+  PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = (void*)wglGetProcAddress("wglGetExtensionsStringARB");
   Assert(wglGetExtensionsStringARB);
   const char *ext = wglGetExtensionsStringARB(dummy_dc);
   Assert(ext);
-
 
   for (const char *ext_start = ext; *ext; ++ext, ext_start = ext) {
     for (; *ext != ' ' && *ext != 0; ++ext) {}
@@ -114,7 +67,7 @@ fn void rhi_init(void) {
   GL_FUNCTIONS(X)
 #undef X
 
-  wglMakeCurrent(dummy_dc, 0);
+  wglMakeCurrent(dummy_dc, NULL);
   wglDeleteContext(dummy_context);
   ReleaseDC(dummy_window, dummy_dc);
   DestroyWindow(dummy_window);
@@ -122,8 +75,8 @@ fn void rhi_init(void) {
 
 // =============================================================================
 // API dependent code
-fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
-  W32_Window *os_window = (W32_Window *)window.h[0];
+fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
+  W32_Window *os_window = (W32_Window *)hwindow.h[0];
 
   W32Gl_Window *rhi_window = w32gl_state.freequeue_first;
   if (rhi_window) {
@@ -157,7 +110,7 @@ fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
   DescribePixelFormat(dc, pixel_format, sizeof(pfd), &pfd);
   SetPixelFormat(dc, pixel_format, &pfd);
 
-  local i32  gl33_attribs[] = {
+  local i32 gl33_attribs[] = {
     WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
     WGL_CONTEXT_MINOR_VERSION_ARB, 3,
     WGL_CONTEXT_PROFILE_MASK_ARB,  WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
@@ -167,23 +120,24 @@ fn RHI_Handle rhi_opengl_context_create(OS_Handle window) {
   rhi_window->gl_context = wglCreateContextAttribsARB(dc, NULL, gl33_attribs);
   Assert(rhi_window->gl_context);
   wglMakeCurrent(dc, rhi_window->gl_context);
+
   rhi_opengl_vao_setup();
 
   RHI_Handle res = {(u64)rhi_window};
   return res;
 }
 
-fn void rhi_opengl_context_destroy(RHI_Handle context) {
+fn void rhi_context_destroy(RHI_Handle context) {
   Unused(context);
 }
 
-fn void rhi_opengl_context_set_active(RHI_Handle handle) {
+fn void rhi_context_set_active(RHI_Handle handle) {
   W32Gl_Window *rhi_window = (W32Gl_Window*)handle.h[0];
   HDC dc = GetDC(rhi_window->os_window->winhandle);
   wglMakeCurrent(dc, rhi_window->gl_context);
 }
 
-fn void rhi_opengl_context_commit(RHI_Handle context) {
+fn void rhi_context_commit(RHI_Handle context) {
   W32Gl_Window *rhi_window = (W32Gl_Window*)context.h[0];
   HDC dc = GetDC(rhi_window->os_window->winhandle);
   SwapBuffers(dc);

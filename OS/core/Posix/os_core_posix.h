@@ -1,5 +1,5 @@
-#ifndef OS_UNIX_CORE_H
-#define OS_UNIX_CORE_H
+#ifndef OS_POSIX_CORE_H
+#define OS_POSIX_CORE_H
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -24,10 +24,6 @@
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
-#if OS_SOUND
-#  include <pulse/pulseaudio.h>
-#endif
-
 #if DEBUG
 #  define dbg_println(fmt, ...) printf(fmt "\n", ##__VA_ARGS__)
 #  define dbg_print(fmt, ...) printf(fmt, ##__VA_ARGS__)
@@ -36,24 +32,24 @@
 #  define dbg_print(fmt, ...)
 #endif
 
-#define UNX_TIME_FREQ 1000000000
+#define OS_POSIX_TIME_FREQ 1000000000
 
-typedef u64 UNX_PrimitiveType;
+typedef u64 OS_Posix_PrimitiveType;
 enum {
-  UNX_Primitive_Process,
-  UNX_Primitive_Mutex,
-  UNX_Primitive_Rwlock,
-  UNX_Primitive_CondVar,
-  UNX_Primitive_Timer,
-  UNX_Primitive_Thread,
-  UNX_Primitive_Semaphore,
-  UNX_Primitive_Socket,
-  UNX_Primitive_Sound,
+  OS_Posix_Primitive_Process,
+  OS_Posix_Primitive_Mutex,
+  OS_Posix_Primitive_Rwlock,
+  OS_Posix_Primitive_CondVar,
+  OS_Posix_Primitive_Timer,
+  OS_Posix_Primitive_Thread,
+  OS_Posix_Primitive_Semaphore,
+  OS_Posix_Primitive_Socket,
+  OS_Posix_Primitive_Sound,
 };
 
-typedef struct UNX_Primitive {
-  struct UNX_Primitive *next;
-  UNX_PrimitiveType type;
+typedef struct OS_Posix_Primitive {
+  struct OS_Posix_Primitive *next;
+  OS_Posix_PrimitiveType type;
 
   union {
     pid_t proc;
@@ -80,41 +76,38 @@ typedef struct UNX_Primitive {
       socklen_t size;
       struct sockaddr addr;
     } socket;
-#if OS_SOUND
-    struct {
-      File file;
-      pa_stream *stream;
-      pa_sample_spec sample_info;
-
-      OS_Handle pausexit_condvar;
-      OS_Handle pausexit_mutex;
-      bool paused, should_exit;
-
-      OS_Handle player;
-      usize player_offset;
-      OS_Handle player_mutex;
-    } sound;
-#endif
   };
-} UNX_Primitive;
+} OS_Posix_Primitive;
 
 typedef struct {
   String8 path;
   DIR *dir;
   struct dirent *dir_entry;
-} UNX_FileIter;
+} OS_Posix_FileIter;
 
 typedef struct {
   Arena *arena;
   OS_SystemInfo info;
   pthread_mutex_t primitive_lock;
-  UNX_Primitive *primitive_freelist;
+  OS_Posix_Primitive *primitive_freelist;
 
   u64 unix_utc_offset;
   i64 time_offset;
-} UNX_State;
+} OS_Posix_State;
 
-fn void unx_sharedmem_resize(SharedMem *shm, isize size);
-fn void unx_sharedmem_unlink_name(SharedMem *shm);
+internal OS_Posix_Primitive* os_posix_primitive_alloc(OS_Posix_PrimitiveType type);
+internal void os_posix_primitive_release(OS_Posix_Primitive *ptr);
+
+internal void* os_posix_thread_entry(void *args);
+
+internal FS_Properties os_posix_properties_from_stat(struct stat *stat);
+internal i32 os_posix_flags_from_acf(OS_AccessFlag acf);
+
+internal String8 os_posix_gethostname(void);
+
+internal void os_posix_sharedmem_resize(SharedMem *shm, isize size);
+internal void os_posix_sharedmem_unlink_name(SharedMem *shm);
+
+internal void os_posix_sleep_nanoseconds(u32 ns);
 
 #endif

@@ -12,6 +12,10 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
   return res;
 }
 
+fn void rhi_context_commit(RHI_Handle hcontext) {
+  Unused(hcontext);
+}
+
 fn void rhi_context_destroy(RHI_Handle hcontext) {
   RHI_Vulkan_Context *context = (RHI_Vulkan_Context*)hcontext.h[0];
   vkDestroySwapchainKHR(context->device.virtual, context->swapchain.handle, NULL);

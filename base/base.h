@@ -1,6 +1,9 @@
 #ifndef BASE_BASE
 #define BASE_BASE
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #include <string.h>
 
 #if defined(__GNUC__) && !defined(__llvm__) && !defined(__INTEL_COMPILER)
@@ -106,16 +109,9 @@
 #endif
 
 #if OS_LINUX || OS_BSD
-#  define OS_UNIXLIKE 1
+#  define OS_POSIX 1
 #else
-#  define OS_UNIXLIKE 0
-#endif
-
-#if !defined(LNX_X11)
-#  define LNX_X11 0
-#endif
-#if !defined(BSD_X11)
-#  define BSD_X11 0
+#  define OS_POSIX 0
 #endif
 
 #if defined(DEBUG)

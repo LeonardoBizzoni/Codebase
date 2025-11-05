@@ -3,12 +3,14 @@
 
 #include "core/os_core.h"
 
-#if OS_UNIXLIKE
-#  include "core/Unix/unix_core.h"
+#if OS_POSIX
+#  include "core/Posix/os_core_posix.h"
 #  if OS_LINUX
-#    include "core/Unix/Linux/linux_core.h"
+#    include "core/Posix/Linux/os_core_posix_linux.h"
 #  elif OS_BSD
-#    include "core/Unix/BSD/bsd_core.h"
+#    include "core/Posix/BSD/os_core_posix_bsd.h"
+#  else
+#    error posix os not recognized
 #  endif
 #elif OS_WINDOWS
 #  include "core/Win32/os_core_win32.h"
@@ -18,25 +20,12 @@
 
 #if OS_GUI
 #  include "gfx/os_gfx.h"
-#  if OS_UNIXLIKE
-#    include "gfx/Unix/os_gfx_unix.h"
+#  if OS_POSIX
+#    include "gfx/Posix/os_gfx_posix.h"
 #  elif OS_WINDOWS
 #    include "gfx/Win32/os_gfx_win32.h"
 #  else
 #    error os graphical layer is not supported for this platform
-#  endif
-#endif
-
-#if OS_SOUND
-#  include "sound/os_sound.h"
-#  if OS_LINUX
-#    include "sound/Linux/os_sound_linux.h"
-#  elif OS_BSD
-#    include "sound/BSD/os_sound_bsd.h"
-#  elif OS_WINDOWS
-#    include "sound/Win32/os_sound_win32.h"
-#  else
-#    error os sound layer is not supported for this platform
 #  endif
 #endif
 

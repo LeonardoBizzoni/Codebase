@@ -1,113 +1,10 @@
-global UNX_State unx_state = {0};
+global OS_Posix_State os_posix_state = {0};
 
+// =============================================================================
+// System information retrieval
 fn OS_SystemInfo *os_sysinfo(void) {
-  return &unx_state.info;
+  return &os_posix_state.info;
 }
-
-fn UNX_Primitive* unx_primitive_alloc(UNX_PrimitiveType type) {
-  pthread_mutex_lock(&unx_state.primitive_lock);
-  UNX_Primitive *res = unx_state.primitive_freelist;
-  if (res) {
-    StackPop(unx_state.primitive_freelist);
-    memzero(res, sizeof(UNX_Primitive));
-  } else {
-    res = arena_push(unx_state.arena, UNX_Primitive);
-  }
-  pthread_mutex_unlock(&unx_state.primitive_lock);
-
-  res->type = type;
-  return res;
-}
-
-fn void unx_primitive_free(UNX_Primitive *ptr) {
-  pthread_mutex_lock(&unx_state.primitive_lock);
-  StackPush(unx_state.primitive_freelist, ptr);
-  pthread_mutex_unlock(&unx_state.primitive_lock);
-}
-
-fn void* unx_thread_entry(void *args) {
-  UNX_Primitive *wrap_args = (UNX_Primitive *)args;
-  Func_Thread *func = (Func_Thread *)wrap_args->thread.func;
-  func(wrap_args->thread.args);
-  return 0;
-}
-
-fn FS_Properties unx_properties_from_stat(struct stat *stat) {
-  FS_Properties result = {0};
-  result.ownerID = stat->st_uid;
-  result.groupID = stat->st_gid;
-  result.size = stat->st_size;
-  result.last_access_time = time64_from_unix((u64)stat->st_atime);
-  result.last_modification_time = time64_from_unix((u64)stat->st_mtime);
-  result.last_status_change_time = time64_from_unix((u64)stat->st_ctime);
-
-  switch (stat->st_mode & S_IFMT) {
-  case S_IFBLK:  result.type = OS_FileType_BlkDevice;  break;
-  case S_IFCHR:  result.type = OS_FileType_CharDevice; break;
-  case S_IFDIR:  result.type = OS_FileType_Dir;        break;
-  case S_IFIFO:  result.type = OS_FileType_Pipe;       break;
-  case S_IFLNK:  result.type = OS_FileType_Link;       break;
-  case S_IFSOCK: result.type = OS_FileType_Socket;     break;
-  case S_IFREG:  result.type = OS_FileType_Regular;    break;
-  }
-
-  result.user = OS_Permissions_Unknown;
-  if (stat->st_mode & S_IRUSR) { result.user |= OS_Permissions_Read; }
-  if (stat->st_mode & S_IWUSR) { result.user |= OS_Permissions_Write; }
-  if (stat->st_mode & S_IXUSR) { result.user |= OS_Permissions_Execute; }
-
-  result.group = OS_Permissions_Unknown;
-  if (stat->st_mode & S_IRGRP) { result.group |= OS_Permissions_Read; }
-  if (stat->st_mode & S_IWGRP) { result.group |= OS_Permissions_Write; }
-  if (stat->st_mode & S_IXGRP) { result.group |= OS_Permissions_Execute; }
-
-  result.other = OS_Permissions_Unknown;
-  if (stat->st_mode & S_IROTH) { result.other |= OS_Permissions_Read; }
-  if (stat->st_mode & S_IWOTH) { result.other |= OS_Permissions_Write; }
-  if (stat->st_mode & S_IXOTH) { result.other |= OS_Permissions_Execute; }
-
-  return result;
-}
-
-fn String8 unx_gethostname(void) {
-  char name[HOST_NAME_MAX];
-  (void)gethostname(name, HOST_NAME_MAX);
-
-  String8 namestr = str8((u8 *)name, str8_len(name));
-  return namestr;
-}
-
-fn i32 unx_flags_from_acf(OS_AccessFlags acf) {
-  i32 res = 0;
-  if ((acf & OS_acfRead) && (acf & OS_acfWrite)) {
-    res |= O_RDWR;
-  } else if(acf & OS_acfRead) {
-    res |= O_RDONLY;
-  } else if(acf & OS_acfWrite) {
-    res |= O_WRONLY | O_CREAT | O_TRUNC;
-  }
-  if (acf & OS_acfExecute) { res |= O_EXCL | O_CREAT; }
-  if (acf & OS_acfAppend) { res |= O_APPEND | O_CREAT; }
-  return res;
-}
-
-fn void unx_sharedmem_resize(SharedMem *shm, isize size) {
-  Assert(size);
-  Assert(!ftruncate((i32)shm->file_handle.h[0], size));
-  munmap(shm->content, (usize)shm->prop.size);
-  shm->content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE,
-                           MAP_SHARED, (i32)shm->file_handle.h[0], 0);
-  Assert(shm->content != MAP_FAILED);
-  shm->prop.size = size;
-}
-
-fn void unx_sharedmem_unlink_name(SharedMem *shm) {
-  if (!shm->path.size) { return; }
-  Scratch scratch = ScratchBegin(0, 0);
-  shm_unlink(cstr_from_str8(scratch.arena, shm->path));
-  ScratchEnd(scratch);
-}
-
 
 // =============================================================================
 // DateTime
@@ -115,7 +12,7 @@ fn time64 os_local_now(void) {
   struct timespec tms;
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
-  time64 res = time64_from_unix((u64)tms.tv_sec + unx_state.unix_utc_offset);
+  time64 res = time64_from_unix((u64)tms.tv_sec + os_posix_state.unix_utc_offset);
   res |= (u64)((f64)tms.tv_nsec / 1e6);
   return res;
 }
@@ -125,20 +22,20 @@ fn DateTime os_local_dateTimeNow(void) {
   (void)clock_gettime(CLOCK_REALTIME, &tms);
 
   DateTime res = datetime_from_unix((u64)tms.tv_sec +
-                                    unx_state.unix_utc_offset);
+                                    os_posix_state.unix_utc_offset);
   res.ms = (u16)((f64)tms.tv_nsec / 1e6);
   return res;
 }
 
 fn time64 os_local_fromUTCTime64(time64 t) {
   u64 utc_time = unix_from_time64(t);
-  time64 res = time64_from_unix(utc_time + unx_state.unix_utc_offset);
+  time64 res = time64_from_unix(utc_time + os_posix_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_local_fromUTCDateTime(DateTime *dt) {
   u64 utc_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(utc_time + unx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(utc_time + os_posix_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
@@ -181,13 +78,13 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset) {
 
 fn time64 os_utc_fromLocalTime64(time64 t) {
   u64 local_time = unix_from_time64(t);
-  time64 res = time64_from_unix(local_time - unx_state.unix_utc_offset);
+  time64 res = time64_from_unix(local_time - os_posix_state.unix_utc_offset);
   return res | (t & bitmask10);
 }
 
 fn DateTime os_utc_fromLocalDateTime(DateTime *dt) {
   u64 local_time = unix_from_datetime(dt);
-  DateTime res = datetime_from_unix(local_time - unx_state.unix_utc_offset);
+  DateTime res = datetime_from_unix(local_time - os_posix_state.unix_utc_offset);
   res.ms = dt->ms;
   return res;
 }
@@ -196,18 +93,10 @@ fn void os_sleep_milliseconds(u32 ms) {
   usleep((useconds_t)(ms * 1e3));
 }
 
-fn void unx_sleep_nanoseconds(u32 ns) {
-  struct timespec duration = {
-    .tv_sec = ns / (u32)1e9,
-    .tv_nsec = ns % (u32)1e9,
-  };
-  (void)nanosleep(&duration, 0);
-}
-
 fn OS_Handle os_timer_start(void) {
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Timer);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Timer);
   if (clock_gettime(CLOCK_MONOTONIC, &prim->timer) != 0) {
-    unx_primitive_free(prim);
+    os_posix_primitive_release(prim);
     prim = 0;
   }
 
@@ -216,12 +105,12 @@ fn OS_Handle os_timer_start(void) {
 }
 
 fn void os_timer_free(OS_Handle handle) {
-  unx_primitive_free((UNX_Primitive*)handle.h[0]);
+  os_posix_primitive_release((OS_Posix_Primitive*)handle.h[0]);
 }
 
 fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end, OS_TimerGranularity unit) {
-  struct timespec tstart = ((UNX_Primitive *)start.h[0])->timer;
-  struct timespec tend = ((UNX_Primitive *)end.h[0])->timer;
+  struct timespec tstart = ((OS_Posix_Primitive *)start.h[0])->timer;
+  struct timespec tend = ((OS_Posix_Primitive *)end.h[0])->timer;
   u64 diff_nanos = (u64)(tend.tv_sec - tstart.tv_sec) * (u64)1e9 +
                    (u64)(tend.tv_nsec - tstart.tv_nsec);
 
@@ -246,39 +135,41 @@ fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end, OS_TimerGranular
 fn f64 os_time_now(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (f64)((ts.tv_sec * UNX_TIME_FREQ + ts.tv_nsec) -
-               unx_state.time_offset) /
-         UNX_TIME_FREQ;
+  return (f64)((ts.tv_sec * OS_POSIX_TIME_FREQ + ts.tv_nsec) -
+               os_posix_state.time_offset) /
+         OS_POSIX_TIME_FREQ;
 }
 
 fn u64 os_time_update_frequency(void) {
-  return UNX_TIME_FREQ;
+  return OS_POSIX_TIME_FREQ;
 }
 
 // =============================================================================
 // Memory allocation
-fn void* os_reserve(isize size) {
-  Assert(size > 0);
-  void *res = mmap(0, (usize)size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS,
-                   -1, 0);
-  if (res == MAP_FAILED) { res = 0; }
-  return res;
+fn void* os_reserve(i64 bytes) {
+  Assert(bytes > 0);
+  void *res = mmap(0, (u64)bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  return (res != MAP_FAILED ? res : 0);
 }
 
-fn void os_release(void *base, isize size) {
-  Assert(size > 0);
-  (void)munmap(base, (usize)size);
+fn void os_release(void *base, i64 bytes) {
+  Assert(bytes > 0);
+  i32 res = munmap(base, (u64)bytes);
+  Assert(res == 0);
 }
 
-fn void os_commit(void *base, isize size) {
-  Assert(size > 0);
-  Assert(mprotect(base, (usize)size, PROT_READ | PROT_WRITE) == 0);
+fn void os_commit(void *base, i64 bytes) {
+  Assert(bytes > 0);
+  i32 res = mprotect(base, (u64)bytes, PROT_READ | PROT_WRITE);
+  Assert(res == 0);
 }
 
-fn void os_decommit(void *base, isize size) {
-  Assert(size > 0);
-  (void)mprotect(base, (usize)size, PROT_NONE);
-  (void)madvise(base, (usize)size, MADV_DONTNEED);
+fn void os_decommit(void *base, i64 bytes) {
+  Assert(bytes > 0);
+  i32 res = mprotect(base, (u64)bytes, PROT_NONE);
+  Assert(res == 0);
+  res = madvise(base, (u64)bytes, MADV_DONTNEED);
+  Assert(res == 0);
 }
 
 // =============================================================================
@@ -286,12 +177,12 @@ fn void os_decommit(void *base, isize size) {
 fn OS_Handle os_thread_start(Func_Thread *thread_main, void *args) {
   Assert(thread_main);
 
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Thread);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Thread);
   prim->thread.func = thread_main;
   prim->thread.args = args;
 
-  if (pthread_create(&prim->thread.handle, 0, unx_thread_entry, prim) != 0) {
-    unx_primitive_free(prim);
+  if (pthread_create(&prim->thread.handle, 0, os_posix_thread_entry, prim) != 0) {
+    os_posix_primitive_release(prim);
     prim = 0;
   }
 
@@ -300,24 +191,24 @@ fn OS_Handle os_thread_start(Func_Thread *thread_main, void *args) {
 }
 
 fn void os_thread_kill(OS_Handle thd_handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != UNX_Primitive_Thread) { return; }
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != OS_Posix_Primitive_Thread) { return; }
   (void)pthread_kill(prim->thread.handle, 0);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
 fn void os_thread_cancel(OS_Handle thd_handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != UNX_Primitive_Thread) { return; }
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != OS_Posix_Primitive_Thread) { return; }
   (void)pthread_cancel(prim->thread.handle);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
 fn bool os_thread_join(OS_Handle thd_handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)thd_handle.h[0];
-  if (!prim || prim->type != UNX_Primitive_Thread) { return false; }
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)thd_handle.h[0];
+  if (!prim || prim->type != OS_Posix_Primitive_Thread) { return false; }
   bool res = pthread_join(prim->thread.handle, 0) == 0;
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
   return res;
 }
 
@@ -332,7 +223,7 @@ fn OS_Handle os_proc_spawn(String8 command) {
     Scratch scratch = ScratchBegin(0, 0);
     Assert(execl("/bin/sh", "sh", "-c",
                  cstr_from_str8(scratch.arena, command), NULL) != -1);
-    // unreachable
+    Unreachable();
     ScratchEnd(scratch);
   }
 
@@ -367,11 +258,11 @@ fn void os_atexit(Func_Void *callback) {
 }
 
 fn OS_Handle os_mutex_alloc(void) {
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Mutex);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Mutex);
   pthread_mutexattr_t attr;
   if (pthread_mutexattr_init(&attr) != 0 ||
       pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE) != 0) {
-    unx_primitive_free(prim);
+    os_posix_primitive_release(prim);
     prim = 0;
   } else {
     (void)pthread_mutex_init(&prim->mutex, &attr);
@@ -382,28 +273,28 @@ fn OS_Handle os_mutex_alloc(void) {
 }
 
 fn void os_mutex_lock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_mutex_lock(&prim->mutex);
 }
 
 fn bool os_mutex_trylock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   return pthread_mutex_trylock(&prim->mutex) == 0;
 }
 
 fn void os_mutex_unlock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_mutex_unlock(&prim->mutex);
 }
 
 fn void os_mutex_free(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   pthread_mutex_destroy(&prim->mutex);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
 fn OS_Handle os_rwlock_alloc(void) {
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Rwlock);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Rwlock);
   pthread_rwlock_init(&prim->rwlock, 0);
 
   OS_Handle res = {{(u64)prim}};
@@ -411,45 +302,45 @@ fn OS_Handle os_rwlock_alloc(void) {
 }
 
 fn void os_rwlock_read_lock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_rwlock_rdlock(&prim->rwlock);
 }
 
 fn bool os_rwlock_read_trylock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   return pthread_rwlock_tryrdlock(&prim->rwlock) == 0;
 }
 
 fn void os_rwlock_read_unlock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
 }
 
 fn void os_rwlock_write_lock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_rwlock_wrlock(&prim->rwlock);
 }
 
 fn bool os_rwlock_write_trylock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   return pthread_rwlock_trywrlock(&prim->rwlock) == 0;
 }
 
 fn void os_rwlock_write_unlock(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_rwlock_unlock(&prim->rwlock);
 }
 
 fn void os_rwlock_free(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   pthread_rwlock_destroy(&prim->rwlock);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
 fn OS_Handle os_cond_alloc(void) {
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_CondVar);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_CondVar);
   if (pthread_cond_init(&prim->condvar.cond, 0)) {
-    unx_primitive_free(prim);
+    os_posix_primitive_release(prim);
     prim = 0;
   } else {
     (void)pthread_mutex_init(&prim->condvar.mutex, 0);
@@ -460,19 +351,19 @@ fn OS_Handle os_cond_alloc(void) {
 }
 
 fn void os_cond_signal(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_cond_signal(&prim->condvar.cond);
 }
 
 fn void os_cond_broadcast(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   (void)pthread_cond_broadcast(&prim->condvar.cond);
 }
 
 fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
                      u32 wait_at_most_microsec) {
-  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
-  UNX_Primitive *mutex_prim = (UNX_Primitive *)mutex_handle.h[0];
+  OS_Posix_Primitive *cond_prim = (OS_Posix_Primitive *)cond_handle.h[0];
+  OS_Posix_Primitive *mutex_prim = (OS_Posix_Primitive *)mutex_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -493,8 +384,8 @@ fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
 
 fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
                             u32 wait_at_most_microsec) {
-  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
-  UNX_Primitive *rwlock_prim = (UNX_Primitive *)rwlock_handle.h[0];
+  OS_Posix_Primitive *cond_prim = (OS_Posix_Primitive *)cond_handle.h[0];
+  OS_Posix_Primitive *rwlock_prim = (OS_Posix_Primitive *)rwlock_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -525,8 +416,8 @@ fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
 
 fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
                              u32 wait_at_most_microsec) {
-  UNX_Primitive *cond_prim = (UNX_Primitive *)cond_handle.h[0];
-  UNX_Primitive *rwlock_prim = (UNX_Primitive *)rwlock_handle.h[0];
+  OS_Posix_Primitive *cond_prim = (OS_Posix_Primitive *)cond_handle.h[0];
+  OS_Posix_Primitive *rwlock_prim = (OS_Posix_Primitive *)rwlock_handle.h[0];
 
   if (wait_at_most_microsec) {
     struct timespec abstime;
@@ -556,16 +447,16 @@ fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
 }
 
 fn bool os_cond_free(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   i32 res = pthread_cond_destroy(&prim->condvar.cond) &
             pthread_mutex_destroy(&prim->condvar.mutex);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
   return res == 0;
 }
 
 fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
                                 u32 max_count, String8 name) {
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Semaphore);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Semaphore);
   prim->semaphore.kind = kind;
   prim->semaphore.max_count = max_count;
   switch (kind) {
@@ -596,7 +487,7 @@ fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
 }
 
 fn bool os_semaphore_signal(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   if (prim->semaphore.count + 1 >= prim->semaphore.max_count ||
       sem_post(prim->semaphore.sem)) {
     return false;
@@ -605,7 +496,7 @@ fn bool os_semaphore_signal(OS_Handle handle) {
 }
 
 fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   if (wait_at_most_microsec) {
     struct timespec abstime;
     (void)clock_gettime(CLOCK_REALTIME, &abstime);
@@ -623,12 +514,12 @@ fn bool os_semaphore_wait(OS_Handle handle, u32 wait_at_most_microsec) {
 }
 
 fn bool os_semaphore_trywait(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   return sem_trywait(prim->semaphore.sem) == 0;
 }
 
 fn void os_semaphore_free(OS_Handle handle) {
-  UNX_Primitive *prim = (UNX_Primitive *)handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive *)handle.h[0];
   switch (prim->semaphore.kind) {
     case OS_SemaphoreKind_Thread: {
       (void)sem_destroy(prim->semaphore.sem);
@@ -638,14 +529,14 @@ fn void os_semaphore_free(OS_Handle handle) {
       (void)sem_close(prim->semaphore.sem);
     } break;
   }
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
-fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags) {
+fn SharedMem os_sharedmem_open(String8 name, i64 bytes, OS_AccessFlag flags) {
   SharedMem res = {0};
   res.path = name;
 
-  i32 access_flags = unx_flags_from_acf(flags);
+  i32 access_flags = os_posix_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
   i32 shm_fd = shm_open(cstr_from_str8(scratch.arena, name), access_flags,
                         S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -653,10 +544,10 @@ fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags) {
   res.file_handle.h[0] = (u64)shm_fd;
   ScratchEnd(scratch);
 
-  Assert(size >= 0);
-  Assert(!ftruncate((i32)res.file_handle.h[0], size));
-  res.prop.size = size;
-  res.content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE,
+  Assert(bytes >= 0);
+  Assert(!ftruncate((i32)res.file_handle.h[0], bytes));
+  res.prop.size = bytes;
+  res.content = (u8*)mmap(0, (u64)bytes, PROT_READ | PROT_WRITE,
                            MAP_SHARED, (i32)res.file_handle.h[0], 0);
   Assert(res.content != MAP_FAILED);
 
@@ -664,7 +555,7 @@ fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags) {
 }
 
 fn void os_sharedmem_close(SharedMem *shm) {
-  unx_sharedmem_unlink_name(shm);
+  os_posix_sharedmem_unlink_name(shm);
   munmap(shm->content, (usize)shm->prop.size);
   close((i32)shm->file_handle.h[0]);
 }
@@ -685,7 +576,7 @@ fn Func_Void *os_lib_lookup(OS_Handle lib, String8 symbol) {
   void *handle = (void*)lib.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   Func_Void *result = (Func_Void*)(u64)dlsym(handle, cstr_from_str8(scratch.arena, symbol));
-  /* Assert(result, dlerror()); */
+  Assert(result);
   ScratchEnd(scratch);
   return result;
 }
@@ -804,7 +695,7 @@ fn IP os_net_ip_from_str8(String8 name, OS_Net_Network hint) {
 fn OS_Socket os_socket_open(String8 name, u16 port,
                             OS_Net_Transport protocol) {
   OS_Socket res = {0};
-  UNX_Primitive *prim = unx_primitive_alloc(UNX_Primitive_Socket);
+  OS_Posix_Primitive *prim = os_posix_primitive_alloc(OS_Posix_Primitive_Socket);
   IP server = os_net_ip_from_str8(name, 0);
   i32 ctype = 0, cdomain = 0;
   switch (server.version) {
@@ -842,7 +733,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
 
   prim->socket.fd = socket(cdomain, ctype, 0);
   if (prim->socket.fd == -1) {
-    unx_primitive_free(prim);
+    os_posix_primitive_release(prim);
     perror("os_socket");
     return res;
   }
@@ -855,7 +746,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port,
 }
 
 fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
-  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive*)socket->handle.h[0];
 
   i32 optval = 1;
   (void)setsockopt(prim->socket.fd, SOL_SOCKET,
@@ -868,8 +759,8 @@ fn void os_socket_listen(OS_Socket *socket, u8 max_backlog) {
 fn OS_Socket os_socket_accept(OS_Socket *socket) {
   OS_Socket res = {0};
 
-  UNX_Primitive *server_prim = (UNX_Primitive*)socket->handle.h[0];
-  UNX_Primitive *client_prim = unx_primitive_alloc(UNX_Primitive_Socket);
+  OS_Posix_Primitive *server_prim = (OS_Posix_Primitive*)socket->handle.h[0];
+  OS_Posix_Primitive *client_prim = os_posix_primitive_alloc(OS_Posix_Primitive_Socket);
   client_prim->socket.size = sizeof(client_prim->socket.addr);
   client_prim->socket.fd = accept(server_prim->socket.fd,
                                   &client_prim->socket.addr,
@@ -901,17 +792,17 @@ fn OS_Socket os_socket_accept(OS_Socket *socket) {
   return res;
 }
 
-fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
+fn u8* os_socket_recv(Arena *arena, OS_Socket *client, i64 buffer_size) {
   u8 *res = arena_push_many(arena, u8, buffer_size);
-  UNX_Primitive *prim = (UNX_Primitive*)client->handle.h[0];
-  (void)read(prim->socket.fd, res, buffer_size);
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive*)client->handle.h[0];
+  i64 read_status = read(prim->socket.fd, res, (u64)buffer_size);
+  Assert(read_status != -1);
   return res;
 }
 
 fn void os_socket_connect(OS_Socket *server) {
-  UNX_Primitive *prim = (UNX_Primitive*)server->handle.h[0];
-  if (connect(prim->socket.fd, &prim->socket.addr,
-              prim->socket.size) == -1) {
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive*)server->handle.h[0];
+  if (connect(prim->socket.fd, &prim->socket.addr, prim->socket.size) == -1) {
     perror("os_socket_connect");
     return;
   }
@@ -936,17 +827,17 @@ fn void os_socket_connect(OS_Socket *server) {
 }
 
 fn void os_socket_send(OS_Socket *socket, String8 msg) {
-  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive*)socket->handle.h[0];
   Scratch scratch = ScratchBegin(0, 0);
   send(prim->socket.fd, cstr_from_str8(scratch.arena, msg), (usize)msg.size, 0);
   ScratchEnd(scratch);
 }
 
 fn void os_socket_close(OS_Socket *socket) {
-  UNX_Primitive *prim = (UNX_Primitive*)socket->handle.h[0];
+  OS_Posix_Primitive *prim = (OS_Posix_Primitive*)socket->handle.h[0];
   shutdown(prim->socket.fd, SHUT_RDWR);
   close(prim->socket.fd);
-  unx_primitive_free(prim);
+  os_posix_primitive_release(prim);
 }
 
 // =============================================================================
@@ -954,12 +845,12 @@ fn void os_socket_close(OS_Socket *socket) {
 fn String8 os_fs_read(Arena *arena, OS_Handle file) {
   int fd = (i32)file.h[0];
   String8 result = {0};
-  if(!fd) { return result; }
+  if (!fd) { return result; }
 
   struct stat file_stat;
   if (!fstat(fd, &file_stat)) {
     u8 *buffer = arena_push_many(arena, u8, file_stat.st_size);
-    if(pread(fd, buffer, (usize)file_stat.st_size, 0) >= 0) {
+    if (pread(fd, buffer, (usize)file_stat.st_size, 0) >= 0) {
       result.str = buffer;
       result.size = file_stat.st_size;
     }
@@ -968,33 +859,33 @@ fn String8 os_fs_read(Arena *arena, OS_Handle file) {
   return result;
 }
 
-fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, i64 bytes) {
+  Assert(bytes > 0);
   int fd = (i32)file.h[0];
   String8 result = {0};
-  if(!fd) { return result; }
+  if (!fd) { return result; }
 
-  u8 *buffer = arena_push_many(arena, u8, size);
-  if(pread(fd, buffer, size, 0) >= 0) {
+  u8 *buffer = arena_push_many(arena, u8, bytes);
+  if (pread(fd, buffer, (u64)bytes, 0) >= 0) {
     result.str = buffer;
     result.size = str8_len((char *)buffer);
   }
-
   return result;
 }
 
 fn bool os_fs_write(OS_Handle file, String8 content) {
-  if(!file.h[0]) { return false; }
+  if (!file.h[0]) { return false; }
   return write((i32)file.h[0], content.str, (usize)content.size)
          == content.size;
 }
 
 fn FS_Properties os_fs_get_properties(OS_Handle file) {
   FS_Properties result = {0};
-  if(!file.h[0]) { return result; }
+  if (!file.h[0]) { return result; }
 
   struct stat file_stat;
   if (fstat((i32)file.h[0], &file_stat) == 0) {
-    result = unx_properties_from_stat(&file_stat);
+    result = os_posix_properties_from_stat(&file_stat);
   }
   return result;
 }
@@ -1013,10 +904,10 @@ fn String8 os_fs_readlink(Arena *arena, String8 path) {
 }
 
 // =============================================================================
-// Memory mapping files for easier and faster handling
-fn void* os_fs_map(OS_Handle fd, i32 offset, isize length) {
+// Memory mapping files
+fn void* os_fs_map(OS_Handle fd, i32 offset, i64 bytes) {
   Assert(offset >= 0);
-  Assert(length > 0);
+  Assert(bytes > 0);
 
   i32 flags = fcntl((i32)fd.h[0], F_GETFL);
   if (flags < 0) { return NULL; }
@@ -1026,12 +917,13 @@ fn void* os_fs_map(OS_Handle fd, i32 offset, isize length) {
   } else {
     flags = PROT_READ | PROT_WRITE;
   }
-  void *res = mmap(0, (usize)length, flags, MAP_SHARED, (i32)fd.h[0], offset);
+  void *res = mmap(0, (usize)bytes, flags, MAP_SHARED, (i32)fd.h[0], offset);
   return res;
 }
 
-fn bool os_fs_unmap(void *fmap, isize length) {
-  return !munmap(fmap, (usize)length);
+fn bool os_fs_unmap(void *fmap, i64 bytes) {
+  Assert(bytes > 0);
+  return !munmap(fmap, (u64)bytes);
 }
 
 fn File os_fs_fopen(Arena *arena, OS_Handle fd) {
@@ -1068,15 +960,15 @@ fn bool os_fs_fclose(File *file) {
          os_fs_close(file->file_handle);
 }
 
-fn bool os_fs_fresize(File *file, isize size) {
-  Assert(size >= 0);
-  if (ftruncate((i32)file->file_handle.h[0], size) < 0) {
+fn bool os_fs_fresize(File *file, i64 bytes) {
+  Assert(bytes >= 0);
+  if (ftruncate((i32)file->file_handle.h[0], bytes) < 0) {
     return false;
   }
 
-  file->prop.size = size;
-  munmap(file->content, (usize)file->prop.size);
-  file->content = (u8*)mmap(0, (usize)size, PROT_READ | PROT_WRITE, MAP_SHARED,
+  file->prop.size = bytes;
+  munmap(file->content, (u64)file->prop.size);
+  file->content = (u8*)mmap(0, (u64)bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
                             (i32)file->file_handle.h[0], 0);
   return file->content != MAP_FAILED;
 }
@@ -1138,7 +1030,7 @@ fn String8 os_fs_filename_from_path(Arena *arena, String8 path) {
 // File iteration
 fn OS_FileIter* os_fs_iter_begin(Arena *arena, String8 path) {
   OS_FileIter *os_iter = arena_push(arena, OS_FileIter);
-  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
+  OS_Posix_FileIter *iter = (OS_Posix_FileIter *)os_iter->memory;
   iter->path = path;
   Scratch scratch = ScratchBegin(&arena, 1);
   iter->dir = opendir(cstr_from_str8(scratch.arena, path));
@@ -1152,7 +1044,7 @@ fn bool os_fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_ou
   local const String8 parentdir = StrlitInit("..");
 
   String8 str = {0};
-  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
+  OS_Posix_FileIter *iter = (OS_Posix_FileIter *)os_iter->memory;
   struct dirent *entry = 0;
 
   if (!iter->dir) { return false; }
@@ -1171,7 +1063,7 @@ fn bool os_fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_ou
       return false;
     }
 
-    info_out->properties = unx_properties_from_stat(&file_stat);
+    info_out->properties = os_posix_properties_from_stat(&file_stat);
   } while (os_iter->filter_allowed && !(info_out->properties.type & os_iter->filter_allowed));
 
   info_out->name.size = str.size;
@@ -1182,6 +1074,120 @@ fn bool os_fs_iter_next(Arena *arena, OS_FileIter *os_iter, OS_FileInfo *info_ou
 }
 
 fn void os_fs_iter_end(OS_FileIter *os_iter) {
-  UNX_FileIter *iter = (UNX_FileIter *)os_iter->memory;
+  OS_Posix_FileIter *iter = (OS_Posix_FileIter *)os_iter->memory;
   if (iter->dir) { closedir(iter->dir); }
+}
+
+// ===================================================================
+// Platform dependent functions
+internal OS_Posix_Primitive* os_posix_primitive_alloc(OS_Posix_PrimitiveType type) {
+  pthread_mutex_lock(&os_posix_state.primitive_lock);
+  OS_Posix_Primitive *res = os_posix_state.primitive_freelist;
+  if (res) {
+    StackPop(os_posix_state.primitive_freelist);
+    memzero(res, sizeof(OS_Posix_Primitive));
+  } else {
+    res = arena_push(os_posix_state.arena, OS_Posix_Primitive);
+  }
+  pthread_mutex_unlock(&os_posix_state.primitive_lock);
+
+  res->type = type;
+  return res;
+}
+
+internal void os_posix_primitive_release(OS_Posix_Primitive *ptr) {
+  pthread_mutex_lock(&os_posix_state.primitive_lock);
+  StackPush(os_posix_state.primitive_freelist, ptr);
+  pthread_mutex_unlock(&os_posix_state.primitive_lock);
+}
+
+internal void* os_posix_thread_entry(void *args) {
+  OS_Posix_Primitive *wrap_args = (OS_Posix_Primitive *)args;
+  Func_Thread *func = (Func_Thread *)wrap_args->thread.func;
+  func(wrap_args->thread.args);
+  return 0;
+}
+
+internal FS_Properties os_posix_properties_from_stat(struct stat *stat) {
+  FS_Properties result = {0};
+  result.ownerID = stat->st_uid;
+  result.groupID = stat->st_gid;
+  result.size = stat->st_size;
+  result.last_access_time = time64_from_unix((u64)stat->st_atime);
+  result.last_modification_time = time64_from_unix((u64)stat->st_mtime);
+  result.last_status_change_time = time64_from_unix((u64)stat->st_ctime);
+
+  switch (stat->st_mode & S_IFMT) {
+  case S_IFBLK:  result.type = OS_FileType_BlkDevice;  break;
+  case S_IFCHR:  result.type = OS_FileType_CharDevice; break;
+  case S_IFDIR:  result.type = OS_FileType_Dir;        break;
+  case S_IFIFO:  result.type = OS_FileType_Pipe;       break;
+  case S_IFLNK:  result.type = OS_FileType_Link;       break;
+  case S_IFSOCK: result.type = OS_FileType_Socket;     break;
+  case S_IFREG:  result.type = OS_FileType_Regular;    break;
+  }
+
+  result.user = OS_Permissions_Unknown;
+  if (stat->st_mode & S_IRUSR) { result.user |= OS_Permissions_Read; }
+  if (stat->st_mode & S_IWUSR) { result.user |= OS_Permissions_Write; }
+  if (stat->st_mode & S_IXUSR) { result.user |= OS_Permissions_Execute; }
+
+  result.group = OS_Permissions_Unknown;
+  if (stat->st_mode & S_IRGRP) { result.group |= OS_Permissions_Read; }
+  if (stat->st_mode & S_IWGRP) { result.group |= OS_Permissions_Write; }
+  if (stat->st_mode & S_IXGRP) { result.group |= OS_Permissions_Execute; }
+
+  result.other = OS_Permissions_Unknown;
+  if (stat->st_mode & S_IROTH) { result.other |= OS_Permissions_Read; }
+  if (stat->st_mode & S_IWOTH) { result.other |= OS_Permissions_Write; }
+  if (stat->st_mode & S_IXOTH) { result.other |= OS_Permissions_Execute; }
+
+  return result;
+}
+
+internal String8 os_posix_gethostname(void) {
+  char name[HOST_NAME_MAX];
+  (void)gethostname(name, HOST_NAME_MAX);
+
+  String8 namestr = str8((u8 *)name, str8_len(name));
+  return namestr;
+}
+
+internal i32 os_posix_flags_from_acf(OS_AccessFlag acf) {
+  i32 res = 0;
+  if ((acf & OS_AccessFlag_Read) && (acf & OS_AccessFlag_Write)) {
+    res |= O_RDWR;
+  } else if (acf & OS_AccessFlag_Read) {
+    res |= O_RDONLY;
+  } else if (acf & OS_AccessFlag_Write) {
+    res |= O_WRONLY | O_CREAT | O_TRUNC;
+  }
+  if (acf & OS_AccessFlag_Execute) { res |= O_EXCL | O_CREAT; }
+  if (acf & OS_AccessFlag_Append) { res |= O_APPEND | O_CREAT; }
+  return res;
+}
+
+internal void os_posix_sharedmem_resize(SharedMem *shm, i64 bytes) {
+  Assert(bytes);
+  Assert(!ftruncate((i32)shm->file_handle.h[0], bytes));
+  munmap(shm->content, (u64)shm->prop.size);
+  shm->content = (u8*)mmap(0, (u64)bytes, PROT_READ | PROT_WRITE,
+                           MAP_SHARED, (i32)shm->file_handle.h[0], 0);
+  Assert(shm->content != MAP_FAILED);
+  shm->prop.size = bytes;
+}
+
+internal void os_posix_sharedmem_unlink_name(SharedMem *shm) {
+  if (!shm->path.size) { return; }
+  Scratch scratch = ScratchBegin(0, 0);
+  shm_unlink(cstr_from_str8(scratch.arena, shm->path));
+  ScratchEnd(scratch);
+}
+
+internal void os_posix_sleep_nanoseconds(u32 ns) {
+  struct timespec duration = {
+    .tv_sec = ns / (u32)1e9,
+    .tv_nsec = ns % (u32)1e9,
+  };
+  (void)nanosleep(&duration, 0);
 }

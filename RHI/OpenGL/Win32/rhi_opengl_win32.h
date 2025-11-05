@@ -1,9 +1,6 @@
 #ifndef RHI_OPENGL_WIN32_H
 #define RHI_OPENGL_WIN32_H
 
-#error I dont't know how to make this fucking work, fuck windows.
-
-#include <gl/gl.h>
 #include "glcorearb.h"
 #include "wglext.h"
 

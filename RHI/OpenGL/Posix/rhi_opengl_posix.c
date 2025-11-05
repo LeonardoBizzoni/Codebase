@@ -1,9 +1,9 @@
-global LNX_GL_State lnx_gl_state = {0};
+global RHI_Opengl_Posix_State rhi_gl_posix_state = {0};
 
 typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
 fn void rhi_init(void) {
-  lnx_gl_state.arena = arena_build();
+  rhi_gl_posix_state.arena = arena_build();
 
   GLint glx_attribs[] = {
     GLX_X_RENDERABLE    , True,
@@ -20,18 +20,18 @@ fn void rhi_init(void) {
     None
   };
   i32 fbcount;
-  GLXFBConfig* fbc = glXChooseFBConfig(x11_state.xdisplay, x11_state.xscreen,
+  GLXFBConfig* fbc = glXChooseFBConfig(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xscreen,
                                        glx_attribs, &fbcount);
   Assert(fbcount > 0 && fbc);
 
   // Pick the FB config/visual with the most samples per pixel
   int best_fbc_idx = -1, worst_fbc = -1, best_num_samp = -1, worst_num_samp = 999;
   for (int i = 0; i < fbcount; ++i) {
-    XVisualInfo *vi = glXGetVisualFromFBConfig(x11_state.xdisplay, fbc[i]);
-    if (vi) {
+    XVisualInfo *vi = glXGetVisualFromFBConfig(os_gfx_posix_state.xdisplay, fbc[i]);
+    if (vi && vi->screen == os_gfx_posix_state.xscreen) {
       int samp_buf, samples;
-      glXGetFBConfigAttrib(x11_state.xdisplay, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf );
-      glXGetFBConfigAttrib(x11_state.xdisplay, fbc[i], GLX_SAMPLES, &samples  );
+      glXGetFBConfigAttrib(os_gfx_posix_state.xdisplay, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf);
+      glXGetFBConfigAttrib(os_gfx_posix_state.xdisplay, fbc[i], GLX_SAMPLES, &samples);
 
       if (best_fbc_idx < 0 || (samp_buf && samples > best_num_samp)) {
         best_fbc_idx = i;
@@ -42,15 +42,16 @@ fn void rhi_init(void) {
         worst_num_samp = samples;
       }
     }
-    XFree( vi );
+    XFree(vi);
   }
   GLXFBConfig best_fbc = fbc[best_fbc_idx];
   XFree( fbc );
 
-  XVisualInfo *visuals = glXGetVisualFromFBConfig(x11_state.xdisplay, best_fbc);
+  XVisualInfo *visuals = glXGetVisualFromFBConfig(os_gfx_posix_state.xdisplay, best_fbc);
   Assert(visuals);
-  Assert(x11_state.xscreen == visuals->screen);
-  x11_state.xvisual = *visuals;
+  Assert(os_gfx_posix_state.xscreen == visuals->screen);
+  os_gfx_posix_state.xvisual = *visuals;
+  XFree(visuals);
 
   glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
   glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc) glXGetProcAddressARB( (const GLubyte *) "glXCreateContextAttribsARB" );
@@ -62,26 +63,26 @@ fn void rhi_init(void) {
     None
   };
 
-  const char *glx_extensions = glXQueryExtensionsString(x11_state.xdisplay,
-                                                        x11_state.xscreen);
+  const char *glx_extensions = glXQueryExtensionsString(os_gfx_posix_state.xdisplay,
+                                                        os_gfx_posix_state.xscreen);
   AssertAlways(str8_find_first_str8(str8_from_cstr((char*)glx_extensions),
                                     Strlit("GLX_ARB_create_context")));
-  lnx_gl_state.glx_context = glXCreateContextAttribsARB(x11_state.xdisplay,
+  rhi_gl_posix_state.glx_context = glXCreateContextAttribsARB(os_gfx_posix_state.xdisplay,
                                                         best_fbc, 0, true,
                                                         context_attribs);
-  XSync(x11_state.xdisplay, False);
+  XSync(os_gfx_posix_state.xdisplay, False);
 }
 
 fn void rhi_deinit(void) {
-  glXDestroyContext(x11_state.xdisplay, lnx_gl_state.glx_context);
+  glXDestroyContext(os_gfx_posix_state.xdisplay, rhi_gl_posix_state.glx_context);
 }
 
 // =============================================================================
 // API dependent code
 fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
   Unused(arena);
-  X11_Window *window = (X11_Window*)hwindow.h[0];
-  glXMakeCurrent(x11_state.xdisplay, window->xwindow, lnx_gl_state.glx_context);
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  glXMakeCurrent(os_gfx_posix_state.xdisplay, window->xwindow, rhi_gl_posix_state.glx_context);
 
 #define X(Type, Name)                                       \
   Name = (Type)glXGetProcAddressARB((const GLubyte*)#Name); \
@@ -110,11 +111,11 @@ fn void rhi_context_destroy(RHI_Handle hcontext) {
 }
 
 fn void rhi_opengl_context_set_active(RHI_Handle hcontext) {
-  X11_Window *window = (X11_Window *)hcontext.h[0];
-  glXMakeCurrent(x11_state.xdisplay, window->xwindow, lnx_gl_state.glx_context);
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window *)hcontext.h[0];
+  glXMakeCurrent(os_gfx_posix_state.xdisplay, window->xwindow, rhi_gl_posix_state.glx_context);
 }
 
 fn void rhi_context_commit(RHI_Handle hcontext) {
-  X11_Window *window = (X11_Window *)hcontext.h[0];
-  glXSwapBuffers(x11_state.xdisplay, window->xwindow);
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window *)hcontext.h[0];
+  glXSwapBuffers(os_gfx_posix_state.xdisplay, window->xwindow);
 }

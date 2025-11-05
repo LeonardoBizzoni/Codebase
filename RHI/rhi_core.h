@@ -44,11 +44,6 @@ typedef struct {
 } RHI_BufferLayoutElement;
 
 typedef struct {
-  RHI_BufferLayoutElement *elements;
-  i32 count;
-} RHI_BufferLayout;
-
-typedef struct {
   Vec3F32 position;
   Vec3F32 direction_front;
   Vec3F32 direction_right;
@@ -106,14 +101,17 @@ fn void rhi_buffer_host_send(RHI_Handle hcontext, RHI_Handle hbuffer,
                              const void *data, i32 size);
 fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle htarget_buffer,
                         RHI_Handle hsource_buffer, i32 size);
-fn void rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer, RHI_BufferLayout layout);
+fn void rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer,
+                              RHI_BufferLayoutElement *layout,
+                              i64 layout_elements_count);
 
 fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
                                    String8 vertex_shader_path,
                                    String8 fragment_shader_path);
 
-fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext,
-                                  RHI_Handle hshader, RHI_BufferLayout layout);
+fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
+                                  RHI_BufferLayoutElement *layout,
+                                  i64 layout_elements_count);
 fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline);
 
 internal void rhi_init(void);

@@ -20,12 +20,11 @@ enum {
 };
 
 typedef struct {
+  String8 hostname;
   i64 page_size;
   i64 hugepage_size;
-
-  u8 core_count;
-  u64 total_memory;
-  String8 hostname;
+  i64 total_memory;
+  i32 core_count;
 } OS_SystemInfo;
 
 typedef u8 OS_LogLevel;
@@ -50,14 +49,14 @@ enum {
   OS_Permissions_Read    = 1 << 2,
 };
 
-typedef u32 OS_AccessFlags;
+typedef u32 OS_AccessFlag;
 enum {
-  OS_acfRead       = 1 << 0,
-  OS_acfWrite      = 1 << 1,
-  OS_acfExecute    = 1 << 2,
-  OS_acfAppend     = 1 << 3,
-  OS_acfShareRead  = 1 << 4,
-  OS_acfShareWrite = 1 << 5,
+  OS_AccessFlag_Read       = 1 << 0,
+  OS_AccessFlag_Write      = 1 << 1,
+  OS_AccessFlag_Execute    = 1 << 2,
+  OS_AccessFlag_Append     = 1 << 3,
+  OS_AccessFlag_ShareRead  = 1 << 4,
+  OS_AccessFlag_ShareWrite = 1 << 5,
 };
 
 typedef u64 OS_FileType;
@@ -214,15 +213,19 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
 
 // =============================================================================
 // Main entry point
-fn void os_env_setup(void);
+//   os_env_setup: implemented per OS
+
 fn void start(CmdLine *cmdln);
+fn void os_env_setup(void);
 
 // =============================================================================
-// System information retrieval
+// System information retrieval: implemented per OS
 fn OS_SystemInfo *os_sysinfo(void);
 
 // =============================================================================
-// DateTime
+// Date&Time stuff: implemented per OS
+
+// NOTE(lb): move local<->utc into base layer
 fn time64 os_local_now(void);
 fn DateTime os_local_dateTimeNow(void);
 fn time64 os_local_fromUTCTime64(time64 t);
@@ -235,29 +238,30 @@ fn DateTime os_utc_localizedDateTime(i8 utc_offset);
 fn time64 os_utc_fromLocalTime64(time64 t);
 fn DateTime os_utc_fromLocalDateTime(DateTime *dt);
 
+fn f64 os_time_now(void);
+fn u64 os_time_update_frequency(void);
 fn void os_sleep_milliseconds(u32 ms);
 
 fn OS_Handle os_timer_start(void);
 fn void os_timer_free(OS_Handle handle);
-fn bool os_timer_reached(OS_Handle timer, u64 how_much, OS_TimerGranularity unit);
-fn u64 os_timer_elapsed(OS_Handle start, OS_TimerGranularity unit);
 fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
                                 OS_TimerGranularity unit);
 
-fn f64 os_time_now(void);
-fn u64 os_time_update_frequency(void);
+// Date&Time stuff: OS independent
+fn bool os_timer_reached(OS_Handle timer, u64 how_much, OS_TimerGranularity unit);
+fn u64 os_timer_elapsed(OS_Handle start, OS_TimerGranularity unit);
 
 // =============================================================================
-// Memory allocation
-fn void* os_reserve(isize size);
-fn void* os_reserve_huge(isize size);
-fn void os_release(void *base, isize size);
+// Memory allocation: implemented per OS
+fn void* os_reserve(i64 bytes);
+fn void* os_reserve_huge(i64 bytes);
+fn void os_release(void *base, i64 bytes);
 
-fn void os_commit(void *base, isize size);
-fn void os_decommit(void *base, isize size);
+fn void os_commit(void *base, i64 bytes);
+fn void os_decommit(void *base, i64 bytes);
 
 // =============================================================================
-// Threads & Processes stuff
+// Threads & Processes stuff: implemented per OS
 fn OS_Handle os_thread_start(Func_Thread *thread_main, void *args);
 fn void os_thread_kill(OS_Handle thd);
 fn void os_thread_cancel(OS_Handle thd);
@@ -291,22 +295,18 @@ fn void os_rwlock_free(OS_Handle handle);
 fn OS_Handle os_cond_alloc(void);
 fn void os_cond_signal(OS_Handle handle);
 fn void os_cond_broadcast(OS_Handle handle);
-fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle,
-                     u32 wait_at_most_microsec);
-fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle,
-                            u32 wait_at_most_microsec);
-fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle,
-                             u32 wait_at_most_microsec);
+fn bool os_cond_wait(OS_Handle cond_handle, OS_Handle mutex_handle, u32 wait_at_most_microsec);
+fn bool os_cond_waitrw_read(OS_Handle cond_handle, OS_Handle rwlock_handle, u32 wait_at_most_microsec);
+fn bool os_cond_waitrw_write(OS_Handle cond_handle, OS_Handle rwlock_handle, u32 wait_at_most_microsec);
 fn bool os_cond_free(OS_Handle handle);
 
-fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count,
-                                u32 max_count, String8 name);
+fn OS_Handle os_semaphore_alloc(OS_SemaphoreKind kind, u32 init_count, u32 max_count, String8 name);
 fn bool os_semaphore_signal(OS_Handle sem);
 fn bool os_semaphore_wait(OS_Handle sem, u32 wait_at_most_microsec);
 fn bool os_semaphore_trywait(OS_Handle sem);
 fn void os_semaphore_free(OS_Handle sem);
 
-fn SharedMem os_sharedmem_open(String8 name, isize size, OS_AccessFlags flags);
+fn SharedMem os_sharedmem_open(String8 name, i64 bytes, OS_AccessFlag flags);
 fn void os_sharedmem_close(SharedMem *shm);
 
 // =============================================================================
@@ -329,16 +329,16 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol);
 fn void os_socket_listen(OS_Socket *socket, u8 max_backlog);
 fn OS_Socket os_socket_accept(OS_Socket *socket);
 fn void os_socket_connect(OS_Socket *server);
-fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size);
+fn u8* os_socket_recv(Arena *arena, OS_Socket *client, i64 buffer_size);
 fn void os_socket_send(OS_Socket *socket, String8 msg);
 fn void os_socket_close(OS_Socket *socket);
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags);
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlag flags);
 fn bool os_fs_close(OS_Handle fd);
 fn String8 os_fs_read(Arena *arena, OS_Handle file);
-fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size);
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, i64 bytes);
 fn bool os_fs_write(OS_Handle file, String8 content);
 fn bool os_fs_copy(String8 src, String8 dest);
 
@@ -348,13 +348,13 @@ fn String8 os_fs_readlink(Arena *arena, String8 path);
 
 // =============================================================================
 // Memory mapping files
-fn void* os_fs_map(OS_Handle fd, i32 offset, isize length);
-fn bool os_fs_unmap(void *fmap, isize length);
+fn void* os_fs_map(OS_Handle fd, i32 offset, i64 bytes);
+fn bool os_fs_unmap(void *fmap, i64 bytes);
 
 fn File os_fs_fopen(Arena* arena, OS_Handle file);
 fn File os_fs_fopen_tmp(Arena *arena);
 fn bool os_fs_fclose(File *file);
-fn bool os_fs_fresize(File *file, isize size);
+fn bool os_fs_fresize(File *file, i64 bytes);
 fn void os_fs_fwrite(File *file, String8 str);
 
 fn bool os_fs_file_has_changed(File *file);

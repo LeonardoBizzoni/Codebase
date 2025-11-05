@@ -1,8 +1,6 @@
 #ifndef BASE_ARENA
 #define BASE_ARENA
 
-#include <math.h>
-
 #define arena_push(arenaptr, type)           \
   (type*)_arena_push(arenaptr, sizeof(type), \
                      (isize)AlignOf(type))

@@ -153,7 +153,7 @@ fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
   W32_Primitive *end_prim = (W32_Primitive*)end.h[0];
 
   u64 micros = (end_prim->timer.QuadPart - start_prim->timer.QuadPart) * Million(1)
-               / w32_state.perf_freq.QuadPart;
+               / w32_state.perf_freq;
 
   switch (unit) {
     case OS_TimerGranularity_min: {
@@ -174,6 +174,16 @@ fn u64 os_timer_elapsed_between(OS_Handle start, OS_Handle end,
 
 fn void os_timer_free(OS_Handle handle) {
   w32_primitive_release((W32_Primitive*)handle.h[0]);
+}
+
+fn f64 os_time_now(void) {
+  u64 value;
+  QueryPerformanceCounter((LARGE_INTEGER *)&value);
+  return (f64)(value - w32_state.time_offset) / (f64)w32_state.perf_freq;
+}
+
+fn u64 os_time_update_frequency(void) {
+  return w32_state.perf_freq;
 }
 
 ////////////////////////////////
@@ -511,14 +521,14 @@ fn void os_semaphore_free(OS_Handle handle) {
 }
 
 fn SharedMem os_sharedmem_open(String8 name, isize size,
-                               OS_AccessFlags flags) {
+                               OS_AccessFlag flags) {
   Assert(size > 0);
   SharedMem res = {0};
   DWORD access_flags = 0;
-  if (flags & OS_acfRead)    { access_flags |= GENERIC_READ;}
-  if (flags & OS_acfWrite)   { access_flags |= GENERIC_WRITE; }
-  if (flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  if (flags & OS_acfAppend)  { access_flags |= FILE_APPEND_DATA; }
+  if (flags & OS_AccessFlag_Read)    { access_flags |= GENERIC_READ;}
+  if (flags & OS_AccessFlag_Write)   { access_flags |= GENERIC_WRITE; }
+  if (flags & OS_AccessFlag_Execute) { access_flags |= GENERIC_EXECUTE; }
+  if (flags & OS_AccessFlag_Append)  { access_flags |= FILE_APPEND_DATA; }
 
   Scratch scratch = ScratchBegin(0, 0);
   StringBuilder ss = {0};
@@ -535,10 +545,10 @@ fn SharedMem os_sharedmem_open(String8 name, isize size,
   if (!res.mmap_handle.h[0]) { return res; }
 
   access_flags = 0;
-  if (flags & OS_acfRead)    { access_flags |= FILE_MAP_READ;}
-  if (flags & OS_acfWrite)   { access_flags |= FILE_MAP_WRITE; }
-  if (flags & OS_acfExecute) { access_flags |= FILE_MAP_EXECUTE; }
-  if (flags & OS_acfAppend)  { access_flags |= FILE_MAP_ALL_ACCESS; }
+  if (flags & OS_AccessFlag_Read)    { access_flags |= FILE_MAP_READ;}
+  if (flags & OS_AccessFlag_Write)   { access_flags |= FILE_MAP_WRITE; }
+  if (flags & OS_AccessFlag_Execute) { access_flags |= FILE_MAP_EXECUTE; }
+  if (flags & OS_AccessFlag_Append)  { access_flags |= FILE_MAP_ALL_ACCESS; }
   res.content = (u8*)MapViewOfFile((HANDLE)res.mmap_handle.h[0], access_flags,
                                    0, 0, size);
   if (!res.content) {
@@ -658,7 +668,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       prim->socket.size = sizeof(struct sockaddr_in6);
     } break;
     default: {
-      Panic("Invalid server address.");
+      Assert(false && "Invalid server address.");
     }
   }
   switch (protocol) {
@@ -669,7 +679,7 @@ fn OS_Socket os_socket_open(String8 name, u16 port, OS_Net_Transport protocol) {
       ctype = SOCK_DGRAM;
     } break;
     default: {
-      Panic("Invalid transport protocol.");
+      Assert(false && "Invalid transport protocol.");
     }
   }
 
@@ -756,10 +766,10 @@ fn void os_socket_connect(OS_Socket *server) {
   }
 }
 
-fn u8* os_socket_recv(Arena *arena, OS_Socket *client, usize buffer_size) {
+fn u8* os_socket_recv(Arena *arena, OS_Socket *client, i64 buffer_size) {
   u8 *res = arena_push_many(arena, u8, buffer_size);
   W32_Primitive *prim = (W32_Primitive*)client->handle.h[0];
-  recv(prim->socket.handle, (char*)res, (int)buffer_size, MSG_WAITALL);
+  recv(prim->socket.handle, (char*)res, buffer_size, MSG_WAITALL);
   return res;
 }
 
@@ -778,7 +788,7 @@ fn void os_socket_close(OS_Socket *socket) {
 
 ////////////////////////////////
 //- km: File operations
-fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlag flags) {
   W32_Primitive *prim = w32_primitive_alloc(W32_Primitive_File);
   prim->file.flags = flags;
 
@@ -789,21 +799,21 @@ fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
 
-  if (flags & OS_acfRead) {
+  if (flags & OS_AccessFlag_Read) {
     access_flags |= GENERIC_READ;
     share_mode |= FILE_SHARE_READ;
   }
-  if (flags & OS_acfWrite) {
+  if (flags & OS_AccessFlag_Write) {
     access_flags |= GENERIC_WRITE;
     creation_disposition = OPEN_ALWAYS;
   }
-  if (flags & OS_acfAppend) {
+  if (flags & OS_AccessFlag_Append) {
     access_flags |= FILE_APPEND_DATA;
     creation_disposition = OPEN_ALWAYS;
   }
-  if (flags & OS_acfExecute) { access_flags |= GENERIC_EXECUTE; }
-  if (flags & OS_acfShareRead) { share_mode |= FILE_SHARE_READ; }
-  if (flags & OS_acfShareWrite) { share_mode |= FILE_SHARE_WRITE; }
+  if (flags & OS_AccessFlag_Execute) { access_flags |= GENERIC_EXECUTE; }
+  if (flags & OS_AccessFlag_ShareRead) { share_mode |= FILE_SHARE_READ; }
+  if (flags & OS_AccessFlag_ShareWrite) { share_mode |= FILE_SHARE_WRITE; }
 
   prim->file.handle = CreateFileW((WCHAR*)path.str, access_flags,
                                   share_mode, &security_attributes,
@@ -859,7 +869,7 @@ fn String8 os_fs_read(Arena *arena, OS_Handle handle) {
 
 // TODO(lb): i don't know if there are some location on the Windows
 //           FS that contain files with size=0.
-fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, usize size) {
+fn String8 os_fs_read_virtual(Arena *arena, OS_Handle file, i64 bytes) {
   return os_fs_read(arena, file);
 }
 
@@ -949,7 +959,6 @@ fn FS_Properties os_fs_get_properties(OS_Handle file) {
   properties.last_modification_time = properties.last_status_change_time =
       w32_time64_from_system_time(&lastWriteTime);
 
-
   return properties;
 }
 
@@ -1015,19 +1024,19 @@ fn File os_fs_fopen(Arena *arena, OS_Handle file) {
 
   DWORD access_flags = 0;
   switch (prim->file.flags) {
-  case OS_acfRead: {
+  case OS_AccessFlag_Read: {
     access_flags = PAGE_READONLY;
   } break;
-  case OS_acfWrite:
-  case OS_acfRead | OS_acfWrite: {
+  case OS_AccessFlag_Write:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write: {
     access_flags = PAGE_READWRITE;
   } break;
-  case OS_acfExecute:
-  case OS_acfRead | OS_acfExecute: {
+  case OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Execute: {
     access_flags = PAGE_EXECUTE_READ;
   } break;
-  case OS_acfWrite | OS_acfExecute:
-  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+  case OS_AccessFlag_Write | OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write | OS_AccessFlag_Execute: {
     access_flags = PAGE_EXECUTE_READWRITE;
   } break;
   }
@@ -1036,19 +1045,19 @@ fn File os_fs_fopen(Arena *arena, OS_Handle file) {
 
   access_flags = 0;
   switch (prim->file.flags) {
-  case OS_acfRead: {
+  case OS_AccessFlag_Read: {
     access_flags = FILE_MAP_READ;
   } break;
-  case OS_acfWrite:
-  case OS_acfRead | OS_acfWrite: {
+  case OS_AccessFlag_Write:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write: {
     access_flags = FILE_MAP_WRITE;
   } break;
-  case OS_acfExecute:
-  case OS_acfRead | OS_acfExecute: {
+  case OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Execute: {
     access_flags = FILE_MAP_READ | FILE_MAP_EXECUTE;
   } break;
-  case OS_acfWrite | OS_acfExecute:
-  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+  case OS_AccessFlag_Write | OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write | OS_AccessFlag_Execute: {
     access_flags = FILE_MAP_ALL_ACCESS;
   } break;
   }
@@ -1071,7 +1080,7 @@ fn File os_fs_fopen_tmp(Arena *arena) {
   tmpfile.size = strlen(tmpfile_name);
   tmpfile.str = arena_push_many(arena, u8, tmpfile.size);
   memcopy(tmpfile.str, tmpfile_name, tmpfile.size);
-  return os_fs_fopen(arena, os_fs_open(tmpfile, OS_acfRead | OS_acfWrite));
+  return os_fs_fopen(arena, os_fs_open(tmpfile, OS_AccessFlag_Read | OS_AccessFlag_Write));
 }
 
 fn bool os_fs_fclose(File *file) {
@@ -1098,19 +1107,19 @@ fn bool os_fs_fresize(File *file, isize size) {
 
   DWORD access_flags = 0;
   switch (prim->file.flags) {
-  case OS_acfRead: {
+  case OS_AccessFlag_Read: {
     access_flags = PAGE_READONLY;
   } break;
-  case OS_acfWrite:
-  case OS_acfRead | OS_acfWrite: {
+  case OS_AccessFlag_Write:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write: {
     access_flags = PAGE_READWRITE;
   } break;
-  case OS_acfExecute:
-  case OS_acfRead | OS_acfExecute: {
+  case OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Execute: {
     access_flags = PAGE_EXECUTE_READ;
   } break;
-  case OS_acfWrite | OS_acfExecute:
-  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+  case OS_AccessFlag_Write | OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write | OS_AccessFlag_Execute: {
     access_flags = PAGE_EXECUTE_READWRITE;
   } break;
   }
@@ -1118,19 +1127,19 @@ fn bool os_fs_fresize(File *file, isize size) {
                                                    access_flags, 0, 0, 0);
   access_flags = 0;
   switch (prim->file.flags) {
-  case OS_acfRead: {
+  case OS_AccessFlag_Read: {
     access_flags = FILE_MAP_READ;
   } break;
-  case OS_acfWrite:
-  case OS_acfRead | OS_acfWrite: {
+  case OS_AccessFlag_Write:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write: {
     access_flags = FILE_MAP_WRITE;
   } break;
-  case OS_acfExecute:
-  case OS_acfRead | OS_acfExecute: {
+  case OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Execute: {
     access_flags = FILE_MAP_READ | FILE_MAP_EXECUTE;
   } break;
-  case OS_acfWrite | OS_acfExecute:
-  case OS_acfRead | OS_acfWrite | OS_acfExecute: {
+  case OS_AccessFlag_Write | OS_AccessFlag_Execute:
+  case OS_AccessFlag_Read | OS_AccessFlag_Write | OS_AccessFlag_Execute: {
     access_flags = FILE_MAP_ALL_ACCESS;
   } break;
   }
@@ -1263,7 +1272,7 @@ fn bool os_fs_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out) 
     if (!valid) { continue; }
     info_out->name = str8_from_str16(arena, str16_from_cstr16((u16*)data.cFileName));
 
-    OS_Handle file = os_fs_open(info_out->name, OS_acfRead);
+    OS_Handle file = os_fs_open(info_out->name, OS_AccessFlag_Read);
     info_out->properties = os_fs_get_properties(file);
     os_fs_close(file);
     if (iter->filter_allowed &&
@@ -1289,7 +1298,6 @@ fn void dbg_print(const char *fmt, ...) {
   va_start(args, fmt);
   String8 msg = _str8_format(scratch.arena, fmt, args);
   OutputDebugStringA(cstr_from_str8(scratch.arena, msg));
-  OutputDebugStringA("\n");
   va_end(args);
   ScratchEnd(scratch);
 }
@@ -1386,7 +1394,8 @@ fn void os_env_setup(void) {
 
   w32_state.arena = arena_build(.reserve_size = GB(1));
   InitializeCriticalSection(&w32_state.mutex);
-  QueryPerformanceFrequency(&w32_state.perf_freq);
+  QueryPerformanceFrequency((LARGE_INTEGER*)&w32_state.perf_freq);
+  QueryPerformanceCounter((LARGE_INTEGER*)&w32_state.time_offset);
 
   w32_state.thread_list.mutex = os_mutex_alloc();
 

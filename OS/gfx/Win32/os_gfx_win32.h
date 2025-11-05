@@ -43,4 +43,6 @@ fn void w32_xinput_load(void);
 fn LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
                                         WPARAM wparam, LPARAM lparam);
 
+internal u8 os_vkcode_from_os_key(OS_Key key);
+
 #endif

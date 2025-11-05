@@ -1,50 +1,16 @@
 // =============================================================================
-// System information retrieval
-fn void lnx_parseMeminfo(void) {
-  OS_Handle meminfo = os_fs_open(Strlit("/proc/meminfo"), OS_acfRead);
-  StringBuilder lines = str8_split(unx_state.arena,
-                                   os_fs_read_virtual(unx_state.arena,
-                                                      meminfo, 4096), '\n');
-  for (StringBuilderNode *curr_line = lines.first;
-       curr_line;
-       curr_line = curr_line->next) {
-    StringBuilder ss = str8_split(unx_state.arena, curr_line->value, ':');
-    for (StringBuilderNode *curr = ss.first; curr; curr = curr->next) {
-      if (str8_eq(curr->value, Strlit("MemTotal"))) {
-        curr = curr->next;
-        unx_state.info.total_memory =
-          KiB(1) *
-          u64_from_str8(str8_split(unx_state.arena,
-                                   str8_trim(curr->value),
-                                   ' ').first->value);
-      } else if (str8_eq(curr->value, Strlit("Hugepagesize"))) {
-        curr = curr->next;
-        unx_state.info.hugepage_size =
-          (i64)(KiB(1) *
-                u64_from_str8(str8_split(unx_state.arena,
-                                         str8_trim(curr->value),
-                                         ' ').first->value));
-        return;
-      }
-    }
-  }
-}
-
-// =============================================================================
 // Memory allocation
-fn void* os_reserve_huge(isize size) {
-  Assert(size > 0);
+fn void* os_reserve_huge(i64 bytes) {
   // TODO(lb): MAP_HUGETLB vs MAP_HUGE_2MB/MAP_HUGE_1GB?
-  void *res = mmap(0, (usize)size, PROT_NONE,
-                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
-  if (res == MAP_FAILED) { res = 0; }
-  return res;
+  Assert(bytes > 0);
+  void *res = mmap(0, (u64)bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+  return (res != MAP_FAILED ? res : 0);
 }
 
 // =============================================================================
 // File reading and writing/appending
-fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlags flags) {
-  i32 access_flags = O_CREAT | unx_flags_from_acf(flags);
+fn OS_Handle os_fs_open(String8 filepath, OS_AccessFlag flags) {
+  i32 access_flags = O_CREAT | os_posix_flags_from_acf(flags);
   Scratch scratch = ScratchBegin(0, 0);
   i32 fd = open(cstr_from_str8(scratch.arena, filepath), access_flags,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -92,7 +58,7 @@ fn bool os_fs_copy(String8 source, String8 destination) {
 
 // =============================================================================
 // Glibc missing wrappers
-fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
+internal i32 os_posix_lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns) {
   struct lnx_sched_attr attr = {
     .size = sizeof(attr),
     .sched_policy = policy,
@@ -104,25 +70,23 @@ fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period
   return (i32)syscall(__NR_sched_setattr, syscall(__NR_gettid), &attr, 0);
 }
 
-fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                               Func_Signal *deadline_miss_handler) {
-  Assert(!lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns));
-  //       \CPU time exceeded/
+internal void os_posix_lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns, Func_Signal *deadline_miss_handler) {
+  Assert(!os_posix_lnx_sched_setattr(SCHED_DEADLINE, runtime_ns, deadline_ns, period_ns));
   (void)signal(SIGXCPU, deadline_miss_handler);
 }
 
-fn void lnx_sched_yield(void) {
+internal void os_posix_lnx_sched_yield(void) {
   sched_yield();
 }
 
 // =============================================================================
 // Signals
 // TODO(lb): are there signals on windows?
-fn void lnx_signal_send_private(i32 signal) {
+internal void os_posix_lnx_signal_send_private(i32 signal) {
   kill(getpid(), signal);
 }
 
-fn void lnx_signal_wait(i32 signal) {
+internal void os_posix_lnx_signal_wait(i32 signal) {
   sigset_t signal_set;
   sigemptyset(&signal_set);
   sigaddset(&signal_set, signal);
@@ -132,30 +96,49 @@ fn void lnx_signal_wait(i32 signal) {
 }
 
 // =============================================================================
+internal void os_posix_lnx_parse_meminfo(void) {
+  OS_Handle meminfo = os_fs_open(Strlit("/proc/meminfo"), OS_AccessFlag_Read);
+  StringBuilder lines = str8_split(os_posix_state.arena,
+                                   os_fs_read_virtual(os_posix_state.arena,
+                                                      meminfo, 4096), '\n');
+  for (StringBuilderNode *curr_line = lines.first;
+       curr_line;
+       curr_line = curr_line->next) {
+    StringBuilder ss = str8_split(os_posix_state.arena, curr_line->value, ':');
+    for (StringBuilderNode *curr = ss.first; curr; curr = curr->next) {
+      if (str8_eq(curr->value, Strlit("MemTotal"))) {
+        curr = curr->next;
+        os_posix_state.info.total_memory = KiB(1) * i64_from_str8(str8_split(os_posix_state.arena, str8_trim(curr->value), ' ').first->value);
+      } else if (str8_eq(curr->value, Strlit("Hugepagesize"))) {
+        curr = curr->next;
+        os_posix_state.info.hugepage_size = KiB(1) * i64_from_str8(str8_split(os_posix_state.arena, str8_trim(curr->value), ' ').first->value);
+      }
+    }
+  }
+}
+
 fn void os_env_setup(void) {
   srand((u32)time(0));
-  unx_state.info.core_count = (u8)get_nprocs();
-  unx_state.info.page_size = getpagesize();
-  unx_state.info.hostname = unx_gethostname();
+  os_posix_state.info.core_count = get_nprocs();
+  os_posix_state.info.page_size = getpagesize();
+  os_posix_state.info.hostname = os_posix_gethostname();
 
-  unx_state.arena = arena_build();
-  pthread_mutex_init(&unx_state.primitive_lock, 0);
-  lnx_parseMeminfo();
+  os_posix_state.arena = arena_build();
+  pthread_mutex_init(&os_posix_state.primitive_lock, 0);
+  os_posix_lnx_parse_meminfo();
 
   struct timespec tms;
   struct tm lt = {0};
   (void)clock_gettime(CLOCK_REALTIME, &tms);
   (void)localtime_r(&tms.tv_sec, &lt);
-  unx_state.unix_utc_offset = (u64)lt.tm_gmtoff;
+  os_posix_state.unix_utc_offset = (u64)lt.tm_gmtoff;
 
   clock_gettime(CLOCK_MONOTONIC, &tms);
-  unx_state.time_offset = tms.tv_sec * UNX_TIME_FREQ + tms.tv_nsec;
+  os_posix_state.time_offset = tms.tv_sec * OS_POSIX_TIME_FREQ + tms.tv_nsec;
 
 #if OS_GUI
-  unx_gfx_init();
-#endif
-#if OS_SOUND
-  lnx_snd_init();
+  os_gfx_init();
+  rhi_init();
 #endif
 }
 
@@ -166,13 +149,16 @@ i32 main(i32 argc, char **argv) {
   CmdLine cli = {0};
   cli.count = argc - 1;
   cli.exe = str8_from_cstr(argv[0]);
-  cli.args = arena_push_many(unx_state.arena, String8, argc - 1);
+  cli.args = arena_push_many(os_posix_state.arena, String8, argc - 1);
   for (isize i = 1; i < argc; ++i) {
     cli.args[i - 1] = str8_from_cstr(argv[i]);
   }
 
   start(&cli);
+
+#if OS_GUI
   rhi_deinit();
-  unx_gfx_deinit();
+  os_gfx_deinit();
+#endif
 }
 #endif

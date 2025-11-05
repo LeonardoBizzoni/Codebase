@@ -28,11 +28,13 @@ struct lnx_sched_attr {
   u32 sched_util_max;
 };
 
-fn void lnx_parseMeminfo(void);
+internal i32  os_posix_lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns);
+internal void os_posix_lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns, Func_Signal *deadline_miss_handler);
+internal void os_posix_lnx_sched_yield(void);
 
-fn i32 lnx_sched_setattr(u32 policy, u64 runtime_ns, u64 deadline_ns, u64 period_ns);
-fn void lnx_sched_set_deadline(u64 runtime_ns, u64 deadline_ns, u64 period_ns,
-                               Func_Signal *deadline_miss_handler);
-fn void lnx_sched_yield(void);
+internal void os_posix_lnx_signal_send_private(i32 signal);
+internal void os_posix_lnx_signal_wait(i32 signal);
+
+internal void os_posix_lnx_parse_meminfo(void);
 
 #endif
