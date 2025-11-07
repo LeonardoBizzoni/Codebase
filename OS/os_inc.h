@@ -14,6 +14,8 @@
 #  endif
 #elif OS_WINDOWS
 #  include "core/Win32/os_core_win32.h"
+#elif OS_WEB
+#  include "core/Web/os_core_web.h"
 #else
 #  error os layer is not supported for this platform
 #endif

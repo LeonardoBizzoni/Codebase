@@ -27,7 +27,9 @@
 #  error "Unsupported compiler"
 #endif
 
-#if defined(__gnu_linux__)
+#if defined(__EMSCRIPTEN__)
+#  define OS_WEB 1
+#elif defined(__gnu_linux__)
 #  define OS_LINUX 1
 #elif defined(__unix__)
 #  define OS_BSD 1
@@ -53,8 +55,12 @@
 #  define ARCH_ARM64 1
 #elif defined(__arm__)
 #  define ARCH_ARM32 1
-#elif defined(__AVR__)
-#  define ARCH_AVR 1
+#elif defined(__EMSCRIPTEN__)
+#  if __SIZEOF_POINTER__ == 8
+#    define ARCH_WASM64 1
+#  else
+#    define ARCH_WASM32 1
+#  endif
 #else
 #  error "Unsopported platform"
 #endif
@@ -81,6 +87,9 @@
 #if !defined(OS_WINDOWS)
 #  define OS_WINDOWS 0
 #endif
+#if !defined(OS_WEB)
+#  define OS_WEB 0
+#endif
 #if !defined(OS_NONE)
 #  define OS_NONE 0
 #endif
@@ -97,8 +106,11 @@
 #if !defined(ARCH_ARM64)
 #  define ARCH_ARM64 0
 #endif
-#if !defined(ARCH_AVR)
-#  define ARCH_AVR 0
+#if !defined(ARCH_WASM32)
+#  define ARCH_WASM32 0
+#endif
+#if !defined(ARCH_WASM64)
+#  define ARCH_WASM64 0
 #endif
 
 #if !defined(OS_GUI)
