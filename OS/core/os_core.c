@@ -11,7 +11,13 @@ fn void os_print(OS_LogLevel level, const char *caller, const char *file,
     case OS_LogLevel_Error: {
       dbg_print(ANSI_COLOR_RED "[ERROR ");
     } break;
-    default: dbg_print(ANSI_COLOR_RESET); goto print_str;
+  default: {
+    Unused(caller);
+    Unused(file);
+    Unused(line);
+    dbg_print(ANSI_COLOR_RESET);
+    goto print_str;
+  } break;
   }
   dbg_print("%s:%s@L%d] " ANSI_COLOR_RESET, file, caller, line);
 

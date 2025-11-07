@@ -5,6 +5,11 @@ typedef struct {
   u64 h[1];
 } OS_Handle;
 
+typedef struct {
+  i64 size;
+  OS_Handle *handles;
+} OS_HandleArray;
+
 typedef u8 OS_SemaphoreKind;
 enum {
   OS_SemaphoreKind_Thread,

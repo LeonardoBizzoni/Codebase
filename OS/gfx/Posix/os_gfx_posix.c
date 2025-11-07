@@ -7,7 +7,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
     memzero(window, sizeof(OS_GFX_Posix_Window));
     StackPop(os_gfx_posix_state.freelist_window);
   } else {
-    window = arena_push(os_gfx_posix_state.arena, OS_GFX_Posix_Window);
+    window = arena_push(os_posix_state.arena, OS_GFX_Posix_Window);
   }
   DLLPushBack(os_gfx_posix_state.first_window, os_gfx_posix_state.last_window, window);
 
@@ -30,7 +30,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
   window->xgc = XCreateGC(os_gfx_posix_state.xdisplay, window->xwindow, 0, &gcv);
 
   {
-    Scratch scratch = ScratchBegin(&os_gfx_posix_state.arena, 1);
+    Scratch scratch = ScratchBegin(&os_posix_state.arena, 1);
     XStoreName(os_gfx_posix_state.xdisplay, window->xwindow,
                cstr_from_str8(scratch.arena, name));
     ScratchEnd(scratch);
@@ -210,6 +210,66 @@ fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height) {
   *height = attribs.height;
 }
 
+fn void os_window_set_monitor(OS_Handle hwindow, OS_Handle hmonitor) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  XRRMonitorInfo *xmonitor_target = (XRRMonitorInfo *)hmonitor.h[0];
+  XRRMonitorInfo *xmonitor_source = os_gfx_posix_monitor_from_window(window);
+
+  XWindowAttributes window_attributes = {0};
+  XGetWindowAttributes(os_gfx_posix_state.xdisplay, window->xwindow, &window_attributes);
+
+  i32 window_relative_x = window_attributes.x - xmonitor_source->x;
+  i32 window_relative_y = window_attributes.y - xmonitor_source->y;
+  XMoveWindow(os_gfx_posix_state.xdisplay, window->xwindow,
+              xmonitor_target->x + window_relative_x,
+              xmonitor_target->y + window_relative_y);
+}
+
+fn OS_HandleArray os_monitor_array(Arena *arena) {
+  OS_HandleArray res = {0};
+  res.size = os_gfx_posix_state.xmonitors_count;
+  res.handles = arena_push_many(arena, OS_Handle, os_gfx_posix_state.xmonitors_count);
+  for (i32 i = 0; i < os_gfx_posix_state.xmonitors_count; ++i) {
+    res.handles[i] = (OS_Handle) {{ (u64)&os_gfx_posix_state.xmonitors[i] }};
+  }
+  return res;
+}
+
+fn OS_Handle os_monitor_from_window(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  OS_Handle res = {{ (u64)os_gfx_posix_monitor_from_window(window) }};
+  return res;
+}
+
+fn OS_Handle os_monitor_primary(void) {
+  XRRMonitorInfo *xmonitor = 0;
+  for (i32 i = 0; i < os_gfx_posix_state.xmonitors_count; ++i) {
+    if (os_gfx_posix_state.xmonitors[i].primary) {
+      xmonitor = &os_gfx_posix_state.xmonitors[i];
+    }
+  }
+  Assert(xmonitor);
+  OS_Handle res = {{ (u64)xmonitor }};
+  return res;
+}
+
+fn String8 os_monitor_name(Arena *arena, OS_Handle hmonitor) {
+  XRRMonitorInfo *xmonitor = (XRRMonitorInfo *)hmonitor.h[0];
+  char *cname = XGetAtomName(os_gfx_posix_state.xdisplay, xmonitor->name);
+  String8 res = {0};
+  res.size = str8_len(cname);
+  res.str = arena_push_many(arena, u8, res.size);
+  memcopy(res.str, cname, res.size);
+  XFree(cname);
+  return res;
+}
+
+fn void os_monitor_size(OS_Handle hmonitor, i32 *width, i32 *height) {
+  XRRMonitorInfo *xmonitor = (XRRMonitorInfo *)hmonitor.h[0];
+  *width = xmonitor->width;
+  *height = xmonitor->height;
+}
+
 fn String8 os_key_name_from_event(Arena *arena, OS_Event event) {
   Unused(arena);
   String8 res = {0};
@@ -277,7 +337,6 @@ fn OS_EventList os_get_events(Arena *arena, bool wait) {
 // =============================================================================
 // Platform specific definitions
 internal void os_gfx_init(void) {
-  os_gfx_posix_state.arena = arena_build();
   os_gfx_posix_state.xdisplay = XOpenDisplay(0);
   os_gfx_posix_state.xscreen = DefaultScreen(os_gfx_posix_state.xdisplay);
   os_gfx_posix_state.xroot = RootWindow(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xscreen);
@@ -291,11 +350,40 @@ internal void os_gfx_init(void) {
   os_gfx_posix_state.xatom_state_maximized_vert = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE_MAXIMIZED_VERT", False);
   os_gfx_posix_state.xatom_motif_wm_hints = XInternAtom(os_gfx_posix_state.xdisplay, "_MOTIF_WM_HINTS", False);
   XSynchronize(os_gfx_posix_state.xdisplay, True);
+
+  XRRMonitorInfo *active_monitors = XRRGetMonitors(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xroot, True,
+                                                   &os_gfx_posix_state.xmonitors_count);
+  os_gfx_posix_state.xmonitors = arena_push_many(os_posix_state.arena, XRRMonitorInfo,
+                                                 os_gfx_posix_state.xmonitors_count);
+  memcopy(os_gfx_posix_state.xmonitors, active_monitors,
+          sizeof(*active_monitors) * (u32)os_gfx_posix_state.xmonitors_count);
+  XRRFreeMonitors(active_monitors);
 }
 
 internal void os_gfx_deinit(void) {
   XAutoRepeatOn(os_gfx_posix_state.xdisplay);
   XCloseDisplay(os_gfx_posix_state.xdisplay);
+}
+
+internal XRRMonitorInfo* os_gfx_posix_monitor_from_window(OS_GFX_Posix_Window *window) {
+  XWindowAttributes window_attributes = {0};
+  XGetWindowAttributes(os_gfx_posix_state.xdisplay, window->xwindow, &window_attributes);
+
+  i32 window_center_x = window_attributes.x + window_attributes.width  / 2;
+  i32 window_center_y = window_attributes.y + window_attributes.height / 2;
+
+  XRRMonitorInfo *window_monitor = 0;
+  for (i32 i = 0; i < os_gfx_posix_state.xmonitors_count; ++i) {
+    XRRMonitorInfo *xmonitor = &os_gfx_posix_state.xmonitors[i];
+    if (window_center_x >= xmonitor->x &&
+        window_center_x < xmonitor->x + xmonitor->width &&
+        window_center_y >= xmonitor->y &&
+        window_center_y < xmonitor->y + xmonitor->width) {
+      window_monitor = xmonitor;
+    }
+  }
+  Assert(window_monitor);
+  return window_monitor;
 }
 
 internal bool os_posix_window_check_xatom(OS_GFX_Posix_Window *window, Atom target) {

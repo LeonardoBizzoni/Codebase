@@ -202,6 +202,7 @@ typedef struct {
 } OS_InputDeviceState;
 
 fn OS_Handle os_window_open(String8 name, i32 width, i32 height);
+fn OS_Handle os_window_open_on_monitor(String8 name, i32 width, i32 height, OS_Handle hmonitor);
 fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
 fn void os_window_minimize(OS_Handle hwindow);
@@ -217,10 +218,17 @@ fn bool os_window_is_maximized(OS_Handle hwindow);
 fn bool os_window_is_borderless(OS_Handle hwindow);
 fn bool os_window_is_focused(OS_Handle hwindow);
 
-fn void os_window_set_title(OS_Handle window, String8 title);
+fn void os_window_set_title(OS_Handle hwindow, String8 title);
 fn void os_window_set_position(OS_Handle hwindow, i32 x, i32 y);
 fn void os_window_set_size(OS_Handle hwindow, i32 width, i32 height);
-fn void os_window_get_size(OS_Handle window, i32 *width, i32 *height);
+fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height);
+fn void os_window_set_monitor(OS_Handle hwindow, OS_Handle hmonitor);
+
+fn OS_HandleArray os_monitor_array(Arena *arena);
+fn OS_Handle os_monitor_from_window(OS_Handle hwindow);
+fn OS_Handle os_monitor_primary(void);
+fn String8 os_monitor_name(Arena *arena, OS_Handle hmonitor);
+fn void os_monitor_size(OS_Handle hmonitor, i32 *width, i32 *height);
 
 fn String8 os_key_name_from_event(Arena *arena, OS_Event event);
 fn bool os_key_is_down(OS_Key key);

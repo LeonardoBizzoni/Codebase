@@ -6,6 +6,8 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/XKBlib.h>
+
+#include <X11/extensions/Xrandr.h>
 #define internal static
 
 typedef struct OS_GFX_Posix_Window {
@@ -16,7 +18,6 @@ typedef struct OS_GFX_Posix_Window {
 } OS_GFX_Posix_Window;
 
 typedef struct {
-  Arena *arena;
   OS_GFX_Posix_Window *first_window;
   OS_GFX_Posix_Window *last_window;
   OS_GFX_Posix_Window *freelist_window;
@@ -25,6 +26,9 @@ typedef struct {
   XVisualInfo xvisual;
   i32 xscreen;
   Window xroot;
+
+  XRRMonitorInfo *xmonitors;
+  i32 xmonitors_count;
 
   Atom xatom_close;
   Atom xatom_change_state;
@@ -49,6 +53,7 @@ StaticAssert(sizeof(OS_GFX_Posix_MotifWMHint) == 5 * sizeof(long), invalid_motif
 internal void os_gfx_init(void);
 internal void os_gfx_deinit(void);
 
+internal XRRMonitorInfo* os_gfx_posix_monitor_from_window(OS_GFX_Posix_Window *window);
 internal bool os_posix_window_check_xatom(OS_GFX_Posix_Window *window, Atom target);
 internal OS_GFX_Posix_Window* os_posix_window_from_xwindow(Window xwindow);
 internal KeySym os_posix_keysym_from_os_key(OS_Key key);
