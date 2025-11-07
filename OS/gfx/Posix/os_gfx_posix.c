@@ -53,6 +53,21 @@ fn void os_window_hide(OS_Handle hwindow) {
   XFlush(os_gfx_posix_state.xdisplay);
 }
 
+fn void os_window_minimize(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+
+  XEvent event = {0};
+  event.xclient.type = ClientMessage;
+  event.xclient.window = window->xwindow;
+  event.xclient.message_type = os_gfx_posix_state.xatom_change_state;
+  event.xclient.format = 32;
+  event.xclient.data.l[0] = IconicState;
+
+  XSendEvent(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xroot, False,
+             SubstructureRedirectMask | SubstructureNotifyMask, &event);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
 fn void os_window_close(OS_Handle hwindow) {
   OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
   XUnmapWindow(os_gfx_posix_state.xdisplay, window->xwindow);
@@ -65,6 +80,128 @@ fn void os_window_close(OS_Handle hwindow) {
   StackPush(os_gfx_posix_state.freelist_window, window);
 }
 
+fn void os_window_toggle_fullscreen(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  XEvent event = {0};
+  event.xclient.type = ClientMessage;
+  event.xclient.send_event = True;
+  event.xclient.window = window->xwindow;
+  event.xclient.message_type = os_gfx_posix_state.xatom_state;
+  event.xclient.format = 32;
+  event.xclient.data.l[0] = os_window_is_fullscreen(hwindow) ? 0 : 1;
+  event.xclient.data.l[1] = (i64)os_gfx_posix_state.xatom_state_fullscreen;
+  event.xclient.data.l[3] = 1;
+
+  XSendEvent(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xroot, False,
+             SubstructureRedirectMask | SubstructureNotifyMask, &event);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
+fn void os_window_toggle_maximized(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+
+  XEvent event = {0};
+  event.xclient.type = ClientMessage;
+  event.xclient.window = window->xwindow;
+  event.xclient.message_type = os_gfx_posix_state.xatom_state;
+  event.xclient.format = 32;
+  event.xclient.data.l[0] = os_window_is_maximized(hwindow) ? 0 : 1;
+  event.xclient.data.l[1] = (i32)os_gfx_posix_state.xatom_state_maximized_horz;
+  event.xclient.data.l[2] = (i32)os_gfx_posix_state.xatom_state_maximized_vert;
+  event.xclient.data.l[3] = 1;
+  event.xclient.data.l[4] = 0;
+
+  XSendEvent(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xroot, False,
+             SubstructureRedirectMask | SubstructureNotifyMask, &event);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
+fn void os_window_toggle_borderless(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  OS_GFX_Posix_MotifWMHint hints = {0};
+  hints.flags = 1L << 1;
+  hints.decorations = os_window_is_borderless(hwindow);
+  XUnmapWindow(os_gfx_posix_state.xdisplay, window->xwindow);
+  XChangeProperty(os_gfx_posix_state.xdisplay, window->xwindow,
+                  os_gfx_posix_state.xatom_motif_wm_hints,
+                  os_gfx_posix_state.xatom_motif_wm_hints, 32,
+                  PropModeReplace, (u8 *)&hints, 5);
+  XMapWindow(os_gfx_posix_state.xdisplay, window->xwindow);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
+fn bool os_window_is_fullscreen(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  return os_posix_window_check_xatom(window, os_gfx_posix_state.xatom_state_fullscreen);
+}
+
+fn bool os_window_is_minimized(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  return os_posix_window_check_xatom(window, os_gfx_posix_state.xatom_state_hidden);
+}
+
+fn bool os_window_is_maximized(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  return os_posix_window_check_xatom(window, os_gfx_posix_state.xatom_state_maximized_horz) &&
+         os_posix_window_check_xatom(window, os_gfx_posix_state.xatom_state_maximized_vert);
+}
+
+fn bool os_window_is_borderless(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+
+  Atom actual_type;
+  i32 actual_format;
+  u64 atom_count, bytes_after;
+  u8 *prop = NULL;
+  if (XGetWindowProperty(os_gfx_posix_state.xdisplay,
+                         window->xwindow, os_gfx_posix_state.xatom_motif_wm_hints,
+                         0, 5, False, os_gfx_posix_state.xatom_motif_wm_hints,
+                         &actual_type, &actual_format,
+                         &atom_count, &bytes_after, &prop) != Success) {
+    return false;
+  }
+  if (!prop || atom_count < 5 || actual_format != 32) { return false; }
+
+  bool res = false;
+  OS_GFX_Posix_MotifWMHint *hints = (OS_GFX_Posix_MotifWMHint*)prop;
+  if (hints->decorations == 0 && hints->flags & (1L << 1)) {
+    res = true;
+  }
+  XFree(prop);
+  return res;
+}
+
+fn bool os_window_is_focused(OS_Handle hwindow) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  Window xwindow_focused;
+  i32 revert_to;
+  XGetInputFocus(os_gfx_posix_state.xdisplay, &xwindow_focused, &revert_to);
+  return xwindow_focused == window->xwindow;
+}
+
+fn void os_window_set_title(OS_Handle hwindow, String8 title) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  {
+    Scratch scratch = ScratchBegin(0, 0);
+    XStoreName(os_gfx_posix_state.xdisplay, window->xwindow,
+               cstr_from_str8(scratch.arena, title));
+    ScratchEnd(scratch);
+  }
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
+fn void os_window_set_position(OS_Handle hwindow, i32 x, i32 y) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  XMoveWindow(os_gfx_posix_state.xdisplay, window->xwindow, x, y);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
+fn void os_window_set_size(OS_Handle hwindow, i32 width, i32 height) {
+  OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
+  XResizeWindow(os_gfx_posix_state.xdisplay, window->xwindow, (u32)width, (u32)height);
+  XFlush(os_gfx_posix_state.xdisplay);
+}
+
 fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height) {
   OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
   XWindowAttributes attribs = {0};
@@ -73,12 +210,20 @@ fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height) {
   *height = attribs.height;
 }
 
-fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
+fn String8 os_key_name_from_event(Arena *arena, OS_Event event) {
   Unused(arena);
   String8 res = {0};
   res.str = (u8*)XKeysymToString(event.key.keycode);
   if (res.str) { res.size = str8_len((char*)res.str); }
   return res;
+}
+
+fn bool os_key_is_down(OS_Key key) {
+  char bitarray[32] = {0};
+  XQueryKeymap(os_gfx_posix_state.xdisplay, bitarray);
+  KeySym keysym = os_posix_keysym_from_os_key(key);
+  KeyCode keycode = XKeysymToKeycode(os_gfx_posix_state.xdisplay, keysym);
+  return bitarray[keycode >> 3] & (1 << (keycode & 7));
 }
 
 fn OS_EventList os_get_events(Arena *arena, bool wait) {
@@ -129,28 +274,53 @@ fn OS_EventList os_get_events(Arena *arena, bool wait) {
   return res;
 }
 
-fn bool os_key_is_down(OS_Key key) {
-  char bitarray[32] = {0};
-  XQueryKeymap(os_gfx_posix_state.xdisplay, bitarray);
-  KeySym keysym = os_posix_keysym_from_os_key(key);
-  KeyCode keycode = XKeysymToKeycode(os_gfx_posix_state.xdisplay, keysym);
-  return bitarray[keycode >> 3] & (1 << (keycode & 7));
-}
-
 // =============================================================================
 // Platform specific definitions
-fn void os_gfx_init(void) {
+internal void os_gfx_init(void) {
   os_gfx_posix_state.arena = arena_build();
   os_gfx_posix_state.xdisplay = XOpenDisplay(0);
   os_gfx_posix_state.xscreen = DefaultScreen(os_gfx_posix_state.xdisplay);
   os_gfx_posix_state.xroot = RootWindow(os_gfx_posix_state.xdisplay, os_gfx_posix_state.xscreen);
   os_gfx_posix_state.xatom_close = XInternAtom(os_gfx_posix_state.xdisplay, "WM_DELETE_WINDOW", False);
+  os_gfx_posix_state.xatom_change_state = XInternAtom(os_gfx_posix_state.xdisplay, "WM_CHANGE_STATE", False);
+  os_gfx_posix_state.xatom_active_window = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_ACTIVE_WINDOW", False);
+  os_gfx_posix_state.xatom_state = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE", False);
+  os_gfx_posix_state.xatom_state_hidden = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE_HIDDEN", False);
+  os_gfx_posix_state.xatom_state_fullscreen = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE_FULLSCREEN", False);
+  os_gfx_posix_state.xatom_state_maximized_horz = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
+  os_gfx_posix_state.xatom_state_maximized_vert = XInternAtom(os_gfx_posix_state.xdisplay, "_NET_WM_STATE_MAXIMIZED_VERT", False);
+  os_gfx_posix_state.xatom_motif_wm_hints = XInternAtom(os_gfx_posix_state.xdisplay, "_MOTIF_WM_HINTS", False);
   XSynchronize(os_gfx_posix_state.xdisplay, True);
 }
 
-fn void os_gfx_deinit(void) {
+internal void os_gfx_deinit(void) {
   XAutoRepeatOn(os_gfx_posix_state.xdisplay);
   XCloseDisplay(os_gfx_posix_state.xdisplay);
+}
+
+internal bool os_posix_window_check_xatom(OS_GFX_Posix_Window *window, Atom target) {
+  Atom actual_type;
+  i32 actual_format;
+  u64 atom_count, bytes_after;
+  u8 *prop = NULL;
+  if (XGetWindowProperty(os_gfx_posix_state.xdisplay,
+                         window->xwindow, os_gfx_posix_state.xatom_state,
+                         0, (~0L), False, XA_ATOM, &actual_type, &actual_format,
+                         &atom_count, &bytes_after, &prop) != Success) {
+    return false;
+  }
+  if (!prop) { return false; }
+
+  bool res = false;
+  Atom *atoms = (Atom*)prop;
+  for (u64 i = 0; i < atom_count; ++i) {
+    if (atoms[i] == target) {
+      res = true;
+      break;
+    }
+  }
+  XFree(prop);
+  return res;
 }
 
 internal OS_GFX_Posix_Window* os_posix_window_from_xwindow(Window xwindow) {

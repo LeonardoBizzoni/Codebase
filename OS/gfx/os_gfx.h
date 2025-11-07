@@ -204,12 +204,27 @@ typedef struct {
 fn OS_Handle os_window_open(String8 name, i32 width, i32 height);
 fn void os_window_show(OS_Handle window);
 fn void os_window_hide(OS_Handle window);
+fn void os_window_minimize(OS_Handle hwindow);
 fn void os_window_close(OS_Handle window);
+
+fn void os_window_toggle_fullscreen(OS_Handle hwindow);
+fn void os_window_toggle_maximized(OS_Handle hwindow);
+fn void os_window_toggle_borderless(OS_Handle hwindow);
+
+fn bool os_window_is_fullscreen(OS_Handle hwindow);
+fn bool os_window_is_minimized(OS_Handle hwindow);
+fn bool os_window_is_maximized(OS_Handle hwindow);
+fn bool os_window_is_borderless(OS_Handle hwindow);
+fn bool os_window_is_focused(OS_Handle hwindow);
+
+fn void os_window_set_title(OS_Handle window, String8 title);
+fn void os_window_set_position(OS_Handle hwindow, i32 x, i32 y);
+fn void os_window_set_size(OS_Handle hwindow, i32 width, i32 height);
 fn void os_window_get_size(OS_Handle window, i32 *width, i32 *height);
 
-fn OS_EventList os_get_events(Arena *arena, bool wait);
+fn String8 os_key_name_from_event(Arena *arena, OS_Event event);
 fn bool os_key_is_down(OS_Key key);
 
-fn String8 os_keyname_from_event(Arena *arena, OS_Event event);
+fn OS_EventList os_get_events(Arena *arena, bool wait);
 
 #endif
