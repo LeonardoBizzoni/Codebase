@@ -4,8 +4,6 @@ global PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = NULL;
 global PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = NULL;
 
 fn void rhi_init(void) {
-  w32gl_state.arena = arena_build();
-
   WNDCLASSA window_class = {
     .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
     .lpfnWndProc = DefWindowProcA,
@@ -83,7 +81,7 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
     memzero(rhi_window, sizeof (*rhi_window));
     QueuePop(w32gl_state.freequeue_first);
   } else {
-    rhi_window = arena_push(w32gl_state.arena, W32Gl_Window);
+    rhi_window = arena_push(w32_state.arena, W32Gl_Window);
   }
   rhi_window->os_window = os_window;
 
@@ -99,7 +97,7 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
     0
   };
 
-  HDC dc = GetDC(os_window->winhandle);
+  HDC dc = GetDC(os_window->handle);
 
   i32 pixel_format;
   u32 num_formats;
@@ -131,14 +129,14 @@ fn void rhi_context_destroy(RHI_Handle context) {
   Unused(context);
 }
 
-fn void rhi_context_set_active(RHI_Handle handle) {
-  W32Gl_Window *rhi_window = (W32Gl_Window*)handle.h[0];
-  HDC dc = GetDC(rhi_window->os_window->winhandle);
+fn void rhi_context_set_active(RHI_Handle hcontext) {
+  W32Gl_Window *rhi_window = (W32Gl_Window*)hcontext.h[0];
+  HDC dc = GetDC(rhi_window->os_window->handle);
   wglMakeCurrent(dc, rhi_window->gl_context);
 }
 
-fn void rhi_context_commit(RHI_Handle context) {
-  W32Gl_Window *rhi_window = (W32Gl_Window*)context.h[0];
-  HDC dc = GetDC(rhi_window->os_window->winhandle);
+fn void rhi_context_commit(RHI_Handle hcontext) {
+  W32Gl_Window *rhi_window = (W32Gl_Window*)hcontext.h[0];
+  HDC dc = GetDC(rhi_window->os_window->handle);
   SwapBuffers(dc);
 }

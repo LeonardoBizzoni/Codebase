@@ -17,13 +17,13 @@ typedef struct W32_Window {
   struct W32_Window *prev;
 
   OS_Handle task;
-  HWND winhandle;
+  HWND handle;
   HBITMAP bitmap_dib;
   HDC mem_dc;
+  WINDOWPLACEMENT placement;
 } W32_Window;
 
 typedef struct {
-  Arena *arena;
   W32_Window *first_window;
   W32_Window *last_window;
   W32_Window *freelist_window;

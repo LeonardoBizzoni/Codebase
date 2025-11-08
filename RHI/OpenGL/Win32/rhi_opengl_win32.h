@@ -13,8 +13,6 @@ typedef struct W32Gl_Window {
 } W32Gl_Window;
 
 typedef struct {
-  Arena *arena;
-
   W32Gl_Window *freequeue_first;
   W32Gl_Window *freequeue_last;
 } W32Gl_State;

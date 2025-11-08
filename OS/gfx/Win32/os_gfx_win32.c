@@ -7,7 +7,7 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
     memzero(window, sizeof(W32_Window));
     StackPop(w32_gfxstate.freelist_window);
   } else {
-    window = arena_push(w32_gfxstate.arena, W32_Window);
+    window = arena_push(w32_state.arena, W32_Window);
   }
   DLLPushBack(w32_gfxstate.first_window, w32_gfxstate.last_window, window);
 
@@ -21,52 +21,172 @@ fn OS_Handle os_window_open(String8 name, i32 width, i32 height) {
     winclass.lpfnWndProc = w32_message_handler;
     winclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     RegisterClass(&winclass);
-    window->winhandle = CreateWindowA(window_name, window_name,
-                                      WS_OVERLAPPEDWINDOW,
-                                      0, 0, width, height,
-                                      0, 0, w32_gfxstate.instance, 0);
-    Assert(window->winhandle);
+    window->handle = CreateWindowA(window_name, window_name,
+                                   WS_OVERLAPPEDWINDOW,
+                                   0, 0, width, height,
+                                   0, 0, w32_gfxstate.instance, 0);
+    Assert(window->handle);
     ScratchEnd(scratch);
   }
 
   RECT rect = {0};
-  (void)GetWindowRect(window->winhandle, &rect);
+  (void)GetWindowRect(window->handle, &rect);
   OS_Handle res = {(u64)window};
   return res;
 }
 
-fn void os_window_show(OS_Handle window) {
-  ShowWindow(((W32_Window *)window.h[0])->winhandle, SW_SHOWDEFAULT);
+fn void os_window_show(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  ShowWindow(window->handle, SW_SHOWDEFAULT);
 }
 
-fn void os_window_hide(OS_Handle window) {
-  ShowWindow(((W32_Window *)window.h[0])->winhandle, SW_HIDE);
+fn void os_window_hide(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  ShowWindow(window->handle, SW_HIDE);
 }
 
-fn void os_window_close(OS_Handle window) {
-  CloseWindow(((W32_Window *)window.h[0])->winhandle);
+fn void os_window_minimize(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  ShowWindow(window->handle, SW_MINIMIZE);
 }
 
-fn OS_EventList os_get_events(Arena *arena, bool wait) {
-  w32_gfxstate.events.arena = arena;
-  memzero(&w32_gfxstate.events.list, sizeof w32_gfxstate.events.list);
-  for (MSG msg = {0};
-       PeekMessage(&msg, 0, 0, 0, PM_REMOVE) ||
-       (wait && w32_gfxstate.events.list.count == 0);) {
-    DispatchMessage(&msg);
-    TranslateMessage(&msg);
+fn void os_window_toggle_fullscreen(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  DWORD style = GetWindowLong(window->handle, GWL_STYLE);
+  if (os_window_is_fullscreen(hwindow)) {
+    SetWindowLong(window->handle, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+    SetWindowPlacement(window->handle, &window->placement);
+    SetWindowPos(window->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  } else {
+    MONITORINFO monitor_info = {0};
+    monitor_info.cbSize = sizeof(MONITORINFO);
+    if (!GetMonitorInfo(MonitorFromWindow(window->handle, MONITOR_DEFAULTTONULL), &monitor_info)) { return; }
+    GetWindowPlacement(window->handle, &window->placement);
+    SetWindowLong(window->handle, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+    SetWindowPos(window->handle, NULL,
+                 monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                 monitor_info.rcMonitor.right - monitor_info.rcMonitor.left,
+                 monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                 SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
   }
-  w32_gfxstate.events.arena = 0;
-  return w32_gfxstate.events.list;
 }
 
-fn bool os_key_is_down(OS_Key key) {
-  u8 vkcode = os_vkcode_from_os_key(key);
-  SHORT state = GetAsyncKeyState(vkcode);
-  return (state & 0x8000) != 0;
+fn void os_window_toggle_maximized(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  ShowWindow(window->handle, os_window_is_maximized(hwindow)
+             ? SW_RESTORE : SW_MAXIMIZE);
 }
 
-fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
+fn void os_window_toggle_borderless(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  LONG_PTR style = GetWindowLongPtr(window->handle, GWL_STYLE);
+  if (os_window_is_borderless(hwindow)) {
+    style |= WS_OVERLAPPEDWINDOW;
+  } else {
+    style &= ~WS_OVERLAPPEDWINDOW;
+  }
+  SetWindowLongPtr(window->handle, GWL_STYLE, style);
+  SetWindowPos(window->handle, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+}
+
+fn bool os_window_is_fullscreen(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  DWORD style = GetWindowLong(window->handle, GWL_STYLE);
+  return !(style & WS_OVERLAPPEDWINDOW);
+}
+
+fn bool os_window_is_minimized(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  WINDOWPLACEMENT wp = {0};
+  wp.length = sizeof(WINDOWPLACEMENT);
+  GetWindowPlacement(window->handle, &wp);
+  return wp.showCmd == SW_MINIMIZE;
+}
+
+fn bool os_window_is_maximized(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  WINDOWPLACEMENT wp = {0};
+  wp.length = sizeof(WINDOWPLACEMENT);
+  GetWindowPlacement(window->handle, &wp);
+  return wp.showCmd == SW_MAXIMIZE;
+}
+
+fn bool os_window_is_borderless(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  LONG_PTR style = GetWindowLongPtr(window->handle, GWL_STYLE);
+  LONG_PTR exstyle = GetWindowLongPtr(window->handle, GWL_EXSTYLE);
+  return !((style & (WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_MAXIMIZE | WS_SYSMENU)) ||
+           (exstyle & (WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE)));
+}
+
+fn bool os_window_is_focused(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  HWND active_winhandle = GetActiveWindow();
+  return window->handle == active_winhandle;
+}
+
+fn void os_window_set_title(OS_Handle hwindow, String8 title) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  Scratch scratch = ScratchBegin(0, 0);
+  const char *ctitle = cstr_from_str8(scratch.arena, title);
+  SetWindowTextA(window->handle, ctitle);
+  ScratchEnd(scratch);
+}
+
+fn void os_window_set_position(OS_Handle hwindow, i32 x, i32 y) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  SetWindowPos(window->handle, NULL, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+fn void os_window_set_size(OS_Handle hwindow, i32 width, i32 height) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  SetWindowPos(window->handle, NULL, 0, 0, width, height, SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+fn void os_window_get_size(OS_Handle hwindow, i32 *width, i32 *height) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  RECT winrect = {0};
+  GetWindowRect(window->handle, &winrect);
+  *width = winrect.right - winrect.left;
+  *height = winrect.bottom - winrect.top;
+}
+
+fn void os_window_set_monitor(OS_Handle hwindow, OS_Handle hmonitor) {
+}
+
+fn OS_HandleArray os_monitor_array(Arena *arena) {
+  OS_HandleArray res = {0};
+  return res;
+}
+
+fn OS_Handle os_monitor_from_window(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  HMONITOR monitor = MonitorFromWindow(window->handle, MONITOR_DEFAULTTONULL);
+  OS_Handle res = {{ (u64)monitor }};
+  return res;
+}
+
+fn OS_Handle os_monitor_primary(void) {
+  OS_Handle res = {0};
+  return res;
+}
+
+fn String8 os_monitor_name(Arena *arena, OS_Handle hmonitor) {
+  String8 res = {0};
+  return res;
+}
+
+fn void os_monitor_size(OS_Handle hmonitor, i32 *width, i32 *height) {
+
+}
+
+
+fn void os_window_close(OS_Handle hwindow) {
+  W32_Window *window = (W32_Window *)hwindow.h[0];
+  CloseWindow(window->handle);
+}
+
+fn String8 os_key_name_from_event(Arena *arena, OS_Event event) {
   u32 lparam = 0, extended = event.key.scancode & 0xFFFF00;
   if (extended == 0xE11D00) {
     lparam = 0x45 << 16;
@@ -87,11 +207,29 @@ fn String8 os_keyname_from_event(Arena *arena, OS_Event event) {
   return res;
 }
 
+fn bool os_key_is_down(OS_Key key) {
+  u8 vkcode = os_vkcode_from_os_key(key);
+  SHORT state = GetAsyncKeyState(vkcode);
+  return (state & 0x8000) != 0;
+}
+
+fn OS_EventList os_get_events(Arena *arena, bool wait) {
+  w32_gfxstate.events.arena = arena;
+  memzero(&w32_gfxstate.events.list, sizeof w32_gfxstate.events.list);
+  for (MSG msg = {0};
+       PeekMessage(&msg, 0, 0, 0, PM_REMOVE) ||
+       (wait && w32_gfxstate.events.list.count == 0);) {
+    DispatchMessage(&msg);
+    TranslateMessage(&msg);
+  }
+  w32_gfxstate.events.arena = 0;
+  return w32_gfxstate.events.list;
+}
+
 // =============================================================================
 // Platform specific definitions
 fn void w32_gfx_init(HINSTANCE instance) {
   timeBeginPeriod(1);
-  w32_gfxstate.arena = arena_build();
   w32_gfxstate.instance = instance;
   // TODO(lb): what about non-xinput gamepads like the dualshock
   //           and nintendo controllers?
@@ -104,7 +242,7 @@ internal W32_Window* w32_window_from_handle(HWND target) {
   for (W32_Window *window = w32_gfxstate.first_window;
        window;
        window = window->next) {
-    if (window->winhandle == target) { return window; }
+    if (window->handle == target) { return window; }
   }
   return 0;
 }
@@ -145,7 +283,7 @@ internal LRESULT CALLBACK w32_message_handler(HWND winhandle, UINT msg_code,
   case WM_PAINT:
   case WM_SIZE: {
     RECT rect;
-    GetClientRect(window->winhandle, &rect);
+    GetClientRect(window->handle, &rect);
     event->expose.width = rect.right - rect.left;
     event->expose.height = rect.bottom - rect.top;
     event->type = OS_EventType_Expose;
