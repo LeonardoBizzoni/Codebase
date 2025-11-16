@@ -135,7 +135,7 @@ fn void rhi_context_set_active(RHI_Handle hcontext) {
   wglMakeCurrent(dc, rhi_window->gl_context);
 }
 
-fn void rhi_context_commit(RHI_Handle hcontext) {
+fn void rhi_opengl_context_swap_buffers(RHI_Handle hcontext) {
   W32Gl_Window *rhi_window = (W32Gl_Window*)hcontext.h[0];
   HDC dc = GetDC(rhi_window->os_window->handle);
   SwapBuffers(dc);

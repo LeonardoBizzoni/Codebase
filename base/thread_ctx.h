@@ -3,6 +3,7 @@
 
 typedef struct {
   Arena *arenas[2];
+  i32 id;
 } TlsContext;
 
 fn Arena *tls_get_scratch(Arena **conflicts, usize count);

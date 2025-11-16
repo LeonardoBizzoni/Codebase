@@ -37,6 +37,42 @@ enum {
   RHI_ShaderDataType_Mat4F32,
 };
 
+typedef u8 RHI_CommandType;
+enum {
+  RHI_CommandType_None,
+  RHI_CommandType_Copy,
+  RHI_CommandType_Clear_Color,
+  RHI_CommandType_Frame_Begin,
+  RHI_CommandType_Frame_Draw_Index,
+  RHI_CommandType_Frame_End,
+  RHI_CommandType_COUNT,
+};
+
+typedef struct {
+  RHI_CommandType type;
+  union {
+    struct {
+      RHI_Handle source;
+      RHI_Handle target;
+      i32 size;
+      i32 source_offset;
+      i32 target_offset;
+    } copy;
+    Vec4F32 clear_color;
+    struct {
+      RHI_Handle pipeline;
+      i32 width;
+      i32 height;
+    } frame_begin;
+    struct {
+      RHI_Handle pipeline;
+      RHI_Handle vertex_buffer;
+      RHI_Handle index_buffer;
+      i32 indices_count;
+    } draw_index;
+  };
+} RHI_Command;
+
 typedef struct {
   RHI_ShaderDataType type;
   String8 name;
@@ -95,16 +131,6 @@ global const i32 rhi_shadertype_map_element_count[] = {
 fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window);
 fn void rhi_context_destroy(RHI_Handle hcontext);
 
-fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
-                               i32 size, RHI_BufferType type);
-fn void rhi_buffer_host_send(RHI_Handle hcontext, RHI_Handle hbuffer,
-                             const void *data, i32 size);
-fn void rhi_buffer_copy(RHI_Handle hcontext, RHI_Handle htarget_buffer,
-                        RHI_Handle hsource_buffer, i32 size);
-fn void rhi_buffer_set_layout(RHI_Handle hcontext, RHI_Handle hbuffer,
-                              RHI_BufferLayoutElement *layout,
-                              i64 layout_elements_count);
-
 fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
                                    String8 vertex_shader_path,
                                    String8 fragment_shader_path);
@@ -113,6 +139,13 @@ fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle 
                                   RHI_BufferLayoutElement *layout,
                                   i64 layout_elements_count);
 fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline);
+
+fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_BufferType type);
+fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset);
+fn void rhi_buffer_staging_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer);
+
+fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd);
+fn void rhi_command_queue_submit(RHI_Handle hcontext);
 
 internal void rhi_init(void);
 internal void rhi_deinit(void);

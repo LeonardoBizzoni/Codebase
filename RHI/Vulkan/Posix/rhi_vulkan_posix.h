@@ -7,6 +7,7 @@ global const char *rhi_vk_needed_extensions[] = {
   VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
   "VK_KHR_surface",
   "VK_KHR_xlib_surface",
+  "VK_EXT_debug_utils",
 };
 local const char *rhi_vulkan_layers_required[] = {
 #if DEBUG

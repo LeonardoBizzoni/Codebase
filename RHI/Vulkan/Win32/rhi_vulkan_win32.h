@@ -8,7 +8,7 @@ global const char *rhi_vk_needed_extensions[] = {
   "VK_KHR_surface",
   "VK_KHR_win32_surface",
 };
-local const char *rhi_vk_layers[] = {
+local const char *rhi_vulkan_layers_required[] = {
 #if DEBUG
   "VK_LAYER_KHRONOS_validation",
 #endif

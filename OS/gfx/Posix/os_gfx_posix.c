@@ -358,6 +358,13 @@ internal void os_gfx_init(void) {
   memcopy(os_gfx_posix_state.xmonitors, active_monitors,
           sizeof(*active_monitors) * (u32)os_gfx_posix_state.xmonitors_count);
   XRRFreeMonitors(active_monitors);
+
+  i32 visuals_count = 0;
+  XVisualInfo xvisual = { .screen = os_gfx_posix_state.xscreen };
+  XVisualInfo *visuals = XGetVisualInfo(os_gfx_posix_state.xdisplay, VisualScreenMask, &xvisual, &visuals_count);
+  Assert(visuals && visuals_count > 0);
+  os_gfx_posix_state.xvisual = *visuals;
+  XFree(visuals);
 }
 
 internal void os_gfx_deinit(void) {

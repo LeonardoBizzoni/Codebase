@@ -2,7 +2,7 @@ global RHI_Opengl_Posix_State rhi_gl_posix_state = {0};
 
 typedef GLXContext (*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
-fn void rhi_init(void) {
+internal void rhi_init(void) {
   rhi_gl_posix_state.arena = arena_build();
 
   GLint glx_attribs[] = {
@@ -73,12 +73,10 @@ fn void rhi_init(void) {
   XSync(os_gfx_posix_state.xdisplay, False);
 }
 
-fn void rhi_deinit(void) {
+internal void rhi_deinit(void) {
   glXDestroyContext(os_gfx_posix_state.xdisplay, rhi_gl_posix_state.glx_context);
 }
 
-// =============================================================================
-// API dependent code
 fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle hwindow) {
   Unused(arena);
   OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window*)hwindow.h[0];
@@ -115,7 +113,7 @@ fn void rhi_opengl_context_set_active(RHI_Handle hcontext) {
   glXMakeCurrent(os_gfx_posix_state.xdisplay, window->xwindow, rhi_gl_posix_state.glx_context);
 }
 
-fn void rhi_context_commit(RHI_Handle hcontext) {
+fn void rhi_opengl_context_swap_buffers(RHI_Handle hcontext) {
   OS_GFX_Posix_Window *window = (OS_GFX_Posix_Window *)hcontext.h[0];
   glXSwapBuffers(os_gfx_posix_state.xdisplay, window->xwindow);
 }
