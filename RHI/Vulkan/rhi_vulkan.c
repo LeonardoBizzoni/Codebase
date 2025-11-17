@@ -2,6 +2,7 @@ global RHI_Vulkan_State rhi_vulkan_state = {0};
 
 fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
   RHI_Vulkan_Context *context = arena_push(arena, RHI_Vulkan_Context);
+  context->hwindow = window;
   context->surface = rhi_vulkan_surface_create(window);
   if (rhi_vulkan_device_init(context)) {
     rhi_vulkan_swapchain_init(arena, context, window);
@@ -388,11 +389,21 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     memcopy(context->clear_value.color.float32, cmd.clear_color.values, 4 * sizeof(f32));
   } break;
   case RHI_CommandType_Frame_Begin: {
+    i32 window_width, window_height;
+  swapchain_should_resize:;
+    os_window_get_size(context->hwindow, &window_width, &window_height);
+    if (context->swapchain.image_width != window_width || context->swapchain.image_height != window_height) {
+      vkDeviceWaitIdle(context->device.virtual);
+      rhi_vulkan_swapchain_destroy(context);
+      rhi_vulkan_swapchain_create(cmd.frame_begin.arena, context, window_width, window_height);
+      goto swapchain_should_resize;
+    }
+
     vkWaitForFences(context->device.virtual, 1, &context->fences_in_flight[context->frame_current], VK_TRUE, U64_MAX);
     VkResult acquire_next_image_result = vkAcquireNextImageKHR(context->device.virtual, context->swapchain.handle,
                                                                UINT64_MAX, context->semaphores_image_available[context->frame_current],
                                                                VK_NULL_HANDLE, &context->frame_current_image);
-    Unused(acquire_next_image_result);
+    Assert(acquire_next_image_result == VK_SUCCESS);
 
     VkCommandBuffer cmdbuff = context->cmdbuffs[tls_ctx.id].graphics.handles[context->frame_current];
     vkResetCommandBuffer(cmdbuff, 0);
@@ -410,7 +421,7 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     };
     VkRenderingInfo rendering_info = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-      .renderArea = {{0, 0}, {(u32)cmd.frame_begin.width, (u32)cmd.frame_begin.height}},
+      .renderArea = {{0, 0}, {(u32)window_width, (u32)window_height}},
       .layerCount = 1,
       .colorAttachmentCount = 1,
       .pColorAttachments = &rendering_color_attachment_info,
@@ -507,7 +518,13 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
       .pImageIndices = &context->frame_current_image,
     };
     VkResult queue_present_result = vkQueuePresentKHR(context->device.queue.present, &presentInfo);
-    Unused(queue_present_result);
+    if (queue_present_result != VK_ERROR_OUT_OF_DATE_KHR) {
+      i32 window_width, window_height;
+      vkDeviceWaitIdle(context->device.virtual);
+      os_window_get_size(context->hwindow, &window_width, &window_height);
+      rhi_vulkan_swapchain_destroy(context);
+      rhi_vulkan_swapchain_create(cmd.frame_end.arena, context, window_width, window_height);
+    }
 
     context->frame_current = (context->frame_current + 1) % 2;
   } break;
@@ -821,6 +838,9 @@ internal void rhi_vulkan_swapchain_init(Arena *arena, RHI_Vulkan_Context *contex
 }
 
 internal void rhi_vulkan_swapchain_create(Arena *arena, RHI_Vulkan_Context *context, i32 width, i32 height) {
+  context->swapchain.image_width = width;
+  context->swapchain.image_height = height;
+
   VkSurfaceCapabilitiesKHR swapchain_capabilities = {0};
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context->device.physical, context->surface, &swapchain_capabilities);
   if (swapchain_capabilities.currentExtent.width == U32_MAX) {

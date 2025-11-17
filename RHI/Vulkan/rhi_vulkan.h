@@ -48,6 +48,8 @@ typedef struct {
 } RHI_Vulkan_CmdBuffers;
 
 typedef struct {
+  OS_Handle hwindow;
+
   VkSurfaceKHR surface;
   RHI_Vulkan_Device device;
 
@@ -63,11 +65,13 @@ typedef struct {
   struct {
     VkImage *images;
     VkImageView *imageviews;
-    u32 image_count;
     VkSwapchainKHR handle;
     VkExtent2D extent;
     VkViewport viewport;
     VkRect2D scissor;
+    u32 image_count;
+    i32 image_width;
+    i32 image_height;
   } swapchain;
 
   VkClearValue clear_value;

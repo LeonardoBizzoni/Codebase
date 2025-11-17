@@ -126,7 +126,10 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     glClearColor(cmd.clear_color.x, cmd.clear_color.y, cmd.clear_color.z, cmd.clear_color.w);
   } break;
   case RHI_CommandType_Frame_Begin: {
-    glViewport(0, 0, cmd.frame_begin.width, cmd.frame_begin.height);
+    i32 window_width, window_height;
+    OS_Handle window_handle = {{ (u64)hcontext.h[0] }};
+    os_window_get_size(window_handle, &window_width, &window_height);
+    glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   } break;
   case RHI_CommandType_Frame_Draw_Index: {

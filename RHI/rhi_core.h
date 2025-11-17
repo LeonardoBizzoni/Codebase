@@ -61,9 +61,11 @@ typedef struct {
     Vec4F32 clear_color;
     struct {
       RHI_Handle pipeline;
-      i32 width;
-      i32 height;
+      Arena *arena;
     } frame_begin;
+    struct {
+      Arena *arena;
+    } frame_end;
     struct {
       RHI_Handle pipeline;
       RHI_Handle vertex_buffer;
