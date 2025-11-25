@@ -7,7 +7,7 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
                                         RHI_ShaderType_Vertex);
   RHI_OpenglObj fragment =
     rhi_opengl_shader_program_from_file(fragment_shader_path,
-                                        RHI_ShaderType_Pixel);
+                                        RHI_ShaderType_Fragment);
 
   RHI_OpenglObj shader = glCreateProgram();
   rhi_opengl_call(glAttachShader(shader, vertex));
@@ -70,7 +70,7 @@ fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
   return res;
 }
 
-fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset) {
+fn void* rhi_buffer_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset) {
   Unused(hcontext);
   RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive*)hbuffer.h[0];
   Assert(prim->type == RHI_OpenglPrimitiveType_Buffer || prim->type == RHI_OpenglPrimitiveType_Index);
@@ -82,7 +82,7 @@ fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, 
   return res;
 }
 
-fn void rhi_buffer_staging_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer) {
+fn void rhi_buffer_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer) {
   Unused(hcontext);
   RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive*)hbuffer.h[0];
   Assert(prim->type == RHI_OpenglPrimitiveType_Buffer || prim->type == RHI_OpenglPrimitiveType_Index);
@@ -211,7 +211,7 @@ internal RHI_OpenglObj rhi_opengl_shader_program_from_str8(String8 source, RHI_S
   case RHI_ShaderType_Vertex: {
     gltype = GL_VERTEX_SHADER;
   } break;
-  case RHI_ShaderType_Pixel: {
+  case RHI_ShaderType_Fragment: {
     gltype = GL_FRAGMENT_SHADER;
   } break;
   }

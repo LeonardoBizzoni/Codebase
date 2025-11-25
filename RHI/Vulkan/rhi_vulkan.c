@@ -31,7 +31,7 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
     VkCommandBufferAllocateInfo alloc_cmdbuff_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 2,
+      .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
     };
     for (i32 i = 0; i < os_sysinfo()->core_count; ++i) {
       alloc_cmdbuff_info.commandPool = context->pools[i].graphics;
@@ -51,7 +51,7 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
     VkSemaphoreCreateInfo create_semaphore_info = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
     };
-    for (u32 i = 0; i < 2; i++) {
+    for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
       VkResult create_fence_result = vkCreateFence(context->device.virtual, &create_fence_info, NULL, &context->fences_in_flight[i]);
       Assert(create_fence_result == VK_SUCCESS);
       VkResult create_semaphore_result = vkCreateSemaphore(context->device.virtual, &create_semaphore_info, NULL, &context->semaphores_image_available[i]);
@@ -65,6 +65,19 @@ fn RHI_Handle rhi_context_create(Arena *arena, OS_Handle window) {
       VkResult create_semaphore_result = vkCreateSemaphore(context->device.virtual, &create_semaphore_info, NULL, &context->semaphores_image_finished[i]);
       Assert(create_semaphore_result == VK_SUCCESS);
     }
+
+    VkDescriptorPoolSize descriptor_pool_size = {
+      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = MAX_FRAMES_IN_FLIGHT,
+    };
+    VkDescriptorPoolCreateInfo create_descriptor_pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .poolSizeCount = 1,
+      .pPoolSizes = &descriptor_pool_size,
+      .maxSets = MAX_FRAMES_IN_FLIGHT,
+    };
+    VkResult create_descritor_pool_result = vkCreateDescriptorPool(context->device.virtual, &create_descriptor_pool_info, NULL, &context->pool_descriptor);
+    Assert(create_descritor_pool_result == VK_SUCCESS);
   } else {
     Err("Dynamic rendering isn't supported");
     context = 0;
@@ -126,17 +139,56 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
   return res;
 }
 
-fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader, RHI_BufferLayoutElement *layout, i64 layout_elements_count) {
+fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
+                                  RHI_BufferLayoutElement layout[], i64 layout_elements_count,
+                                  i32 descriptors[], i32 descriptors_count) {
   RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
   RHI_Vulkan_Shader *shader = (RHI_Vulkan_Shader *)hshader.h[0];
   RHI_Vulkan_Pipeline *pipeline = arena_push(arena, RHI_Vulkan_Pipeline);
-  Assert(pipeline);
 
   VkPipelineLayoutCreateInfo create_pipeline_layout_info = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
   };
-  VkResult create_pipeline_layout_result = vkCreatePipelineLayout(context->device.virtual, &create_pipeline_layout_info, NULL, &pipeline->layout);
-  Assert(create_pipeline_layout_result == VK_SUCCESS);
+
+  {
+    Scratch scratch = ScratchBegin(&arena, 1);
+
+    VkDescriptorSetLayout descriptor_set_layout = {0};
+    VkDescriptorSetLayoutBinding *bindings = arena_push_many(scratch.arena, VkDescriptorSetLayoutBinding, descriptors_count);
+    for (i32 i = 0; i < descriptors_count; ++i) {
+      bindings[i].binding = (u32)i;
+      bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      bindings[i].descriptorCount = (u32)descriptors[i];
+      bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo create_descriptor_set_layout_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = (u32)descriptors_count,
+      .pBindings = bindings,
+    };
+    VkResult create_descriptor_set_layout_result = vkCreateDescriptorSetLayout(context->device.virtual, &create_descriptor_set_layout_info, NULL, &descriptor_set_layout);
+    Assert(create_descriptor_set_layout_result == VK_SUCCESS);
+
+    create_pipeline_layout_info.setLayoutCount = 1;
+    create_pipeline_layout_info.pSetLayouts = &descriptor_set_layout;
+
+    VkDescriptorSetLayout descriptor_set_layouts[MAX_FRAMES_IN_FLIGHT];
+    for (i32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+      descriptor_set_layouts[i] = descriptor_set_layout;
+    }
+    VkDescriptorSetAllocateInfo alloc_descriptor_set_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = context->pool_descriptor,
+      .descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+      .pSetLayouts = descriptor_set_layouts,
+    };
+    VkResult alloc_descriptor_set_result = vkAllocateDescriptorSets(context->device.virtual, &alloc_descriptor_set_info, context->descriptor_sets);
+    Assert(alloc_descriptor_set_result == VK_SUCCESS);
+
+    VkResult create_pipeline_layout_result = vkCreatePipelineLayout(context->device.virtual, &create_pipeline_layout_info, NULL, &pipeline->layout);
+    Assert(create_pipeline_layout_result == VK_SUCCESS);
+    ScratchEnd(scratch);
+  }
 
   i64 actual_layout_count = layout_elements_count;
   VkVertexInputBindingDescription vertex_input_binding = {0};
@@ -156,7 +208,7 @@ fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle 
   };
   VkPipelineDynamicStateCreateInfo create_pipeline_dynamic_states_info = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-    .dynamicStateCount = 2,
+    .dynamicStateCount = Arrsize(dynamic_states),
     .pDynamicStates = dynamic_states,
   };
   VkPipelineViewportStateCreateInfo create_viewport_state_info = {
@@ -320,6 +372,11 @@ fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_
     create_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
   } break;
+  case RHI_BufferType_Uniform: {
+    create_buffer_info.size = (u32)(MAX_FRAMES_IN_FLIGHT * align_forward(size, (i64)context->device.properties.limits.minUniformBufferOffsetAlignment));
+    create_buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    memory_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+  } break;
   }
   VkResult create_buffer_result = vkCreateBuffer(context->device.virtual, &create_buffer_info, NULL, &buffer->handle);
   Assert(create_buffer_result == VK_SUCCESS);
@@ -332,9 +389,9 @@ fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_
     .allocationSize = memory_requirements.size,
     .memoryTypeIndex = U32_MAX,
   };
-  for (u32 i = 0; i < context->device.memory_properties.memoryTypeCount; i++) {
+  for (u32 i = 0; i < context->device.properties_memory.memoryTypeCount; i++) {
     if ((memory_requirements.memoryTypeBits & (1 << i)) &&
-        (context->device.memory_properties.memoryTypes[i].propertyFlags & memory_flags)) {
+        (context->device.properties_memory.memoryTypes[i].propertyFlags & memory_flags)) {
       mem_alloc_info.memoryTypeIndex = i;
       break;
     }
@@ -348,7 +405,7 @@ fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_
   return res;
 }
 
-fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset) {
+fn void* rhi_buffer_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset) {
   RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
   RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)hbuffer.h[0];
   void *res = 0;
@@ -356,7 +413,7 @@ fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, 
   return res;
 }
 
-fn void rhi_buffer_staging_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer) {
+fn void rhi_buffer_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer) {
   RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
   RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)hbuffer.h[0];
   vkUnmapMemory(context->device.virtual, buffer->memory);
@@ -398,6 +455,43 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
       rhi_vulkan_swapchain_create(cmd.frame_begin.arena, context, window_width, window_height);
       goto swapchain_should_resize;
     }
+
+    // ======================================================================
+    // Uniform updates
+    RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)cmd.frame_begin.uniform_buffer.h[0];
+    u64 offset = (u64)context->frame_current * context->device.properties.limits.minUniformBufferOffsetAlignment;
+    u64 size = (u64)align_forward(cmd.frame_begin.uniform_size, (i64)context->device.properties.limits.minUniformBufferOffsetAlignment);
+
+    u8 *memory = 0;
+    vkMapMemory(context->device.virtual, buffer->memory, offset, (u32)cmd.frame_begin.uniform_size, 0, (void**)&memory);
+    memcopy(memory, cmd.frame_begin.uniform_data, cmd.frame_begin.uniform_size);
+
+    VkMappedMemoryRange mapped_range_info = {
+      .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+      .memory = buffer->memory,
+      .offset = offset,
+      .size = size,
+    };
+    VkResult mapped_range_result = vkFlushMappedMemoryRanges(context->device.virtual, 1, &mapped_range_info);
+    Assert(mapped_range_result == VK_SUCCESS);
+    vkUnmapMemory(context->device.virtual, buffer->memory);
+
+    VkDescriptorBufferInfo descriptor_buffer_info = {
+      .buffer = buffer->handle,
+      .offset = offset,
+      .range = size,
+    };
+    VkWriteDescriptorSet descriptor_set_write = {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = context->descriptor_sets[context->frame_current],
+      .dstBinding = (u32)cmd.frame_begin.binding,
+      .dstArrayElement = (u32)cmd.frame_begin.array_element_index,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = 1,
+      .pBufferInfo = &descriptor_buffer_info,
+    };
+    vkUpdateDescriptorSets(context->device.virtual, 1, &descriptor_set_write, 0, NULL);
+    // ======================================================================
 
     vkWaitForFences(context->device.virtual, 1, &context->fences_in_flight[context->frame_current], VK_TRUE, U64_MAX);
     VkResult acquire_next_image_result = vkAcquireNextImageKHR(context->device.virtual, context->swapchain.handle,
@@ -454,6 +548,7 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     vkCmdSetScissor(cmdbuff, 0, 1, &context->swapchain.scissor);
   } break;
   case RHI_CommandType_Frame_Draw_Index: {
+    RHI_Vulkan_Pipeline *pipeline = (RHI_Vulkan_Pipeline *)cmd.draw_index.pipeline.h[0];
     RHI_Vulkan_Buffer *vertex_buffer = (RHI_Vulkan_Buffer *)cmd.draw_index.vertex_buffer.h[0];
     RHI_Vulkan_Buffer *index_buffer = (RHI_Vulkan_Buffer *)cmd.draw_index.index_buffer.h[0];
 
@@ -461,6 +556,7 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmdbuff, 0, 1, &vertex_buffer->handle, offsets);
     vkCmdBindIndexBuffer(cmdbuff, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindDescriptorSets(cmdbuff, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout, 0, 1, &context->descriptor_sets[context->frame_current], 0, NULL);
     vkCmdDrawIndexed(cmdbuff, (u32)cmd.draw_index.indices_count, 1, 0, 0, 0);
   } break;
   case RHI_CommandType_Frame_End: {
@@ -526,7 +622,7 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
       rhi_vulkan_swapchain_create(cmd.frame_end.arena, context, window_width, window_height);
     }
 
-    context->frame_current = (context->frame_current + 1) % 2;
+    context->frame_current = (context->frame_current + 1) % MAX_FRAMES_IN_FLIGHT;
   } break;
   }
 }
@@ -634,6 +730,8 @@ internal bool rhi_vulkan_device_init(RHI_Vulkan_Context *context) {
     context->device.physical = phydevices[0];
     ScratchEnd(scratch);
   }
+
+  vkGetPhysicalDeviceProperties(context->device.physical, &context->device.properties);
 
 #if DEBUG
   rhi_vulkan_device_print(&context->device);
@@ -745,7 +843,7 @@ internal bool rhi_vulkan_device_init(RHI_Vulkan_Context *context) {
     ScratchEnd(scratch);
   }
 
-  vkGetPhysicalDeviceMemoryProperties(context->device.physical, &context->device.memory_properties);
+  vkGetPhysicalDeviceMemoryProperties(context->device.physical, &context->device.properties_memory);
   vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.graphics, 0, &context->device.queue.graphics);
   vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.present,  0, &context->device.queue.present);
   vkGetDeviceQueue(context->device.virtual, context->device.queue_idx.transfer, 0, &context->device.queue.transfer);
@@ -754,13 +852,11 @@ internal bool rhi_vulkan_device_init(RHI_Vulkan_Context *context) {
 }
 
 internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device) {
-  VkPhysicalDeviceProperties props = {0};
-  vkGetPhysicalDeviceProperties(device->physical, &props);
   VkPhysicalDeviceFeatures features = {0};
   vkGetPhysicalDeviceFeatures(device->physical, &features);
 
   char *device_type_string = 0;
-  switch (props.deviceType) {
+  switch (device->properties.deviceType) {
   case VK_PHYSICAL_DEVICE_TYPE_OTHER: {
     device_type_string = "Other";
   } break;
@@ -778,16 +874,16 @@ internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device) {
   } break;
   default: Assert(false && "invalid vulkan device type");
   }
-  u32 vk_major = VK_VERSION_MAJOR(props.apiVersion);
-  u32 vk_minor = VK_VERSION_MINOR(props.apiVersion);
-  u32 vk_patch = VK_VERSION_PATCH(props.apiVersion);
-  u32 driver_major = VK_VERSION_MAJOR(props.driverVersion);
-  u32 driver_minor = VK_VERSION_MINOR(props.driverVersion);
-  u32 driver_patch = VK_VERSION_PATCH(props.driverVersion);
-  dbg_println("Device Name:     \t%s", props.deviceName);
+  u32 vk_major = VK_VERSION_MAJOR(device->properties.apiVersion);
+  u32 vk_minor = VK_VERSION_MINOR(device->properties.apiVersion);
+  u32 vk_patch = VK_VERSION_PATCH(device->properties.apiVersion);
+  u32 driver_major = VK_VERSION_MAJOR(device->properties.driverVersion);
+  u32 driver_minor = VK_VERSION_MINOR(device->properties.driverVersion);
+  u32 driver_patch = VK_VERSION_PATCH(device->properties.driverVersion);
+  dbg_println("Device Name:     \t%s", device->properties.deviceName);
   dbg_println("  Type:          \t%s", device_type_string);
-  dbg_println("  Vendor ID:     \t%d", props.vendorID);
-  dbg_println("  Device ID:     \t%d", props.deviceID);
+  dbg_println("  Vendor ID:     \t%d", device->properties.vendorID);
+  dbg_println("  Device ID:     \t%d", device->properties.deviceID);
   dbg_println("  API Version:   \tv%d.%d.%d", vk_major, vk_minor, vk_patch);
   dbg_println("  Driver Version:\tv%d.%d.%d\n", driver_major, driver_minor,
               driver_patch);

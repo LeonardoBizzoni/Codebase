@@ -9,7 +9,7 @@ typedef u8 RHI_ShaderType;
 enum {
   RHI_ShaderType_None,
   RHI_ShaderType_Vertex,
-  RHI_ShaderType_Pixel,
+  RHI_ShaderType_Fragment,
 };
 
 typedef u8 RHI_BufferType;
@@ -18,6 +18,7 @@ enum {
   RHI_BufferType_Staging,
   RHI_BufferType_Vertex,
   RHI_BufferType_Index,
+  RHI_BufferType_Uniform,
 };
 
 typedef u8 RHI_ShaderDataType;
@@ -43,6 +44,7 @@ enum {
   RHI_CommandType_Copy,
   RHI_CommandType_Clear_Color,
   RHI_CommandType_Frame_Begin,
+  RHI_CommandType_Frame_Uniform,
   RHI_CommandType_Frame_Draw_Index,
   RHI_CommandType_Frame_End,
   RHI_CommandType_COUNT,
@@ -58,20 +60,29 @@ typedef struct {
       i32 source_offset;
       i32 target_offset;
     } copy;
+
     Vec4F32 clear_color;
+
     struct {
-      RHI_Handle pipeline;
       Arena *arena;
+      RHI_Handle pipeline;
+      RHI_Handle uniform_buffer;
+      const void *uniform_data;
+      i32 uniform_size;
+      i32 binding;
+      i32 array_element_index;
     } frame_begin;
     struct {
-      Arena *arena;
-    } frame_end;
-    struct {
       RHI_Handle pipeline;
+      RHI_Handle uniform_buffer;
       RHI_Handle vertex_buffer;
       RHI_Handle index_buffer;
       i32 indices_count;
+      i32 uniform_size;
     } draw_index;
+    struct {
+      Arena *arena;
+    } frame_end;
   };
 } RHI_Command;
 
@@ -138,13 +149,13 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
                                    String8 fragment_shader_path);
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
-                                  RHI_BufferLayoutElement *layout,
-                                  i64 layout_elements_count);
+                                  RHI_BufferLayoutElement *layout, i64 layout_elements_count,
+                                  i32 descriptors[], i32 descriptors_count);
 fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline);
 
 fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_BufferType type);
-fn void* rhi_buffer_staging_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset);
-fn void rhi_buffer_staging_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer);
+fn void* rhi_buffer_memory_map(RHI_Handle hcontext, RHI_Handle hbuffer, i32 size, i32 offset);
+fn void rhi_buffer_memory_unmap(RHI_Handle hcontext, RHI_Handle hbuffer);
 
 fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd);
 fn void rhi_command_queue_submit(RHI_Handle hcontext);

@@ -3,6 +3,8 @@
 
 #include <vulkan/vulkan.h>
 
+#define MAX_FRAMES_IN_FLIGHT 2
+
 typedef struct {
   VkInstance instance;
   VkPresentModeKHR   swapchain_present_mode;
@@ -12,7 +14,8 @@ typedef struct {
 typedef struct {
   VkDevice virtual;
   VkPhysicalDevice physical;
-  VkPhysicalDeviceMemoryProperties memory_properties;
+  VkPhysicalDeviceProperties properties;
+  VkPhysicalDeviceMemoryProperties properties_memory;
   union {
     VkQueue values[3];
     struct {
@@ -38,11 +41,11 @@ typedef struct {
 
 typedef struct {
   struct {
-    VkCommandBuffer handles[2];
+    VkCommandBuffer handles[MAX_FRAMES_IN_FLIGHT];
     i32 submitted_count;
   } graphics;
   struct {
-    VkCommandBuffer handles[2];
+    VkCommandBuffer handles[MAX_FRAMES_IN_FLIGHT];
     i32 submitted_count;
   } transfer;
 } RHI_Vulkan_CmdBuffers;
@@ -53,13 +56,16 @@ typedef struct {
   VkSurfaceKHR surface;
   RHI_Vulkan_Device device;
 
+  VkDescriptorPool pool_descriptor;
+  VkDescriptorSet descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+
   RHI_Vulkan_CmdPool *pools;
   RHI_Vulkan_CmdBuffers *cmdbuffs;
 
   VkFence *images_in_flight;
-  VkFence  fences_in_flight[2];
-  VkSemaphore semaphores_image_available[2];
-  VkSemaphore semaphores_render_finished[2];
+  VkFence  fences_in_flight[MAX_FRAMES_IN_FLIGHT];
+  VkSemaphore semaphores_image_available[MAX_FRAMES_IN_FLIGHT];
+  VkSemaphore semaphores_render_finished[MAX_FRAMES_IN_FLIGHT];
   VkSemaphore *semaphores_image_finished;
 
   struct {
