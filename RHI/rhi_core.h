@@ -149,8 +149,8 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
                                    String8 fragment_shader_path);
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
-                                  RHI_BufferLayoutElement *layout, i64 layout_elements_count,
-                                  i32 descriptors[], i32 descriptors_count);
+                                  RHI_BufferLayoutElement *layout, i32 layout_elements_count,
+                                  String8 *uniform_buffer_objects, i32 uniform_buffer_objects_count);
 fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline);
 
 fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_BufferType type);

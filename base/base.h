@@ -2,8 +2,9 @@
 #define BASE_BASE
 
 #define _USE_MATH_DEFINES
-#include <math.h>
 
+#include <math.h>
+#include <stdint.h>
 #include <string.h>
 
 #if defined(__GNUC__) && !defined(__llvm__) && !defined(__INTEL_COMPILER)
@@ -260,7 +261,6 @@
 #  define DLLExport CExport __declspec(dllexport)
 #endif
 
-#include <stdint.h>
 typedef float f32;
 typedef double f64;
 typedef long double f128;

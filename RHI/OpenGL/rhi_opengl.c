@@ -20,16 +20,45 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
 }
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
-                                  RHI_BufferLayoutElement *layout,
-                                  i64 layout_elements_count) {
+                                  RHI_BufferLayoutElement *layout, i32 layout_elements_count,
+                                  String8 *uniform_buffer_objects, i32 uniform_buffer_objects_count) {
   Unused(hcontext);
 
   RHI_OpenglPrimitive *prim = arena_push(arena, RHI_OpenglPrimitive);
   prim->type = RHI_OpenglPrimitiveType_Pipeline;
   prim->pipeline.shader = (RHI_OpenglObj)hshader.h[0];
-  prim->pipeline.layout_elements_count = layout_elements_count;
-  prim->pipeline.layout = arena_push_many(arena, RHI_BufferLayoutElement, layout_elements_count);
-  memcopy(prim->pipeline.layout, layout, (u32)layout_elements_count * sizeof(*layout));
+
+  i32 stride = 0;
+  for (u32 i = 0; i < (u32)layout_elements_count; ++i) {
+    stride += rhi_shadertype_map_size[layout[i].type];
+  }
+  isize offset = 0;
+  for (u32 i = 0; i < (u32)layout_elements_count; ++i) {
+    rhi_opengl_call(glEnableVertexAttribArray(i));
+    rhi_opengl_call(glVertexAttribPointer(i, rhi_shadertype_map_element_count[layout[i].type],
+                                          rhi_opengl_type_from_shadertype(layout[i].type),
+                                          layout[i].to_normalize ? GL_TRUE : GL_FALSE,
+                                          stride, (const void*)offset));
+    offset += rhi_shadertype_map_size[layout[i].type];
+  }
+
+  RHI_OpenglObj shader = (RHI_OpenglObj)hshader.h[0];
+  rhi_opengl_call(glUseProgram(shader));
+  prim->pipeline.ubos_count = uniform_buffer_objects_count;
+  prim->pipeline.ubos = arena_push_many(arena, RHI_OpenglObj, uniform_buffer_objects_count);
+  {
+    Scratch scratch = ScratchBegin(&arena, 1);
+    for (i32 i = 0; i < uniform_buffer_objects_count; ++i) {
+      rhi_opengl_error_clear();
+      prim->pipeline.ubos[i] = glGetUniformBlockIndex(shader, cstr_from_str8(scratch.arena, uniform_buffer_objects[i]));
+      rhi_opengl_error_check();
+      rhi_opengl_call(glUniformBlockBinding(shader, prim->pipeline.ubos[i], (u32)i));
+    }
+    ScratchEnd(scratch);
+  }
+
+  glEnable(GL_CULL_FACE);
+  glEnable(GL_DEPTH);
 
   RHI_Handle res = {{ (u64)prim }};
   return res;
@@ -40,8 +69,7 @@ fn void rhi_pipeline_destroy(RHI_Handle hcontext, RHI_Handle hpipeline) {
   Unused(hpipeline);
 }
 
-fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
-                               i32 size, RHI_BufferType type) {
+fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext, i32 size, RHI_BufferType type) {
   Unused(hcontext);
   RHI_OpenglPrimitive *prim = arena_push(arena, RHI_OpenglPrimitive);
   Assert(prim);
@@ -64,6 +92,12 @@ fn RHI_Handle rhi_buffer_alloc(Arena *arena, RHI_Handle hcontext,
     rhi_opengl_call(glGenBuffers(1, &prim->index.buffer));
     rhi_opengl_call(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prim->index.buffer));
     rhi_opengl_call(glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW));
+  } break;
+  case RHI_BufferType_Uniform: {
+    prim->type = RHI_OpenglPrimitiveType_Buffer;
+    rhi_opengl_call(glGenBuffers(1, &prim->buffer));
+    rhi_opengl_call(glBindBuffer(GL_UNIFORM_BUFFER, prim->buffer));
+    rhi_opengl_call(glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW));
   } break;
   }
   RHI_Handle res = {{ (u64)prim }};
@@ -131,6 +165,12 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     os_window_get_size(window_handle, &window_width, &window_height);
     glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    RHI_OpenglPrimitive *uniform_buffer = (RHI_OpenglPrimitive *)cmd.frame_begin.uniform_buffer.h[0];
+    Assert(uniform_buffer->type == RHI_OpenglPrimitiveType_Buffer);
+    rhi_opengl_call(glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer->buffer));
+    rhi_opengl_call(glBindBufferRange(GL_UNIFORM_BUFFER, (u32)cmd.frame_begin.binding, uniform_buffer->buffer, 0, cmd.frame_begin.uniform_size));
+    rhi_opengl_call(glBufferSubData(GL_UNIFORM_BUFFER, 0, (u32)cmd.frame_begin.uniform_size, cmd.frame_begin.uniform_data));
   } break;
   case RHI_CommandType_Frame_Draw_Index: {
     RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive *)cmd.draw_index.pipeline.h[0];
@@ -140,20 +180,6 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     rhi_opengl_call(glBindBuffer(GL_ARRAY_BUFFER, prim_vertex_buffer->buffer));
     RHI_OpenglPrimitive *prim_index_buffer = (RHI_OpenglPrimitive*)cmd.draw_index.index_buffer.h[0];
     rhi_opengl_call(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prim_index_buffer->index.buffer));
-
-    i32 stride = 0;
-    for (u32 i = 0; i < (u32)prim->pipeline.layout_elements_count; ++i) {
-      stride += rhi_shadertype_map_size[prim->pipeline.layout[i].type];
-    }
-    isize offset = 0;
-    for (u32 i = 0; i < (u32)prim->pipeline.layout_elements_count; ++i) {
-      rhi_opengl_call(glEnableVertexAttribArray(i));
-      rhi_opengl_call(glVertexAttribPointer(i, rhi_shadertype_map_element_count[prim->pipeline.layout[i].type],
-                                            rhi_opengl_type_from_shadertype(prim->pipeline.layout[i].type),
-                                            prim->pipeline.layout[i].to_normalize ? GL_TRUE : GL_FALSE,
-                                            stride, (const void*)offset));
-      offset += rhi_shadertype_map_size[prim->pipeline.layout[i].type];
-    }
 
     rhi_opengl_call(glUseProgram(prim->pipeline.shader));
     rhi_opengl_call(glDrawElements(GL_TRIANGLES, cmd.draw_index.indices_count, GL_UNSIGNED_INT, 0));

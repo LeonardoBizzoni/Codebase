@@ -23,9 +23,9 @@ typedef struct {
       i32 vertex_count;
     } index;
     struct {
+      RHI_OpenglObj *ubos;
       RHI_OpenglObj shader;
-      RHI_BufferLayoutElement *layout;
-      i64 layout_elements_count;
+      i64 ubos_count;
     } pipeline;
   };
 } RHI_OpenglPrimitive;
@@ -59,11 +59,13 @@ internal void rhi_opengl_error_check(void);
   X(PFNGLMAPBUFFERRANGEPROC, glMapBufferRange)                     \
   X(PFNGLUNMAPBUFFERPROC, glUnmapBuffer)                           \
   X(PFNGLCOPYBUFFERSUBDATAPROC, glCopyBufferSubData)               \
-  X(PFNGLCREATEBUFFERSPROC, glCreateBuffers)                       \
+  X(PFNGLGETUNIFORMBLOCKINDEXPROC, glGetUniformBlockIndex)         \
+  X(PFNGLUNIFORMBLOCKBINDINGPROC, glUniformBlockBinding)           \
+  X(PFNGLBUFFERSUBDATAPROC, glBufferSubData)                       \
+  X(PFNGLBINDBUFFERRANGEPROC, glBindBufferRange)                   \
                                                                    \
   X(PFNGLGENVERTEXARRAYSPROC, glGenVertexArrays)                   \
   X(PFNGLBINDVERTEXARRAYPROC, glBindVertexArray)                   \
-  X(PFNGLCREATEVERTEXARRAYSPROC, glCreateVertexArrays)             \
   X(PFNGLVERTEXATTRIBPOINTERPROC, glVertexAttribPointer)           \
   X(PFNGLENABLEVERTEXATTRIBARRAYPROC, glEnableVertexAttribArray)   \
                                                                    \
@@ -75,11 +77,7 @@ internal void rhi_opengl_error_check(void);
   X(PFNGLCOMPILESHADERPROC, glCompileShader)                       \
   X(PFNGLGETSHADERIVPROC, glGetShaderiv)                           \
   X(PFNGLUSEPROGRAMPROC, glUseProgram)                             \
-  X(PFNGLCREATEPROGRAMPROC, glCreateProgram)                       \
-                                                                   \
-  X(PFNGLGETUNIFORMLOCATIONPROC, glGetUniformLocation)             \
-  X(PFNGLUNIFORM3FPROC, glUniform3f)                               \
-  X(PFNGLUNIFORMMATRIX4FVPROC, glUniformMatrix4fv)
+  X(PFNGLCREATEPROGRAMPROC, glCreateProgram)
 
 #define X(Type, Name) global Type Name;
 GL_FUNCTIONS(X)

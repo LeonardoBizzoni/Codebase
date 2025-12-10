@@ -140,11 +140,12 @@ fn RHI_Handle rhi_shader_from_file(Arena *arena, RHI_Handle hcontext,
 }
 
 fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle hshader,
-                                  RHI_BufferLayoutElement layout[], i64 layout_elements_count,
-                                  i32 descriptors[], i32 descriptors_count) {
+                                  RHI_BufferLayoutElement layout[], i32 layout_elements_count,
+                                  String8 *uniform_buffer_objects, i32 uniform_buffer_objects_count) {
   RHI_Vulkan_Context *context = (RHI_Vulkan_Context *)hcontext.h[0];
   RHI_Vulkan_Shader *shader = (RHI_Vulkan_Shader *)hshader.h[0];
   RHI_Vulkan_Pipeline *pipeline = arena_push(arena, RHI_Vulkan_Pipeline);
+  Unused(uniform_buffer_objects);
 
   VkPipelineLayoutCreateInfo create_pipeline_layout_info = {
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -154,16 +155,16 @@ fn RHI_Handle rhi_pipeline_create(Arena *arena, RHI_Handle hcontext, RHI_Handle 
     Scratch scratch = ScratchBegin(&arena, 1);
 
     VkDescriptorSetLayout descriptor_set_layout = {0};
-    VkDescriptorSetLayoutBinding *bindings = arena_push_many(scratch.arena, VkDescriptorSetLayoutBinding, descriptors_count);
-    for (i32 i = 0; i < descriptors_count; ++i) {
+    VkDescriptorSetLayoutBinding *bindings = arena_push_many(scratch.arena, VkDescriptorSetLayoutBinding, uniform_buffer_objects_count);
+    for (i32 i = 0; i < uniform_buffer_objects_count; ++i) {
       bindings[i].binding = (u32)i;
       bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      bindings[i].descriptorCount = (u32)descriptors[i];
+      bindings[i].descriptorCount = 1;
       bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     }
     VkDescriptorSetLayoutCreateInfo create_descriptor_set_layout_info = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = (u32)descriptors_count,
+      .bindingCount = (u32)uniform_buffer_objects_count,
       .pBindings = bindings,
     };
     VkResult create_descriptor_set_layout_result = vkCreateDescriptorSetLayout(context->device.virtual, &create_descriptor_set_layout_info, NULL, &descriptor_set_layout);
@@ -885,8 +886,7 @@ internal void rhi_vulkan_device_print(RHI_Vulkan_Device *device) {
   dbg_println("  Vendor ID:     \t%d", device->properties.vendorID);
   dbg_println("  Device ID:     \t%d", device->properties.deviceID);
   dbg_println("  API Version:   \tv%d.%d.%d", vk_major, vk_minor, vk_patch);
-  dbg_println("  Driver Version:\tv%d.%d.%d\n", driver_major, driver_minor,
-              driver_patch);
+  dbg_println("  Driver Version:\tv%d.%d.%d\n", driver_major, driver_minor, driver_patch);
 }
 
 internal void rhi_vulkan_swapchain_init(Arena *arena, RHI_Vulkan_Context *context, OS_Handle hwindow) {
