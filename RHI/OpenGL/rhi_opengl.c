@@ -166,23 +166,39 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    RHI_OpenglPrimitive *uniform_buffer = (RHI_OpenglPrimitive *)cmd.frame_begin.uniform_buffer.h[0];
-    Assert(uniform_buffer->type == RHI_OpenglPrimitiveType_Buffer);
-    rhi_opengl_call(glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer->buffer));
-    rhi_opengl_call(glBindBufferRange(GL_UNIFORM_BUFFER, (u32)cmd.frame_begin.binding, uniform_buffer->buffer, 0, cmd.frame_begin.uniform_size));
-    rhi_opengl_call(glBufferSubData(GL_UNIFORM_BUFFER, 0, (u32)cmd.frame_begin.uniform_size, cmd.frame_begin.uniform_data));
+    for (i32 i = 0; i < cmd.frame_begin.uniforms.count; ++i) {
+      RHI_OpenglPrimitive *uniform_buffer = (RHI_OpenglPrimitive *)cmd.frame_begin.uniforms.buffer[i].h[0];
+      Assert(uniform_buffer->type == RHI_OpenglPrimitiveType_Buffer);
+      rhi_opengl_call(glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer->buffer));
+      rhi_opengl_call(glBindBufferRange(GL_UNIFORM_BUFFER, (u32)cmd.frame_begin.uniforms.binding[i],
+                                        uniform_buffer->buffer, 0, cmd.frame_begin.uniforms.buffer_size[i]));
+      if (cmd.frame_begin.uniforms.data && cmd.frame_begin.uniforms.data[i]) {
+        rhi_opengl_call(glBufferSubData(GL_UNIFORM_BUFFER, 0, (u32)cmd.frame_begin.uniforms.buffer_size[i],
+                                        cmd.frame_begin.uniforms.data[i]));
+      }
+    }
   } break;
   case RHI_CommandType_Frame_Draw_Index: {
-    RHI_OpenglPrimitive *prim = (RHI_OpenglPrimitive *)cmd.draw_index.pipeline.h[0];
-    Assert(prim->type == RHI_OpenglPrimitiveType_Pipeline);
+    RHI_OpenglPrimitive *prim_pipeline = (RHI_OpenglPrimitive *)cmd.draw_index.pipeline.h[0];
+    Assert(prim_pipeline->type == RHI_OpenglPrimitiveType_Pipeline);
 
     RHI_OpenglPrimitive *prim_vertex_buffer = (RHI_OpenglPrimitive*)cmd.draw_index.vertex_buffer.h[0];
     rhi_opengl_call(glBindBuffer(GL_ARRAY_BUFFER, prim_vertex_buffer->buffer));
     RHI_OpenglPrimitive *prim_index_buffer = (RHI_OpenglPrimitive*)cmd.draw_index.index_buffer.h[0];
     rhi_opengl_call(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prim_index_buffer->index.buffer));
 
-    rhi_opengl_call(glUseProgram(prim->pipeline.shader));
-    rhi_opengl_call(glDrawElements(GL_TRIANGLES, cmd.draw_index.indices_count, GL_UNSIGNED_INT, 0));
+    for (i32 i = 0; i < cmd.draw_index.uniforms.count; ++i) {
+      RHI_OpenglPrimitive *uniform_buffer = (RHI_OpenglPrimitive *)cmd.draw_index.uniforms.buffer[i].h[0];
+      Assert(uniform_buffer->type == RHI_OpenglPrimitiveType_Buffer);
+      rhi_opengl_call(glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer->buffer));
+      rhi_opengl_call(glBindBufferRange(GL_UNIFORM_BUFFER, (u32)cmd.draw_index.uniforms.binding[i],
+                                        uniform_buffer->buffer, 0, cmd.draw_index.uniforms.buffer_size[i]));
+      rhi_opengl_call(glBufferSubData(GL_UNIFORM_BUFFER, 0, (u32)cmd.draw_index.uniforms.buffer_size[i],
+                                      cmd.draw_index.uniforms.data[i]));
+    }
+
+    rhi_opengl_call(glUseProgram(prim_pipeline->pipeline.shader));
+    rhi_opengl_call(glDrawElements(GL_TRIANGLES, cmd.draw_index.index_count, GL_UNSIGNED_INT, 0));
   } break;
   case RHI_CommandType_Frame_End: {
     rhi_opengl_context_swap_buffers(hcontext);

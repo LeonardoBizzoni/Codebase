@@ -65,20 +65,27 @@ typedef struct {
 
     struct {
       Arena *arena;
+      struct {
+        const void **data;
+        RHI_Handle *buffer;
+        i32 *buffer_size;
+        i32 *binding;
+        i32 count;
+      } uniforms;
       RHI_Handle pipeline;
-      RHI_Handle uniform_buffer;
-      const void *uniform_data;
-      i32 uniform_size;
-      i32 binding;
-      i32 array_element_index;
     } frame_begin;
     struct {
+      struct {
+        const void **data;
+        RHI_Handle *buffer;
+        i32 *buffer_size;
+        i32 *binding;
+        i32 count;
+      } uniforms;
       RHI_Handle pipeline;
-      RHI_Handle uniform_buffer;
       RHI_Handle vertex_buffer;
       RHI_Handle index_buffer;
-      i32 indices_count;
-      i32 uniform_size;
+      i32 index_count;
     } draw_index;
     struct {
       Arena *arena;

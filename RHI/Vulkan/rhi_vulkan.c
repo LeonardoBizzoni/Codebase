@@ -459,39 +459,43 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
 
     // ======================================================================
     // Uniform updates
-    RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)cmd.frame_begin.uniform_buffer.h[0];
-    u64 offset = (u64)context->frame_current * context->device.properties.limits.minUniformBufferOffsetAlignment;
-    u64 size = (u64)align_forward(cmd.frame_begin.uniform_size, (i64)context->device.properties.limits.minUniformBufferOffsetAlignment);
+    for (i32 i = 0; i < cmd.frame_begin.uniforms.count; ++i) {
+      RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)cmd.frame_begin.uniforms.buffer[i].h[0];
+      u64 offset = (u64)context->frame_current * context->device.properties.limits.minUniformBufferOffsetAlignment;
+      u64 size = (u64)align_forward(cmd.frame_begin.uniforms.buffer_size[i], (i64)context->device.properties.limits.minUniformBufferOffsetAlignment);
 
-    u8 *memory = 0;
-    vkMapMemory(context->device.virtual, buffer->memory, offset, (u32)cmd.frame_begin.uniform_size, 0, (void**)&memory);
-    memcopy(memory, cmd.frame_begin.uniform_data, cmd.frame_begin.uniform_size);
+      if (cmd.frame_begin.uniforms.data && cmd.frame_begin.uniforms.data[i]) {
+        u8 *memory = 0;
+        vkMapMemory(context->device.virtual, buffer->memory, offset, (u32)cmd.frame_begin.uniforms.buffer_size[i], 0, (void**)&memory);
+        memcopy(memory, cmd.frame_begin.uniforms.data[i], cmd.frame_begin.uniforms.buffer_size[i]);
 
-    VkMappedMemoryRange mapped_range_info = {
-      .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-      .memory = buffer->memory,
-      .offset = offset,
-      .size = size,
-    };
-    VkResult mapped_range_result = vkFlushMappedMemoryRanges(context->device.virtual, 1, &mapped_range_info);
-    Assert(mapped_range_result == VK_SUCCESS);
-    vkUnmapMemory(context->device.virtual, buffer->memory);
+        VkMappedMemoryRange mapped_range_info = {
+          .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+          .memory = buffer->memory,
+          .offset = offset,
+          .size = size,
+        };
+        VkResult mapped_range_result = vkFlushMappedMemoryRanges(context->device.virtual, 1, &mapped_range_info);
+        Assert(mapped_range_result == VK_SUCCESS);
+        vkUnmapMemory(context->device.virtual, buffer->memory);
+      }
 
-    VkDescriptorBufferInfo descriptor_buffer_info = {
-      .buffer = buffer->handle,
-      .offset = offset,
-      .range = size,
-    };
-    VkWriteDescriptorSet descriptor_set_write = {
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = context->descriptor_sets[context->frame_current],
-      .dstBinding = (u32)cmd.frame_begin.binding,
-      .dstArrayElement = (u32)cmd.frame_begin.array_element_index,
-      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      .descriptorCount = 1,
-      .pBufferInfo = &descriptor_buffer_info,
-    };
-    vkUpdateDescriptorSets(context->device.virtual, 1, &descriptor_set_write, 0, NULL);
+      VkDescriptorBufferInfo descriptor_buffer_info = {
+        .buffer = buffer->handle,
+        .offset = offset,
+        .range = size,
+      };
+      VkWriteDescriptorSet descriptor_set_write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = context->descriptor_sets[context->frame_current],
+        .dstBinding = (u32)cmd.frame_begin.uniforms.binding[i],
+        .dstArrayElement = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .pBufferInfo = &descriptor_buffer_info,
+      };
+      vkUpdateDescriptorSets(context->device.virtual, 1, &descriptor_set_write, 0, NULL);
+    }
     // ======================================================================
 
     vkWaitForFences(context->device.virtual, 1, &context->fences_in_flight[context->frame_current], VK_TRUE, U64_MAX);
@@ -553,12 +557,32 @@ fn void rhi_command_queue_push(RHI_Handle hcontext, RHI_Command cmd) {
     RHI_Vulkan_Buffer *vertex_buffer = (RHI_Vulkan_Buffer *)cmd.draw_index.vertex_buffer.h[0];
     RHI_Vulkan_Buffer *index_buffer = (RHI_Vulkan_Buffer *)cmd.draw_index.index_buffer.h[0];
 
+    for (i32 i = 0; i < cmd.draw_index.uniforms.count; ++i) {
+      RHI_Vulkan_Buffer *buffer = (RHI_Vulkan_Buffer *)cmd.draw_index.uniforms.buffer[i].h[0];
+      u64 offset = (u64)context->frame_current * context->device.properties.limits.minUniformBufferOffsetAlignment;
+      u64 size = (u64)align_forward(cmd.draw_index.uniforms.buffer_size[i], (i64)context->device.properties.limits.minUniformBufferOffsetAlignment);
+
+      u8 *memory = 0;
+      vkMapMemory(context->device.virtual, buffer->memory, offset, (u32)cmd.draw_index.uniforms.buffer_size[i], 0, (void**)&memory);
+      memcopy(memory, cmd.draw_index.uniforms.data[i], cmd.draw_index.uniforms.buffer_size[i]);
+
+      VkMappedMemoryRange mapped_range_info = {
+        .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .memory = buffer->memory,
+        .offset = offset,
+        .size = size,
+      };
+      VkResult mapped_range_result = vkFlushMappedMemoryRanges(context->device.virtual, 1, &mapped_range_info);
+      Assert(mapped_range_result == VK_SUCCESS);
+      vkUnmapMemory(context->device.virtual, buffer->memory);
+    }
+
     VkCommandBuffer cmdbuff = context->cmdbuffs[tls_ctx.id].graphics.handles[context->frame_current];
     VkDeviceSize offsets[] = {0};
+    vkCmdBindDescriptorSets(cmdbuff, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout, 0, 1, &context->descriptor_sets[context->frame_current], 0, NULL);
     vkCmdBindVertexBuffers(cmdbuff, 0, 1, &vertex_buffer->handle, offsets);
     vkCmdBindIndexBuffer(cmdbuff, index_buffer->handle, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdBindDescriptorSets(cmdbuff, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout, 0, 1, &context->descriptor_sets[context->frame_current], 0, NULL);
-    vkCmdDrawIndexed(cmdbuff, (u32)cmd.draw_index.indices_count, 1, 0, 0, 0);
+    vkCmdDrawIndexed(cmdbuff, (u32)cmd.draw_index.index_count, 1, 0, 0, 0);
   } break;
   case RHI_CommandType_Frame_End: {
     VkCommandBuffer cmdbuff = context->cmdbuffs[tls_ctx.id].graphics.handles[context->frame_current];
